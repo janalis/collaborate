@@ -15,13 +15,17 @@ final class Database
 {
     public const string DEFAULT_URL = 'mysql://root@127.0.0.1:3306/collaborate_test?serverVersion=10.11.0-MariaDB';
 
-    /** `COLLABORATE_DATABASE_URL` with its database replaced by `collaborate_<app>_<environment>`. */
+    /**
+     * `COLLABORATE_DATABASE_URL` with its database `<name>` replaced by `<name>_<app>_<environment>`, so checkouts
+     * whose URLs name different databases never share the applications' databases.
+     */
     public static function url(string $app, string $environment): string
     {
         $url = Environment::get('COLLABORATE_DATABASE_URL') ?? self::DEFAULT_URL;
         $token = Environment::get('TEST_TOKEN');
         $suffix = (string) preg_replace('/\W/', '_', $environment . (null === $token ? '' : '_' . $token));
-        $name = 'collaborate_' . $app . '_' . $suffix;
+        $base = preg_match('#^[a-z0-9+]+://[^/]+/([^?]+)#i', $url, $match) ? $match[1] : 'collaborate';
+        $name = $base . '_' . $app . '_' . $suffix;
 
         return (string) preg_replace('#^([a-z0-9+]+://[^/]+)(/[^?]*)?#i', '$1/' . $name, $url, 1);
     }

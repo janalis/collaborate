@@ -6,14 +6,21 @@ namespace Janalis\Collaborate\Tests\Application\Shared\Entity;
 
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Validator\Constraints as Assert;
 
-/** The record both test applications edit: plain text, a textarea, a rich-text field, a choice and ordered tags. */
+/**
+ * The record both test applications edit: one field of each kind a shared draft carries (text, textarea, rich
+ * text, Markdown, a select, radios, a checkbox, a number, a date, an association) and ordered tags.
+ */
 #[ORM\Entity]
 #[ORM\Table(name: 'app_article')]
 class Article implements \Stringable
 {
     public const array STATUSES = ['Draft' => 'draft', 'Review' => 'review', 'Published' => 'published'];
+
+    public const array AUDIENCES = ['Everyone' => 'everyone', 'Members' => 'members'];
 
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -21,6 +28,7 @@ class Article implements \Stringable
     public ?int $id = null;
 
     #[ORM\Column(length: 255)]
+    #[Assert\NotBlank]
     public string $title = '';
 
     #[ORM\Column(type: 'text')]
@@ -30,8 +38,29 @@ class Article implements \Stringable
     #[ORM\Column(type: 'text')]
     public string $content = '';
 
+    /** Markdown written in CKEditor's source mode or rendered. */
+    #[ORM\Column(type: 'text')]
+    public string $notes = '';
+
     #[ORM\Column(length: 20)]
     public string $status = 'draft';
+
+    #[ORM\Column(length: 20)]
+    public string $audience = 'everyone';
+
+    #[ORM\Column]
+    public bool $featured = false;
+
+    #[ORM\Column(nullable: true)]
+    #[Assert\Range(min: 0, max: 5)]
+    public ?int $rating = null;
+
+    #[ORM\Column(type: Types::DATE_IMMUTABLE, nullable: true)]
+    public ?\DateTimeImmutable $publishedOn = null;
+
+    #[ORM\ManyToOne(targetEntity: Category::class)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    public ?Category $category = null;
 
     /** @var Collection<int, Tag> */
     #[ORM\OneToMany(targetEntity: Tag::class, mappedBy: 'article', cascade: ['persist'], orphanRemoval: true)]

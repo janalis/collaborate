@@ -21,6 +21,8 @@ use Symfony\Bundle\SecurityBundle\SecurityBundle;
 use Symfony\Bundle\TwigBundle\TwigBundle;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ServicesConfigurator;
+use Symfony\Component\Form\Extension\Core\Type\FormType;
+use Symfony\Component\Form\Extension\Validator\Type\FormTypeValidatorExtension;
 use Symfony\Component\HttpKernel\Kernel;
 use Symfony\Component\HttpKernel\Log\Logger;
 use Symfony\Component\Routing\Loader\Configurator\RoutingConfigurator;
@@ -33,13 +35,25 @@ use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
  * and the bundle with shared drafts, cursors and saved-view updates on.
  *
  * Environments: `test` (PHPUnit: mock sessions, a {@see RecordingHub}), `e2e` (FrankenPHP: file sessions,
- * the hub the web server runs at `MERCURE_URL`).
+ * the hub the web server runs at `MERCURE_URL`, two avatars before the `+N` counter) and `e2e_limits` (`e2e`
+ * with the smallest draft limits, {@see LIMITS}).
  */
 abstract class AppKernel extends Kernel
 {
     use MicroKernelTrait;
 
     public const string MERCURE_SECRET = '!ChangeThisMercureHubJWTSecretKey!';
+
+    /** The browser environment whose drafts reach their limits within one scenario, and compact as soon as they may. */
+    public const string LIMITS = 'e2e_limits';
+
+    /** The smallest limits the configuration accepts, for {@see LIMITS}. */
+    private const array SMALL_LIMITS = [
+        'max_update_bytes' => 4096,
+        'max_draft_bytes' => 65_536,
+        'max_fields' => 30,
+        'compact' => ['bytes' => 1024, 'idle' => 0],
+    ];
 
     /** The application's name: its database, session cookie and directories. */
     abstract public static function app(): string;
@@ -183,12 +197,13 @@ abstract class AppKernel extends Kernel
             ],
         ]);
         $container->extension('collaborate', [
-            'drafts' => [
-                'enabled' => true,
-                'rich_text' => ['block_prefixes' => ['rich_text'], 'ckeditor_version' => self::ckeditorVersion()],
-            ],
+            'drafts' =>
+                [
+                    'enabled' => true,
+                    'rich_text' => ['block_prefixes' => ['rich_text'], 'ckeditor_version' => self::ckeditorVersion()],
+                ] + (self::LIMITS === $this->environment ? self::SMALL_LIMITS : []),
             'updates' => ['enabled' => true],
-        ]);
+        ] + ($test ? [] : ['cursors' => ['max_avatars' => 2]]));
 
         $services = $container->services();
         $services->defaults()->autowire()->autoconfigure();
@@ -217,6 +232,14 @@ abstract class AppKernel extends Kernel
             ->args([service('asset_mapper.importmap.renderer')])
             ->tag('twig.runtime');
         $services->set('twig.extension.importmap', ImportMapExtension::class)->tag('twig.extension');
+        // FrameworkBundle validates forms only when symfony/validator is a non-dev requirement, as in an
+        // application; here it is the bundle's dev dependency.
+        $services->set('form.type_extension.form.validator', FormTypeValidatorExtension::class)->args([
+            service('validator'),
+            service('form.violation_mapper'),
+            service('twig.form.renderer')->ignoreOnInvalid(),
+            service('translator')->ignoreOnInvalid(),
+        ])->tag('form.type_extension', ['extended-type' => FormType::class]);
         $services->set(TestUserProvider::class);
         $services->set(LoginAuthenticator::class);
         $services->set(LoginController::class)->tag('controller.service_arguments');
@@ -229,8 +252,13 @@ abstract class AppKernel extends Kernel
         $routes->import(self::repository() . '/config/routes.php')->prefix('/admin');
         $routes->add('login', '/login')->controller(LoginController::class)->methods(['GET', 'POST']);
         $routes->add('logout', '/logout')->methods(['GET']);
-        if ('e2e' === $this->environment) {
+        if ('test' !== $this->environment) {
             $routes->add('e2e_articles', '/e2e/articles')->controller(E2eController::class)->methods(['POST']);
+            $routes
+                ->add('e2e_article_update', '/admin/e2e/articles/{id}')
+                ->controller([E2eController::class, 'update'])
+                ->requirements(['id' => '\d+'])
+                ->methods(['POST']);
         }
         $this->configureAppRoutes($routes);
     }

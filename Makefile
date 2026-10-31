@@ -83,6 +83,7 @@ app-setup: ## Prepare the test applications for the browser: assets, EasyAdmin's
 	COLLABORATE_APP=easyadmin APP_ENV=e2e $(CONSOLE) assets:install tests/Application/EasyAdmin/public --no-interaction
 	COLLABORATE_APP=plain APP_ENV=e2e $(CONSOLE) app:setup
 	COLLABORATE_APP=easyadmin APP_ENV=e2e $(CONSOLE) app:setup
+	COLLABORATE_APP=plain APP_ENV=e2e_limits $(CONSOLE) app:setup
 
 e2e: app-setup ## Run the Playwright scenarios against both applications under FrankenPHP (ARGS="--project=plain …")
 	npx playwright test $(ARGS)

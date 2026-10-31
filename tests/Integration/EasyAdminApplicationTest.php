@@ -40,6 +40,7 @@ use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
 use Janalis\Collaborate\Tests\Application\EasyAdmin\EasyAdminKernel;
 use Janalis\Collaborate\Tests\Application\Shared\Entity\Article;
+use Janalis\Collaborate\Tests\Application\Shared\Entity\Category;
 use Janalis\Collaborate\Tests\Application\Shared\Entity\Tag;
 use Janalis\Collaborate\Twig\CollaborateExtension;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -134,8 +135,8 @@ final class EasyAdminApplicationTest extends CollaborationTestCase
         self::assertSame('updates', $updates[0]['channel']);
         self::assertSame('saved', $updates[0]['kind']);
         // The saved class and the classes one association away, by EasyAdmin entity name.
-        self::assertSame(['Article', 'Tag'], $updates[0]['entities']);
-        self::assertTrue(class_exists(Tag::class) && class_exists(Article::class));
+        self::assertSame(['Article', 'Category', 'Tag'], $updates[0]['entities']);
+        self::assertTrue(class_exists(Tag::class) && class_exists(Article::class) && class_exists(Category::class));
 
         // The index page lists the new title, for the refresh to show.
         self::assertSelectorTextContains(

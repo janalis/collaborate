@@ -25,12 +25,41 @@ const richText = (html) => {
   return body.textContent.replace(/\n{3,}/g, '\n\n').trim();
 };
 
+/**
+ * An entry's or a collection's own state (`path[@key]`, `path[__collection__]`) has no control: it is named
+ * after its collection, and an entry after the first text its row shows.
+ */
+function collectionLabel(session, name) {
+  const type = session.state?.fields?.[name]?.type;
+  const match = /^(.*)\[(?:@([^\]]+)|__collection__)\]$/.exec(session.formName(name));
+  if (!match || !['member', 'collection'].includes(type)) return null;
+  const container = Array.from(session.form.querySelectorAll('[data-collaborate-collection]')).find(
+    (element) => element.dataset.collaborateCollection === match[1]
+  );
+  const parent = container?.querySelector('label, legend')?.textContent.trim();
+  if (!parent) return null;
+  const row = match[2]
+    ? Array.from(container.querySelectorAll('.field-collection-item')).find(
+        (node) => node.dataset.collaborateItem === match[2]
+      )
+    : null;
+  const text = Array.from(row?.querySelectorAll('input:not([type]), input[type="text"]') ?? [])
+    .map((input) => input.value.trim())
+    .find(Boolean);
+  return text ? `${parent} › ${text}` : parent;
+}
+
 /** The field's label; a collection entry's names its collection first. */
 export function fieldLabel(session, name) {
+  const entry = collectionLabel(session, name);
+  if (entry) return entry;
   const element = first(control(session, name));
   const group = element?.closest('.form-group');
   const own =
-    element?.labels?.[0]?.textContent.trim() || group?.querySelector('label, legend')?.textContent.trim() || '';
+    element?.labels?.[0]?.textContent.trim() ||
+    element?.getAttribute('aria-label')?.trim() ||
+    group?.querySelector('label, legend')?.textContent.trim() ||
+    '';
   const collection = element?.closest('[data-collaborate-collection]');
   const parent = collection?.querySelector('label, legend')?.textContent.trim();
   if (own && parent && parent !== own) return `${parent} › ${own}`;

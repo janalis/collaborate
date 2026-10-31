@@ -233,12 +233,12 @@ abstract class AppKernel extends Kernel
             ->tag('twig.runtime');
         $services->set('twig.extension.importmap', ImportMapExtension::class)->tag('twig.extension');
         // FrameworkBundle validates forms only when symfony/validator is a non-dev requirement, as in an
-        // application; here it is the bundle's dev dependency.
+        // application; here it is the bundle's dev dependency. Named arguments skip the second parameter, a flag
+        // on Symfony 7.4 and a violation mapper on 8.x: both build their own mapper from the renderer and translator.
         $services->set('form.type_extension.form.validator', FormTypeValidatorExtension::class)->args([
-            service('validator'),
-            service('form.violation_mapper'),
-            service('twig.form.renderer')->ignoreOnInvalid(),
-            service('translator')->ignoreOnInvalid(),
+            '$validator' => service('validator'),
+            '$formRenderer' => service('twig.form.renderer')->ignoreOnInvalid(),
+            '$translator' => service('translator')->ignoreOnInvalid(),
         ])->tag('form.type_extension', ['extended-type' => FormType::class]);
         $services->set(TestUserProvider::class);
         $services->set(LoginAuthenticator::class);

@@ -8,7 +8,7 @@ use Doctrine\DBAL\Cache\QueryCacheProfile;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Result;
 
-/** A DBAL wrapper (`wrapperClass`) that records the parameters of every statement it executes, and the SQL of every query. */
+/** A DBAL wrapper (`wrapperClass`) that records the parameters of every statement it executes, and the SQL and parameters of every query. */
 final class StatementRecordingConnection extends Connection
 {
     /** @var list<array<array-key, mixed>> */
@@ -17,6 +17,9 @@ final class StatementRecordingConnection extends Connection
     /** @var list<string> */
     public array $queries = [];
 
+    /** @var list<array<array-key, mixed>> the parameters of each of {@see $queries} */
+    public array $queryParameters = [];
+
     public function executeQuery(
         string $sql,
         array $params = [],
@@ -24,6 +27,7 @@ final class StatementRecordingConnection extends Connection
         ?QueryCacheProfile $qcp = null,
     ): Result {
         $this->queries[] = $sql;
+        $this->queryParameters[] = $params;
 
         return parent::executeQuery($sql, $params, $types, $qcp);
     }

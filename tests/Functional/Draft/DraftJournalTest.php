@@ -20,6 +20,7 @@ use Janalis\Collaborate\Tests\Fixtures\Draft\InterleavingConnection;
 use Janalis\Collaborate\Tests\Fixtures\Draft\StatementRecordingConnection;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Tag;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Tagging;
+use Pdo\Mysql;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -73,8 +74,13 @@ final class DraftJournalTest extends TestCase
         'choice' => ['type' => 'value', 'initial' => 'a'],
     ];
 
+    /** Whether this process created its own database (`TEST_TOKEN`). */
+    private static bool $created = false;
+
     /**
-     * A connection to the test database.
+     * A connection to the test database. Parallel test processes (Infection's, ParaTest's) each work in a
+     * database of their own, `<name>_t<TEST_TOKEN>`: named locks are global to the server and keyed by the
+     * database, so processes sharing one would hold each other's draft locks.
      *
      * @param class-string<Connection> $wrapperClass
      */
@@ -85,9 +91,27 @@ final class DraftJournalTest extends TestCase
             ?? $_ENV['COLLABORATE_DATABASE_URL']
             ?? getenv('COLLABORATE_DATABASE_URL');
         self::assertIsString($url, 'COLLABORATE_DATABASE_URL names the test database.');
+        $params = new DsnParser(['mysql' => 'pdo_mysql', 'mariadb' => 'pdo_mysql'])->parse($url);
+        $token = $_SERVER['TEST_TOKEN'] ?? getenv('TEST_TOKEN');
+        $name = $params['dbname'] ?? null;
+        if (\is_string($token) && '' !== $token && null !== $name) {
+            $params['dbname'] = $name . '_t' . (string) preg_replace('/\W/', '_', $token);
+            if (!self::$created) {
+                $serverParams = $params;
+                unset($serverParams['dbname']);
+                $server = DriverManager::getConnection($serverParams);
+                $server->executeStatement(
+                    'CREATE DATABASE IF NOT EXISTS ' . $server->quoteSingleIdentifier($params['dbname']),
+                );
+                $server->close();
+                self::$created = true;
+            }
+        }
 
-        return DriverManager::getConnection(['wrapperClass' => $wrapperClass]
-        + new DsnParser(['mysql' => 'pdo_mysql', 'mariadb' => 'pdo_mysql'])->parse($url));
+        // No journal statement waits for a row lock longer than a peer's write: a test that does fails fast.
+        $params['driverOptions'] = [Mysql::ATTR_INIT_COMMAND => 'SET SESSION innodb_lock_wait_timeout = 1'];
+
+        return DriverManager::getConnection(['wrapperClass' => $wrapperClass] + $params);
     }
 
     /** @return list<string> the CREATE TABLE statements of docs/schema.sql */

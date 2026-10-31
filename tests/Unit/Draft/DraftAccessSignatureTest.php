@@ -120,4 +120,74 @@ final class DraftAccessSignatureTest extends TestCase
         $this->expectException(PreconditionFailedHttpException::class);
         $access->verify(explode('.', $grant)[1], $user, 150);
     }
+
+    /** Whether the scope of `$grant` is still cached `$seconds` after it was verified. */
+    private static function kept(ArrayAdapter $scopes, MockClock $clock, string $grant, float $seconds): bool
+    {
+        $now = $clock->now();
+        $clock->sleep($seconds);
+        $hit = $scopes->getItem('collaborate_grant.' . explode('.', $grant)[1])->isHit();
+        $clock->modify($now->format('Y-m-d H:i:s.u'));
+
+        return $hit;
+    }
+
+    public function testByDefaultAGrantLastsTenHoursAndItsSignatureFifteenMinutes(): void
+    {
+        $clock = new MockClock();
+        $scopes = new ArrayAdapter(clock: $clock);
+        $access = new DraftAccess(
+            'secret',
+            true,
+            new Topics(),
+            new SecurityCollaboratorProvider(),
+            new RoleDraftAccessChecker(),
+            $scopes,
+        );
+        $user = $this->user();
+        $grant = $access->issue(self::SCOPE, 7, 100, $user->getRoles());
+
+        self::assertSame(36_100, $access->verify($grant, $user, 101)['expires']);
+
+        self::assertTrue(self::kept($scopes, $clock, $grant, 899.5));
+        self::assertFalse(self::kept($scopes, $clock, $grant, 900.5));
+    }
+
+    public function testASignatureIsKeptOneSecondAtLeast(): void
+    {
+        $clock = new MockClock();
+        $scopes = new ArrayAdapter(clock: $clock);
+        $access = $this->access(scopes: $scopes, lifetime: 60);
+        $user = $this->user();
+        $grant = $access->issue(self::SCOPE, 7, 100, $user->getRoles());
+
+        // Verified as it expires: refused, its scope cached for one second.
+        try {
+            $access->verify($grant, $user, 160);
+            self::fail('An expired grant was accepted.');
+        } catch (AccessDeniedHttpException) {
+            self::assertTrue(self::kept($scopes, $clock, $grant, 0.5));
+            self::assertFalse(self::kept($scopes, $clock, $grant, 1.5));
+        }
+    }
+
+    public function testOnlyAWholeSignatureIsLookedUpInTheCache(): void
+    {
+        $scopes = new ArrayAdapter();
+        $access = $this->access(scopes: $scopes);
+        $user = $this->user();
+        $grant = $access->issue(self::SCOPE, 7, 100, $user->getRoles());
+        $signature = explode('.', $grant)[1];
+        $access->verify($grant, $user, 101);
+
+        // A known signature with anything after it, a line break included, is a malformed full grant.
+        foreach ([$signature . '0', $signature . "\n"] as $sent) {
+            try {
+                $access->verify($sent, $user, 101);
+                self::fail('A malformed grant was accepted.');
+            } catch (AccessDeniedHttpException $denied) {
+                self::assertSame('Invalid Collaborate grant.', $denied->getMessage());
+            }
+        }
+    }
 }

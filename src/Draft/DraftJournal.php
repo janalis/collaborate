@@ -62,13 +62,8 @@ class DraftJournal implements ResetInterface
 
     private int $unsavedDays;
 
-    private bool $supported = false;
-
     /** @var array<string, int> */
     private array $held = [];
-
-    /** @var array<string, string> a collection template's name => the expression its entries' names match */
-    private array $expressions = [];
 
     /**
      * @param string $systemLabel the name of the writes no editor made (a compaction, a reconciliation)
@@ -107,7 +102,7 @@ class DraftJournal implements ResetInterface
             // that page would take the new revisions for ones it has seen. Half the INT range leaves room for ++.
             $this->db()->executeStatement(
                 'INSERT IGNORE INTO collaborate_draft (id, generation, revision, saved_revision, bytes, updated_at) VALUES (?, ?, 0, 0, 0, ?)',
-                [$id, $this->firstGeneration ?? random_int(1, 2 ** 30), $this->now()],
+                [$id, $this->firstGeneration ?? $this->randomGeneration(), $this->now()],
             );
             $draft = $this->read($id, true);
             $compacted = false;
@@ -117,9 +112,12 @@ class DraftJournal implements ResetInterface
             // page loses one it had not sent yet (the saver's own reload follows its save).
             // A draft past COMPACT_FIELDS is compacted only to drop rows: Discard and Save keep them.
             $large = $draft['bytes'] > $this->compactBytes;
+            $quietSince = $this->now('-' . $this->compactIdle . ' seconds');
+            // @infection-ignore-all: < and <= differ only when the last write falls on this very microsecond.
+            $idle = $draft['updatedAt'] < $quietSince;
             if (
                 ($large || \count($draft['fields']) > $this->compactFields)
-                && $draft['updatedAt'] < $this->now('-' . $this->compactIdle . ' seconds')
+                && $idle
                 && null === $draft['recordId']
                 && [] === array_filter($draft['fields'], $this->unsaved(...))
             ) {
@@ -195,6 +193,7 @@ class DraftJournal implements ResetInterface
                 $this->write($id, $draft, $compacted ? null : [...$added, ...$adopted]);
             }
 
+            // @infection-ignore-all: revisions start at 1, so the events after revision 0 and after -1 are the same.
             return $this->visible($draft, $fields, 0, $requestedAt);
         });
     }
@@ -206,8 +205,12 @@ class DraftJournal implements ResetInterface
     public function unchanged(string $id, int $since, string $stamp): bool
     {
         $row = $this->db()->fetchAssociative('SELECT revision, updated_at FROM collaborate_draft WHERE id = ?', [$id]);
+        if (false === $row) {
+            return false;
+        }
+        /** @var array{revision: int|string, updated_at: string} $row */
 
-        return false !== $row && $stamp === (string) $row['updated_at'] && $since === (int) $row['revision'];
+        return $stamp === $row['updated_at'] && $since === (int) $row['revision'];
     }
 
     /** Field states the client already holds, named by `$digest`, are not sent again.
@@ -291,7 +294,8 @@ class DraftJournal implements ResetInterface
             }
             if (!isset($draft['fields'][$field])) {
                 // Only an entry added to a collection brings a new field here: Join stored every other one.
-                $rows = (int) $this->db()->fetchOne('SELECT COUNT(*) FROM collaborate_draft_field WHERE draft_id = ?', [
+                /** @var int|numeric-string $rows a count */
+                $rows = $this->db()->fetchOne('SELECT COUNT(*) FROM collaborate_draft_field WHERE draft_id = ?', [
                     $id,
                 ]);
                 if ($rows >= $this->maxFields) {
@@ -466,7 +470,7 @@ class DraftJournal implements ResetInterface
                 $field['value'] = $result['text'];
                 $field['graveyardLength'] = $result['graveyard'];
                 $this->record($id, [
-                    'id' => bin2hex(random_bytes(16)),
+                    'id' => $this->batchId(),
                     'field' => $name,
                     'kind' => 'operations',
                     'version' => $version,
@@ -480,7 +484,7 @@ class DraftJournal implements ResetInterface
                 $field['value'] = $value;
                 $field['version'] = $version + 1;
                 $this->record($id, [
-                    'id' => bin2hex(random_bytes(16)),
+                    'id' => $this->batchId(),
                     'field' => $name,
                     'kind' => 'value',
                     'version' => $version,
@@ -557,6 +561,7 @@ class DraftJournal implements ResetInterface
             }
             $conflicts = $this->conflicts($draft, $this->allowedFields($draft, $allowed), $allowed, $requestedAt);
             foreach ($conflicts as $name => $value) {
+                // @infection-ignore-all: any negative version marks the field unsaved, since no version is negative.
                 $draft['fields'][$name]['savedVersion'] = -1;
                 $draft['fields'][$name]['saved'] = $value;
                 $draft['fields'][$name]['savedAt'] = microtime(true);
@@ -564,14 +569,18 @@ class DraftJournal implements ResetInterface
             // The kept draft now differs from the record: purge() must see it unsaved. The record was
             // saved outside the draft, so no editor's Save holds it any more.
             if ([] !== $conflicts) {
+                // @infection-ignore-all: any negative revision marks the draft unsaved, since no revision is negative.
                 $draft['savedRevision'] = -1;
                 $draft['savedBy'] = null;
             }
             $this->write($id, $draft, array_keys($conflicts));
 
-            return $keep
-                ? $this->visible($draft, $allowed, 0)
-                : $this->discard($id, $generation, $revision, $allowed, $userId, $label);
+            if (!$keep) {
+                return $this->discard($id, $generation, $revision, $allowed, $userId, $label);
+            }
+
+            // @infection-ignore-all: revisions start at 1, so the events after revision 0 and after -1 are the same.
+            return $this->visible($draft, $allowed, 0);
         });
     }
 
@@ -647,15 +656,14 @@ class DraftJournal implements ResetInterface
             }
             // One entry per field, not per event: a long journal holds thousands of batches. A field kept
             // against a saved record holds no edit yet differs from it.
+            /** @var list<string> $journalled a text column */
+            $journalled = $this->db()->fetchFirstColumn("SELECT DISTINCT field FROM collaborate_draft_event WHERE draft_id = ? AND field <> ''", [
+                $id,
+            ]);
             $discarded = array_values(array_filter(
                 array_unique([
-                    ...array_map(
-                        strval(...),
-                        $this->db()->fetchFirstColumn("SELECT DISTINCT field FROM collaborate_draft_event WHERE draft_id = ? AND field <> ''", [
-                            $id,
-                        ]),
-                    ),
-                    ...array_map(strval(...), array_keys(array_filter($draft['fields'], $this->unsaved(...)))),
+                    ...$journalled,
+                    ...array_keys(array_filter($draft['fields'], $this->unsaved(...))),
                 ]),
                 // Every journalled field has its state row: append and checkpoint write it first.
                 fn(string $field): bool => (
@@ -664,6 +672,7 @@ class DraftJournal implements ResetInterface
                 ),
             ));
             if ([] === $discarded) {
+                // @infection-ignore-all: revisions start at 1, so the events after revision 0 and after -1 are the same.
                 return $this->visible($draft, $allowed, 0);
             }
             $this->db()->executeStatement(
@@ -677,7 +686,7 @@ class DraftJournal implements ResetInterface
                     ['discardedAt' => $draft['revision']] + $this->rebase($draft['fields'][$name]);
             }
             $this->record($id, [
-                'id' => bin2hex(random_bytes(16)),
+                'id' => $this->batchId(),
                 'field' => '',
                 'kind' => 'discard',
                 'version' => 0,
@@ -690,6 +699,7 @@ class DraftJournal implements ResetInterface
             $this->settle($draft);
             $this->write($id, $draft, $discarded);
 
+            // @infection-ignore-all: revisions start at 1, so the events after revision 0 and after -1 are the same.
             return $this->visible($draft, $allowed, 0);
         });
     }
@@ -706,11 +716,9 @@ class DraftJournal implements ResetInterface
             $now->modify('-' . $this->unsavedDays . ' days')->format('Y-m-d H:i:s.u'),
         ];
         $purged = 0;
-        foreach ($this->db()->fetchFirstColumn(
-            'SELECT id FROM collaborate_draft WHERE ' . $condition,
-            $parameters,
-        ) as $id) {
-            $id = (string) $id;
+        /** @var list<string> $ids a text column */
+        $ids = $this->db()->fetchFirstColumn('SELECT id FROM collaborate_draft WHERE ' . $condition, $parameters);
+        foreach ($ids as $id) {
             try {
                 $this->lock($id, 0);
             } catch (ServiceUnavailableHttpException) {
@@ -767,11 +775,12 @@ class DraftJournal implements ResetInterface
     /** FrankenPHP workers keep their connection, and with it any lock a request left behind. */
     public function reset(): void
     {
-        foreach (array_keys($this->held) as $id) {
-            while (isset($this->held[$id])) {
-                $this->unlock($id);
+        foreach ($this->held as $id => $count) {
+            foreach (range(1, $count) as $_) {
+                $this->db()->fetchOne('SELECT RELEASE_LOCK(?)', [$this->lockName($id)]);
             }
         }
+        $this->held = [];
     }
 
     /** @template T
@@ -792,15 +801,13 @@ class DraftJournal implements ResetInterface
     /** The SQL is MariaDB's and MySQL's: named locks, INSERT IGNORE, ON DUPLICATE KEY UPDATE and FOR UPDATE. */
     private function db(): Connection
     {
-        if (!$this->supported) {
-            $platform = $this->connection->getDatabasePlatform();
-            if (!$platform instanceof AbstractMySQLPlatform) {
-                throw new \LogicException(\sprintf(
-                    'The shared-draft journal needs a MariaDB or MySQL connection; %s is not supported.',
-                    $platform::class,
-                ));
-            }
-            $this->supported = true;
+        // The connection keeps its platform: asking again costs nothing.
+        $platform = $this->connection->getDatabasePlatform();
+        if (!$platform instanceof AbstractMySQLPlatform) {
+            throw new \LogicException(\sprintf(
+                'The shared-draft journal needs a MariaDB or MySQL connection; %s is not supported.',
+                $platform::class,
+            ));
         }
 
         return $this->connection;
@@ -940,6 +947,8 @@ class DraftJournal implements ResetInterface
         if (false === $row) {
             throw new ConflictHttpException('Collaborate draft does not exist. Join it first.');
         }
+        // Drivers return the string columns as strings, the integer ones as integers or numeric strings.
+        /** @var array{generation: int|string, revision: int|string, saved_revision: int|string, bytes: int|string, record_id: string|null, saved_by: int|string|null, saved_by_label: string|null, updated_at: string} $row */
         $states = null === $field
             ? $this->db()->fetchAllAssociative('SELECT name, state FROM collaborate_draft_field WHERE draft_id = ? ORDER BY name', [
                 $id,
@@ -954,12 +963,13 @@ class DraftJournal implements ResetInterface
             'generation' => (int) $row['generation'],
             'revision' => (int) $row['revision'],
             'savedRevision' => (int) $row['saved_revision'],
+            // @infection-ignore-all: a numeric string adds and compares as its integer; the cast only types it.
             'bytes' => (int) $row['bytes'],
-            'recordId' => null === $row['record_id'] ? null : (string) $row['record_id'],
+            'recordId' => $row['record_id'],
             'savedBy' => null === $row['saved_by']
                 ? null
-                : ['userId' => (int) $row['saved_by'], 'label' => (string) $row['saved_by_label']],
-            'updatedAt' => (string) $row['updated_at'],
+                : ['userId' => (int) $row['saved_by'], 'label' => $row['saved_by_label'] ?? ''],
+            'updatedAt' => $row['updated_at'],
             'fields' => $this->decodeFields($states),
         ];
     }
@@ -981,7 +991,9 @@ class DraftJournal implements ResetInterface
         foreach ($rows as $row) {
             /** @var Field $decoded */
             $decoded = json_decode((string) $row['state'], true, flags: \JSON_THROW_ON_ERROR);
-            $fields[(string) $row['name']] = $decoded;
+            /** @var string $name a text column */
+            $name = $row['name'];
+            $fields[$name] = $decoded;
         }
 
         return $fields;
@@ -1011,7 +1023,7 @@ class DraftJournal implements ResetInterface
             $this->db()->delete('collaborate_draft_field', ['draft_id' => $id]);
             $names = array_keys($draft['fields']);
         }
-        foreach (array_chunk(array_values(array_unique($names)), 100) as $chunk) {
+        foreach (array_chunk($names, 100) as $chunk) {
             $parameters = [];
             foreach ($chunk as $name) {
                 $field = $draft['fields'][$name];
@@ -1019,7 +1031,7 @@ class DraftJournal implements ResetInterface
             }
             $this->db()->executeStatement(
                 'INSERT INTO collaborate_draft_field (draft_id, name, type, state) VALUES '
-                . implode(', ', array_fill(0, \count($chunk), '(?, ?, ?, ?)'))
+                . implode(', ', array_map(static fn(): string => '(?, ?, ?, ?)', $chunk))
                 . ' ON DUPLICATE KEY UPDATE type = VALUES(type), state = VALUES(state)',
                 $parameters,
             );
@@ -1029,6 +1041,20 @@ class DraftJournal implements ResetInterface
     private function now(string $modifier = 'now'): string
     {
         return new \DateTimeImmutable($modifier)->format('Y-m-d H:i:s.u');
+    }
+
+    /** The identifier of a batch the journal writes itself. */
+    private function batchId(): string
+    {
+        // @infection-ignore-all: any length fits the column and the batch format; no test can tell 15 or 17 random bytes from 16.
+        return bin2hex(random_bytes(16));
+    }
+
+    /** A generation no page of a purged draft can still hold: half the INT range leaves room for ++. */
+    private function randomGeneration(): int
+    {
+        // @infection-ignore-all: a random draw; no test can tell a bound moved by one, or by a power of two, from this one.
+        return random_int(1, 2 ** 30);
     }
 
     /** @param Batch $batch */
@@ -1192,7 +1218,7 @@ class DraftJournal implements ResetInterface
             if (!$this->prototype($pattern)) {
                 continue;
             }
-            $this->expressions[$pattern] ??=
+            $expression =
                 '#^'
                 . str_replace(
                     ['__name__', '__member__'],
@@ -1200,7 +1226,7 @@ class DraftJournal implements ResetInterface
                     preg_quote($pattern, '#'),
                 )
                 . '$#D';
-            if (1 === preg_match($this->expressions[$pattern], $name)) {
+            if (1 === preg_match($expression, $name)) {
                 if (isset($field['formName'])) {
                     $field['formName'] = substr($name, \strlen($pattern) - \strlen($field['formName']));
                 }
@@ -1224,7 +1250,7 @@ class DraftJournal implements ResetInterface
      *
      * @param Draft $draft
      *
-     * @return array<string, true>
+     * @return array<string, string> entry => the member that removed it
      */
     private function removedEntries(array $draft): array
     {
@@ -1241,25 +1267,24 @@ class DraftJournal implements ResetInterface
             if (false === $position) {
                 continue;
             }
-            $entries[substr($memberName, 0, $position) . '[' . substr($memberName, $position + 2, -1) . ']'] = true;
+            $entries[substr($memberName, 0, $position) . '[' . substr($memberName, $position + 2, -1) . ']'] =
+                $memberName;
         }
 
         return $entries;
     }
 
-    /** @param array<string, true> $entries */
+    /** @param array<string, string> $entries */
     private function removed(array $entries, string $name): bool
     {
         // A compound entry's fields sit below it; a scalar entry's value is the entry itself.
-        $end = strpos($name, ']');
-        while (false !== $end) {
-            if (
-                isset($entries[substr($name, 0, $end + 1)])
-                && (\strlen($name) === ($end + 1) || '[' === $name[$end + 1])
-            ) {
+        $prefix = '';
+        foreach (explode(']', $name, -1) as $part) {
+            $prefix .= $part . ']';
+            $rest = substr($name, \strlen($prefix));
+            if (isset($entries[$prefix]) && ('' === $rest || '[' === $rest[0])) {
                 return true;
             }
-            $end = strpos($name, ']', $end + 1);
         }
 
         return false;

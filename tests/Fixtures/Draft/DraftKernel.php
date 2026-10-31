@@ -49,12 +49,12 @@ final class DraftKernel extends Kernel
 
     public function getCacheDir(): string
     {
-        return sys_get_temp_dir() . '/janalis-collaborate-tests/draft-kernel/cache/' . $this->environment;
+        return \dirname(__DIR__, 3) . '/var/draft-kernel/cache/' . $this->environment;
     }
 
     public function getLogDir(): string
     {
-        return sys_get_temp_dir() . '/janalis-collaborate-tests/draft-kernel/log';
+        return \dirname(__DIR__, 3) . '/var/draft-kernel/log';
     }
 
     private function configureContainer(ContainerConfigurator $container): void

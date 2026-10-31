@@ -74,7 +74,9 @@ final class TestKernel extends Kernel
 
     private function varDir(): string
     {
-        return sys_get_temp_dir() . '/janalis-collaborate-tests/' . hash('xxh128', serialize($this->collaborate));
+        // Under this checkout's var/: a shared temporary directory would let one checkout's container, with its
+        // database URL, serve another's tests.
+        return \dirname(__DIR__, 2) . '/var/test-kernel/' . hash('xxh128', serialize($this->collaborate));
     }
 
     private function configureContainer(ContainerConfigurator $container): void

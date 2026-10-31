@@ -15,5 +15,9 @@
         <testsuite name="integration"><directory>tests/Integration</directory></testsuite>
         <testsuite name="tools"><directory>tests/Tools</directory></testsuite>
     </testsuites>
-    <source ignoreIndirectDeprecations="true"><include><directory>src</directory><directory>tools</directory></include></source>
+    <source ignoreIndirectDeprecations="true">
+        <include><directory>src</directory><directory>tools</directory></include>
+        <!-- The release tool's two-line entry script: it calls exit(), so only its subprocess test runs it. -->
+        <exclude><file>tools/relprep.php</file></exclude>
+    </source>
 </phpunit>

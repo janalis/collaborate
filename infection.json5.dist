@@ -1,12 +1,14 @@
 {
     "$schema": "vendor/infection/infection/resources/schema.json",
     "source": {
-        "directories": ["src"]
+        "directories": ["src", "tools"],
+        // The release tool's entry script only calls ReleasePrep and exit().
+        "excludes": ["relprep.php"]
     },
     // Every PHPUnit suite kills mutants: the unit tests, the MariaDB functional tests and the bundle inside
     // the two test applications (tests/Integration). Each process owns its databases (TEST_TOKEN).
-    "testFrameworkOptions": "--testsuite=unit,functional,integration",
-    "initialTestsPhpOptions": "-d pcov.enabled=1",
+    "testFrameworkOptions": "--testsuite=unit,functional,integration,tools",
+    "initialTestsPhpOptions": "-d pcov.enabled=1 -d pcov.directory=.",
     "threads": "max",
     "timeout": 60,
     "tmpDir": "var/infection/tmp",

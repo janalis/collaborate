@@ -70,8 +70,9 @@ test-js: ## Run the Vitest suite
 lint-js: ## Lint the JavaScript (Biome)
 	$(NPM) run lint
 
-coverage: ## Run PHPUnit with coverage (pcov, src/ and tools/) and Vitest with coverage
-	$(PHP) -d pcov.enabled=1 -d pcov.directory=. vendor/bin/phpunit --coverage-text --coverage-html var/coverage $(PHPUNIT_ARGS)
+coverage: ## Require 100% coverage: PHPUnit (pcov, src/ and tools/, every suite) and Vitest (thresholds)
+	$(PHP) -d pcov.enabled=1 -d pcov.directory=. vendor/bin/phpunit --coverage-text --coverage-html var/coverage --coverage-clover var/coverage/clover.xml $(PHPUNIT_ARGS)
+	$(PHP) tests/bin/check-coverage.php var/coverage/clover.xml
 	$(NPM) run test:coverage
 
 infection: ## Mutation-test src/ against every PHPUnit suite (reports in var/infection/)

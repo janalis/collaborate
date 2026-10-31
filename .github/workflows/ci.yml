@@ -42,7 +42,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           extensions: pdo_mysql, mbstring, intl
-          coverage: pcov
+          coverage: none
           tools: composer:v2, flex
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -56,9 +56,40 @@ jobs:
       - name: Build the test applications' assets
         run: npm ci && node tests/Application/bin/setup-assets.mjs
       - name: Unit, functional and tools suites
-        run: php -d pcov.directory=. vendor/bin/phpunit --testsuite unit,functional,tools --coverage-text
+        run: vendor/bin/phpunit --testsuite unit,functional,tools
       - name: Integration suite (the bundle in an application with and without EasyAdmin)
-        run: php -d pcov.directory=. vendor/bin/phpunit --testsuite integration --coverage-text
+        run: vendor/bin/phpunit --testsuite integration
+
+  coverage:
+    name: Coverage (100% of PHP statements and methods, every JS metric)
+    runs-on: ubuntu-latest
+    services:
+      database:
+        image: mariadb:11.4
+        env:
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: '1'
+          MARIADB_DATABASE: collaborate_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      COLLABORATE_DATABASE_URL: mysql://root@127.0.0.1:3306/collaborate_test?serverVersion=10.11.0-MariaDB
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+        with:
+          php-version: '8.5'
+          extensions: pdo_mysql, mbstring, intl
+          coverage: pcov
+          tools: composer:v2
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: composer install --no-interaction --prefer-dist
+      - run: npm ci && node tests/Application/bin/setup-assets.mjs
+      - run: make coverage
 
   lowest:
     name: Lowest dependencies

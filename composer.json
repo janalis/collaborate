@@ -1,0 +1,76 @@
+{
+    "name": "janalis/collaborate",
+    "description": "Live collaboration for Symfony admin forms: shared drafts, presence and cursors over Mercure, with an EasyAdmin adapter.",
+    "type": "symfony-bundle",
+    "license": "MIT",
+    "keywords": ["collaboration", "mercure", "presence", "cursors", "ckeditor", "easyadmin", "symfony-bundle"],
+    "homepage": "https://github.com/janalis/collaborate",
+    "support": {
+        "issues": "https://github.com/janalis/collaborate/issues",
+        "source": "https://github.com/janalis/collaborate"
+    },
+    "require": {
+        "php": "^8.4",
+        "doctrine/dbal": "^4.2",
+        "doctrine/doctrine-bundle": "^2.13 || ^3.0",
+        "doctrine/orm": "^3.3",
+        "psr/clock": "^1.0",
+        "psr/log": "^3.0",
+        "symfony/clock": "^7.4 || ^8.0",
+        "symfony/config": "^7.4 || ^8.0",
+        "symfony/console": "^7.4 || ^8.0",
+        "symfony/dependency-injection": "^7.4 || ^8.0",
+        "symfony/event-dispatcher": "^7.4 || ^8.0",
+        "symfony/form": "^7.4 || ^8.0",
+        "symfony/framework-bundle": "^7.4 || ^8.0",
+        "symfony/http-foundation": "^7.4 || ^8.0",
+        "symfony/http-kernel": "^7.4 || ^8.0",
+        "symfony/mercure-bundle": "^0.3.9 || ^0.4 || ^0.5 || ^0.6",
+        "symfony/rate-limiter": "^7.4 || ^8.0",
+        "symfony/routing": "^7.4 || ^8.0",
+        "symfony/security-bundle": "^7.4 || ^8.0",
+        "symfony/translation-contracts": "^3.5",
+        "symfony/twig-bundle": "^7.4 || ^8.0"
+    },
+    "require-dev": {
+        "carthage-software/mago": "^1.30",
+        "easycorp/easyadmin-bundle": "^4.24 || ^5.0",
+        "gedmo/doctrine-extensions": "^3.13",
+        "phpunit/phpunit": "^12.5",
+        "symfony/asset-mapper": "^7.4 || ^8.0",
+        "symfony/translation": "^7.4 || ^8.0",
+        "symfony/yaml": "^7.4 || ^8.0"
+    },
+    "suggest": {
+        "easycorp/easyadmin-bundle": "Shared drafts on EasyAdmin edit and new forms, and live refresh of saved lists",
+        "gedmo/doctrine-extensions": "Locale-specific draft fields for Gedmo translatable properties",
+        "symfony/asset-mapper": "Serves the bundle's JavaScript and reads the pinned CKEditor version"
+    },
+    "autoload": {
+        "psr-4": {
+            "Janalis\\Collaborate\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Janalis\\Collaborate\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "scripts": {
+        "format": "mago fmt",
+        "format:check": "mago fmt --check",
+        "lint": "mago lint",
+        "analyze": "mago analyze",
+        "test": "phpunit",
+        "verify": [
+            "@composer validate --strict",
+            "@format:check",
+            "@lint",
+            "@analyze",
+            "@test"
+        ]
+    }
+}

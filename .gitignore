@@ -1,0 +1,10 @@
+/vendor/
+/var/
+/node_modules/
+/.phpunit.cache/
+/phpunit.xml
+/infection.json5
+/mago.local.toml
+/auth.json
+/.env.local
+/coverage/

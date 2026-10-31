@@ -78,10 +78,12 @@ export function initUpdates(
           list,
           setTimeout(() => {
             retries.delete(list);
-            // A load started since, the user's own page change included, holds the list in turn.
-            if ((reloadingLists.get(list) ?? -Infinity) + 30_000 > Date.now()) return reloadList(list);
+            // A load started since, the user's own page change included, holds the list in turn. Until this
+            // retry runs, the list stays loading and stale: a landed load or a suspension cancels the retry.
+            if (reloadingLists.get(list) + 30_000 > Date.now()) return reloadList(list);
             reloadingLists.delete(list);
-            if (staleLists.delete(list)) refreshList(list);
+            staleLists.delete(list);
+            refreshList(list);
           }, wait)
         );
       return;

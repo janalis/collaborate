@@ -857,3 +857,65 @@ test('throttles, beats, expires and colours as the layer configures', async () =
   expect(instance.peers.size).toBe(0);
   expect(strip.hidden).toBe(true);
 });
+
+test('turns the label of a cursor near the right or bottom edge of the window back into the page', async () => {
+  await start();
+  document.querySelector('button').getBoundingClientRect = () => ({
+    left: innerWidth - 100,
+    top: innerHeight - 20,
+    width: 100,
+    height: 20,
+    right: innerWidth,
+    bottom: innerHeight,
+  });
+  receive();
+  await vi.advanceTimersByTimeAsync(20);
+  const cursor = document.querySelector('.collaborate-cursor');
+  expect(cursor.dataset.edge).toBe('right');
+  expect(cursor.dataset.bottom).toBe('true');
+});
+
+test('shows a cursor whose anchor appears after its move right at that anchor, without a glide', async () => {
+  await start();
+  const button = document.querySelector('button');
+  button.remove();
+  receive();
+  await vi.advanceTimersByTimeAsync(20);
+  const cursor = document.querySelector('.collaborate-cursor');
+  expect(cursor.hidden).toBe(true);
+  expect(instance.peers.get(2).point).toBeFalsy();
+  document.querySelector('main').append(button);
+  await vi.advanceTimersByTimeAsync(20);
+  expect(cursor.hidden).toBe(false);
+  expect(instance.peers.get(2).point).toEqual({ x: 100, y: 50 });
+  expect(cursor.style.transform).toBe('translate3d(100px, 50px, 0)');
+});
+
+test('keeps a mouse pointer shown after its button is released, unlike a lifted finger', async () => {
+  await start();
+  pointer('pointerdown');
+  pointer('pointerup');
+  now = 1000;
+  await vi.advanceTimersByTimeAsync(1000);
+  const kinds = fetcher.mock.calls.filter(([url]) => url === '/events').map(([, init]) => JSON.parse(init.body).kind);
+  expect(kinds).not.toContain('hide');
+  expect(kinds.at(-1)).toBe('move');
+});
+
+test('sends no heartbeat while the tab is hidden', async () => {
+  await start();
+  pointer('pointermove');
+  now = 100;
+  await vi.advanceTimersByTimeAsync(100);
+  const sent = () => fetcher.mock.calls.filter(([url]) => url === '/events').length;
+  const before = sent();
+  Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+  now = 6000;
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(sent()).toBe(before);
+  Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+  now = 11000;
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(sent()).toBe(before + 1);
+  expect(JSON.parse(fetcher.mock.calls.at(-1)[1].body).kind).toBe('heartbeat');
+});

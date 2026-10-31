@@ -458,3 +458,64 @@ test('never cancels a navigation that started before the refresh, and refreshes 
   await vi.advanceTimersByTimeAsync(1000);
   expect(reload).toHaveBeenCalledOnce();
 });
+
+test('waits once for a loading embedded list, however many saves it hears meanwhile', async () => {
+  vi.useFakeTimers();
+  const { updates } = start('<form data-collaborate><div class="field-embedded-list" data-src="/list"></div></form>');
+  const list = document.querySelector('.field-embedded-list');
+  const reload = vi.fn();
+  list.addEventListener('ea.embedded-list.reload', reload);
+  updates.changed();
+  await vi.advanceTimersByTimeAsync(1000);
+  updates.changed();
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(reload).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(28_000);
+  expect(reload).toHaveBeenCalledOnce();
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(reload).toHaveBeenCalledOnce();
+  updates.stop();
+});
+
+test('leaves a page that is neither a list nor a record view, nor holds a form, as it is', async () => {
+  vi.useFakeTimers();
+  document.body.className = 'ea-edit';
+  const { updates, reload } = start();
+  updates.changed();
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(reload).not.toHaveBeenCalled();
+  expect(sessionStorage.getItem('collaborate-update:/')).toBeNull();
+  updates.stop();
+});
+
+describe('starting on its own', () => {
+  afterEach(() => {
+    vi.resetModules();
+  });
+
+  async function load(readyState) {
+    vi.resetModules();
+    vi.spyOn(document, 'readyState', 'get').mockReturnValue(readyState);
+    const join = vi.fn(() => () => {});
+    vi.doMock('../../assets/hub.js', () => ({ hubFor: () => ({ join }) }));
+    document.body.innerHTML = '<div data-collaborate-layer data-updates="true"></div>';
+    await import('../../assets/updates.js');
+    vi.doUnmock('../../assets/hub.js');
+    return join;
+  }
+
+  test('follows the saved-views channel at once on a parsed page', async () => {
+    const join = await load('complete');
+    expect(join).toHaveBeenCalledOnce();
+    expect(join.mock.calls[0][0].channel).toBe('updates');
+    window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false }));
+  });
+
+  test('waits for the page to be parsed before following it', async () => {
+    const join = await load('loading');
+    expect(join).not.toHaveBeenCalled();
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+    expect(join).toHaveBeenCalledOnce();
+    window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false }));
+  });
+});

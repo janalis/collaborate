@@ -156,9 +156,10 @@ export class CollaborateHub {
       if (signal.aborted) return;
       const streamed = this.streaming === controller;
       if (streamed) this.streaming = null;
-      // A newer connection is under way: it reports for the members, this stream's loss included.
+      // A newer connection is under way: it reports for the members, this stream's loss included. Only a
+      // stream that was open is left running for a newer connection; any other was aborted by it.
       if (this.controller !== controller) {
-        if (streamed) this.lost = true;
+        this.lost = true;
         return;
       }
       // The stream this one was to replace still carries its topics: retry without reporting a loss.

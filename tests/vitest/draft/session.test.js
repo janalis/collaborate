@@ -1916,3 +1916,246 @@ test('gives up Join once the configured retry time is over', async () => {
   await rejected;
   expect(fetcher.mock.calls.filter(([url]) => url === '/join')).toHaveLength(3);
 });
+
+test('shows the edits of the journal Join answers in the fields it registers', async () => {
+  const { session, form } = fixture(
+    '<select name="Record[type]"><option value="a">A</option><option value="b">B</option></select>',
+    { 'Record[type]': { type: 'value', initial: 'a' } },
+    {
+      state: {
+        revision: 1,
+        events: [{ id: 'peer', kind: 'value', field: 'Record[type]', value: 'b', version: 0, revision: 1 }],
+      },
+    }
+  );
+  await session.ready;
+  expect(form.elements.namedItem('Record[type]').value).toBe('b');
+  expect(session.adapters.get('Record[type]').next()).toBeNull();
+});
+
+test('follows a choice rendered as radio buttons', async () => {
+  const { session, form, fetcher } = fixture(
+    '<input type="radio" name="Record[type]" value="a" checked><input type="radio" name="Record[type]" value="b">',
+    { 'Record[type]': { type: 'value', initial: 'a' } }
+  );
+  await session.ready;
+  const [a, b] = form.querySelectorAll('input[type="radio"]');
+  b.checked = true;
+  b.dispatchEvent(new Event('change'));
+  await session.flush();
+  const append = fetcher.mock.calls.find(([url]) => url === '/append');
+  expect(JSON.parse(append[1].body)).toMatchObject({ field: 'Record[type]', kind: 'value', value: 'b' });
+  session.adapters.get('Record[type]').receive({ id: 'peer', kind: 'value', value: 'a', version: 1 });
+  expect(a.checked).toBe(true);
+});
+
+test('both requests a lost signature failed go again with the full grant', async () => {
+  const { session, fetcher, configuration } = fixture();
+  await session.ready;
+  expect(session.acknowledged).toBe(configuration.grant);
+  const transport = fetcher.getMockImplementation();
+  fetcher.mockImplementation(async (url, options) =>
+    JSON.parse(options.body).grant === 'signature' ? new Response('{}', { status: 412 }) : transport(url, options)
+  );
+  fetcher.mockClear();
+  await Promise.all([session.request('replay', { since: 0 }), session.request('replay', { since: 0 })]);
+  const grants = fetcher.mock.calls.map(([, options]) => JSON.parse(options.body).grant);
+  expect(grants).toEqual(['signature', 'signature', configuration.grant, configuration.grant]);
+  expect(session.acknowledged).toBe(configuration.grant);
+});
+
+test('reloads once a Discard the server answers without content is done', async () => {
+  const { session, fetcher } = fixture();
+  await session.ready;
+  const transport = fetcher.getMockImplementation();
+  fetcher.mockImplementation(async (url, options) =>
+    url === '/discard' ? new Response(null, { status: 204 }) : transport(url, options)
+  );
+  const rejoin = vi.spyOn(session, 'rejoin').mockImplementation(() => {});
+  await session.discardDraft();
+  expect(rejoin).toHaveBeenCalledWith({ key: 'noticeDiscardedOwn' });
+});
+
+test('keeps the changed status when the replay a refusal asks for fails', async () => {
+  const { session, form, fetcher } = fixture();
+  await session.ready;
+  fetcher.mockClear();
+  fetcher.mockResolvedValue(new Response('{}', { status: 500 }));
+  session.failed(Object.assign(new Error('changed'), { status: 409 }));
+  await vi.waitFor(() => expect(fetcher.mock.calls.some(([url]) => url === '/replay')).toBe(true));
+  await vi.waitFor(() => expect(session.pulling).toBeNull());
+  expect(form.dataset.collaborateState).toBe('changed');
+});
+
+test('sends a peer-refused edit again on the revision the replay brings', async () => {
+  const { session, form, state, fetcher } = fixture();
+  await session.ready;
+  // A peer's edit of the field lands first: the server refuses this page's batch for its stale version.
+  const transport = fetcher.getMockImplementation();
+  let refused = false;
+  fetcher.mockImplementation(async (url, options) => {
+    if (url === '/append' && !refused) {
+      refused = true;
+      return new Response('{}', { status: 409 });
+    }
+    return transport(url, options);
+  });
+  const control = form.elements.namedItem('Record[name]');
+  control.value = 'Local';
+  control.dispatchEvent(new Event('input'));
+  await session.flush();
+  expect(fetcher.mock.calls.filter(([url]) => url === '/append')).toHaveLength(2);
+  expect(state.events).toHaveLength(1);
+  expect(form.dataset.collaborateState).toBe('draft');
+});
+
+test('reads the draft again for a renewed grant when the replay running meanwhile fails', async () => {
+  const { session, fetcher, configuration } = fixture();
+  await session.ready;
+  const transport = fetcher.getMockImplementation();
+  let fail = true;
+  fetcher.mockImplementation(async (url, options) => {
+    if (url === '/replay' && fail) {
+      fail = false;
+      return new Response('{}', { status: 503 });
+    }
+    return transport(url, options);
+  });
+  fetcher.mockClear();
+  const failing = session.pull();
+  const refreshed = session.refreshConfiguration({ ...configuration });
+  await expect(failing).rejects.toMatchObject({ status: 503 });
+  await refreshed;
+  expect(fetcher.mock.calls.filter(([url]) => url === '/replay')).toHaveLength(2);
+  expect(session.form.dataset.collaborateState).toBe('saved');
+});
+
+test('refreshes the grant from a record answer that carries no tokens', async () => {
+  const { session, form, fetcher, configuration } = fixture(
+    '<input name="Record[name]"><input type="hidden" name="Record[_token]" value="kept">'
+  );
+  await session.ready;
+  const transport = fetcher.getMockImplementation();
+  fetcher.mockImplementation((url, options) =>
+    options.method
+      ? transport(url, options)
+      : Promise.resolve(Response.json({ configuration: { ...configuration, csrf: 'renewed' } }))
+  );
+  await session.refreshRecord(false);
+  expect(session.configuration.csrf).toBe('renewed');
+  expect(form.elements.namedItem('Record[_token]').value).toBe('kept');
+});
+
+test('leaves the conflicts of an unchanged answer to the next replay when the grant changed meanwhile', async () => {
+  const { session, form, fetcher, configuration } = fixture();
+  await session.ready;
+  session.setStatus('offline');
+  const render = vi.spyOn(session, 'renderConflicts');
+  fetcher.mockImplementationOnce(async () => {
+    await session.refreshConfiguration({ ...configuration }, false);
+    return Response.json({ unchanged: true });
+  });
+  await session.pull();
+  expect(form.dataset.collaborateState).toBe('saved');
+  expect(render).not.toHaveBeenCalled();
+});
+
+test('tells a page whose draft changed only in a choice, nothing unsent, to rejoin, and keeps an unsent choice', async () => {
+  const html = '<select name="Record[type]"><option value="a">A</option><option value="b">B</option></select>';
+  const fields = { 'Record[type]': { type: 'value', initial: 'a' } };
+  const clean = fixture(html, fields);
+  await clean.session.ready;
+  const rejoin = vi.spyOn(clean.session, 'rejoin').mockImplementation(() => {});
+  clean.state.generation = 2;
+  await expect(clean.session.replay()).rejects.toThrow('rebased');
+  expect(rejoin).toHaveBeenCalledWith(null);
+
+  const edited = fixture(html, fields);
+  await edited.session.ready;
+  const select = edited.form.elements.namedItem('Record[type]');
+  select.value = 'b';
+  select.dispatchEvent(new Event('change'));
+  edited.state.generation = 2;
+  await expect(edited.session.replay()).rejects.toThrow('discarded');
+  expect(select.value).toBe('b');
+});
+
+test('shows a stored notice that names nobody with its plain message', async () => {
+  const first = fixture();
+  await first.session.ready;
+  first.session.rejoin({ key: 'noticeDiscarded' });
+  first.session.stop();
+  const second = fixture();
+  await second.session.ready;
+  expect(second.form.querySelector('[data-collaborate-notice]').textContent).toBe('Discarded, reloaded');
+});
+
+test('registers no shared mode for a rich field whose grant shares none, and applies source typed only in Markdown mode', async () => {
+  const name = 'Record[body]';
+  const { session, form } = fixture(
+    '<textarea id="body" name="Record[body]"></textarea><input type="radio" name="body_view" value="markdown"><input type="radio" name="body_view" value="wysiwyg" checked>',
+    { [name]: { type: 'rich', initial: 'Body' } }
+  );
+  await session.ready;
+  session.editorReady(name);
+  const field = form.querySelector('textarea');
+  const model = new Model();
+  model.document.createRoot();
+  const apply = vi.fn();
+  vi.useFakeTimers();
+  const remove = session.registerMode(name, { sourceElement: field, model }, apply);
+  expect(session.adapters.has(`${name}[__mode__]`)).toBe(false);
+  const type = (value) => {
+    field.value = value;
+    field.dispatchEvent(new Event('input'));
+  };
+  // The rich editor's own mirror writes the source while not in Markdown mode, focused or not.
+  type('a');
+  field.focus();
+  type('ab');
+  const markdown = form.querySelector('[value="markdown"]');
+  markdown.checked = true;
+  // A peer's edit the editor mirrors into its focused source is not typing either.
+  session.applying = true;
+  type('abc');
+  session.applying = false;
+  await vi.advanceTimersByTimeAsync(100);
+  field.blur();
+  expect(apply).not.toHaveBeenCalled();
+  field.focus();
+  type('abcd');
+  await vi.advanceTimersByTimeAsync(100);
+  expect(apply.mock.calls).toEqual([['abcd']]);
+  remove();
+  model.destroy();
+});
+
+describe('starting on its own', () => {
+  afterEach(() => {
+    vi.resetModules();
+  });
+
+  test('starts no session for a form without a field to follow, and keeps the ordinary form where Join fails', async () => {
+    document.body.innerHTML =
+      '<form id="hidden-only" data-collaborate="{}"><input type="hidden" name="Record[_token]"></form><form id="shared"><input name="Record[name]"></form>';
+    const fields = { 'Record[name]': { type: 'text', initial: '' } };
+    const shared = document.getElementById('shared');
+    shared.dataset.collaborate = JSON.stringify({
+      grant: `${btoa(JSON.stringify({ fields }))}.signature`,
+      csrf: 'csrf',
+      url: '/__action__',
+      messages: { unavailable: 'Unavailable' },
+    });
+    const fetcher = vi.fn(async () => new Response('{}', { status: 400 }));
+    vi.stubGlobal('fetch', fetcher);
+    vi.resetModules();
+    const module = await import('../../../assets/draft/session.js');
+    expect(document.querySelector('#hidden-only [data-collaborate-status]')).toBeNull();
+    const session = module.sessionFor(shared.elements.namedItem('Record[name]'));
+    live.push(session);
+    await expect(session.ready).rejects.toThrow();
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(shared.dataset.collaborateState).toBe('unavailable');
+    expect(shared.querySelector('input').hasAttribute('inert')).toBe(false);
+  });
+});

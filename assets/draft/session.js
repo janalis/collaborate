@@ -216,7 +216,7 @@ export class DraftSession {
           await this.refreshRecord();
           await this.flush();
           if (this.stopped || this.suspended || this.resuming || this.composing) return;
-          if (Object.keys(this.conflicts || {}).length) {
+          if (Object.keys(this.conflicts).length) {
             this.setStatus('conflict');
             this.conflictPanel.scrollIntoView?.({ block: 'nearest' });
             this.conflictPanel.querySelector('h2')?.focus();
@@ -251,6 +251,7 @@ export class DraftSession {
       this.startTimers();
       this.settled();
       this.showNotice();
+      // Every Save and replay comes after this: `this.conflicts` holds a set of conflicts from here on.
       this.renderConflicts(this.state.conflicts || {});
       this.initialized = true;
       this.unlockControls();
@@ -701,7 +702,7 @@ export class DraftSession {
       // Nobody wrote to the draft since, but the answer proves the connection is back.
       if (['offline', 'changed'].includes(this.form.dataset.collaborateState)) {
         this.settled();
-        if (this.configuration === configuration) this.renderConflicts(this.conflicts || {});
+        if (this.configuration === configuration) this.renderConflicts(this.conflicts);
       }
       return;
     }
@@ -907,7 +908,6 @@ export class DraftSession {
     if (this.stopped || this.suspended) return;
     this.poll = setInterval(
       () => {
-        if (this.stopped) return;
         // The hub announces every change. While it is connected, a pull every 30 s only covers a lost publication.
         if (!this.live || !(Date.now() - this.pulled < this.setting('replayConnected', 30_000))) this.schedule();
       },

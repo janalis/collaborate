@@ -1,0 +1,31 @@
+// Markdown style, checked by `make lint` and applied by `make fmt`
+// (markdownlint-cli2 from docs/package.json).
+{
+  "config": {
+    "default": true,
+    // Prose is wrapped by hand or not at all; tables and URLs run long.
+    "MD013": false,
+    // VitePress components (<Badge>), the README's centered header and HTML comments are part of the docs.
+    "MD033": false,
+    // Pages may start with front matter or an include.
+    "MD041": false,
+    // Repeated headings (Options, Example) are fine under different parents.
+    "MD024": { "siblings_only": true },
+    // Spaces inside code spans are meaningful.
+    "MD038": false,
+    // Table cells are not padded to align columns.
+    "MD060": false
+  },
+  "globs": ["**/*.md"],
+  "ignores": [
+    "**/node_modules/**",
+    "vendor/**",
+    "var/**",
+    "coverage/**",
+    "test-results/**",
+    "playwright-report/**",
+    "tests/Application/**/var/**",
+    "docs/.vitepress/cache/**",
+    "docs/.vitepress/dist/**"
+  ]
+}

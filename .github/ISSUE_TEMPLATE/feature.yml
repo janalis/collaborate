@@ -1,0 +1,28 @@
+name: Feature request
+description: A new collaboration behavior, field type, adapter, option or extension point.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are your editors trying to do together, and why is it hard today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What the bundle should do, what each editor would see, and how it fits with drafts, saves and conflicts.
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: Example
+      description: A form type, page or configuration that shows the case.
+      render: php
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

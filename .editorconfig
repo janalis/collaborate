@@ -1,0 +1,26 @@
+# Editor settings, checked by `make lint` (editorconfig-checker).
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# JavaScript, Sass, workflows and the docs site follow Biome's and YAML's two spaces.
+[*.{js,mjs,ts,mts,json,jsonc,scss,css,yml,yaml,md,vue}]
+indent_size = 2
+
+# Composer and PHPUnit keep their four-space files.
+[{composer.json,phpunit.xml.dist}]
+indent_size = 4
+
+[{Makefile,*.mk,Caddyfile}]
+indent_style = tab
+
+[*.md]
+# Code blocks keep the indentation of the language they show; markdownlint checks the rest.
+indent_style = unset
+indent_size = unset

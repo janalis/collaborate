@@ -1,0 +1,123 @@
+name: release
+# Actions → release → Run workflow (on main). Verifies, moves CHANGELOG's [Unreleased] section to the new
+# version, commits and tags it, then publishes the GitHub release with that section as its notes, pings
+# Packagist (janalis/collaborate, from the tag) and refreshes the documentation site.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "X.Y.Z, or patch | minor | major (bump of the latest tag)"
+        required: true
+        default: patch
+      dry_run:
+        description: "Verify and prepare everything, push and publish nothing"
+        type: boolean
+        default: false
+concurrency: release
+permissions:
+  contents: write
+defaults:
+  run:
+    shell: bash
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.relprep.outputs.version }}
+      tag: ${{ steps.relprep.outputs.tag }}
+    services:
+      database:
+        image: mariadb:11.4
+        env:
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: '1'
+          MARIADB_DATABASE: collaborate_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      COLLABORATE_DATABASE_URL: mysql://root@127.0.0.1:3306/collaborate_test?serverVersion=11.4.0-MariaDB
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+        with:
+          php-version: '8.5'
+          extensions: pdo_mysql, mbstring, intl
+          coverage: none
+          tools: composer:v2
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      # Composer and npm dependencies, and the test applications' assets the integration suite renders.
+      - run: make install
+      # The ci workflow already ran markdownlint, editorconfig-checker and actionlint on this commit.
+      - run: make verify MDLINT= EDITORCONFIG= ACTIONLINT=
+      - id: relprep
+        env:
+          BUMP: ${{ inputs.version }}
+        run: php tools/relprep.php --bump "$BUMP" --notes "$RUNNER_TEMP/notes.md" | tee -a "$GITHUB_OUTPUT"
+      - run: git diff
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: ${{ runner.temp }}/notes.md
+      - if: ${{ !inputs.dry_run }}
+        env:
+          TAG: ${{ steps.relprep.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Release $TAG"
+          git tag -a "$TAG" -m "janalis/collaborate $TAG"
+          git push --atomic origin HEAD:main "$TAG"
+
+  # Separate job so a failed publish can be retried ("Re-run failed jobs") without cutting the release again.
+  publish:
+    needs: prepare
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+          path: ${{ runner.temp }}
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists"
+            exit 0
+          fi
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
+      # Packagist's GitHub hook already picks up the tag; this makes it immediate.
+      - env:
+          PACKAGIST_USERNAME: ${{ secrets.PACKAGIST_USERNAME }}
+          PACKAGIST_TOKEN: ${{ secrets.PACKAGIST_TOKEN }}
+        run: |
+          if [ -z "$PACKAGIST_USERNAME" ] || [ -z "$PACKAGIST_TOKEN" ]; then
+            echo "Packagist secrets not set; relying on the GitHub hook"
+            exit 0
+          fi
+          curl -fsS -X POST -H 'Content-Type: application/json' \
+            -H "Authorization: Bearer $PACKAGIST_USERNAME:$PACKAGIST_TOKEN" \
+            -d "{\"repository\":{\"url\":\"https://github.com/$GITHUB_REPOSITORY\"}}" \
+            https://packagist.org/api/update-package
+
+  # Refresh the documentation site (changelog, version in the nav).
+  docs:
+    needs: [prepare, publish]
+    if: ${{ !inputs.dry_run }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/docs.yml
+    with:
+      ref: ${{ needs.prepare.outputs.tag }}

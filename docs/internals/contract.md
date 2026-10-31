@@ -19,17 +19,17 @@ How the parts of the bundle talk to each other. Every name here is fixed: PHP, T
 | `Controller\CursorController` | `POST <prefix>/cursors/events`, route `collaborate_cursor_events`. |
 | `Controller\DraftController` | `POST <prefix>/collaborate/{action}`, route `collaborate_draft`, `action` ∈ join, replay, append, discard, reconcile. |
 | `Twig\CollaborateExtension` | `collaborate_layer()`, `collaborate_presence()`, `collaborate_enabled()`, `collaborate_grant()`. |
-| `Draft\DraftJournal`, `DraftText`, `DraftSave` | The journal (MariaDB/MySQL SQL), plain-text operations, the locked save. |
+| `Draft\DraftJournal`, `DraftText`, `DraftSave` | The journal (MariaDB/MySQL SQL), plain-text operations, the locked save; a host without EasyAdmin calls `DraftSave::completed($record)` once it has persisted the record. |
 | `Form\CollaborateFormExtension` + `Form\FormContextInterface` | Field schema, member keys, the `data-collaborate` attribute; the context says which record the root form edits. |
 | `Doctrine\ChangeCollector` | The `onFlush` half of the saved-view updates. |
-| `EasyAdmin\*` | `EasyAdminFormContext`, `DraftRefreshSubscriber`, `SaveSubscriber`, `UpdatesSubscriber`. |
+| `EasyAdmin\*` | `EasyAdminFormContext`, `DraftRefreshSubscriber`, `SaveSubscriber` (loaded with EasyAdmin); `UpdatesSubscriber`, the response half of the saved-view updates (loaded always, from `drafts.php`). |
 | `Gedmo\*` | The translatable field-key resolver and the translation-object mapping. |
 | `Entity\Draft`, `DraftField`, `DraftEvent` | Tables `collaborate_draft`, `collaborate_draft_field`, `collaborate_draft_event`. |
 | `Command\PurgeDraftsCommand` | `collaborate:purge`. |
 
 Services: `config/services/{core,hub,cursors,drafts,easyadmin,gedmo}.php`, explicit definitions (no autowiring of the bundle's namespace). Routes: `config/routes.php`, imported by the application under its own prefix (e.g. `/{_locale}/admin`).
 
-Request attributes start with `_collaborate_`. Headers: `X-CSRF-Token`, `X-Collaborate-Refresh: 1` (a form's action answers its fresh grant and tokens as JSON), `X-Collaborate-Renew: 1` (a background reload for a fresh page grant). CSRF token ids: `collaborate-hub` (session and cursor events) and `collaborate-draft`.
+Request attributes start with `_collaborate_`. Headers: `X-CSRF-Token`, `X-Collaborate-Refresh: 1` (a form's action answers its fresh grant and tokens as JSON: EasyAdmin's `DraftRefreshSubscriber`, or the host's controller), `X-Collaborate-Renew: 1` (a background reload for a fresh page grant). CSRF token ids: `collaborate-hub` (session and cursor events) and `collaborate-draft`.
 
 Translation domain `collaborate`; its keys are the English strings.
 

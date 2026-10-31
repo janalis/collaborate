@@ -1,0 +1,72 @@
+/* Palette from the logo: cobalt #2f5bd3, sky #6f93f0, coral #f0644b, peach #f7a48f, ink #16213e. */
+:root {
+  --collaborate-cobalt: #2f5bd3;
+  --collaborate-sky: #6f93f0;
+  --collaborate-coral: #f0644b;
+  --collaborate-peach: #f7a48f;
+  --collaborate-ink: #16213e;
+
+  --vp-c-brand-1: #2f5bd3;
+  --vp-c-brand-2: #4570e0;
+  --vp-c-brand-3: #2f5bd3;
+  --vp-c-brand-soft: rgba(111, 147, 240, 0.14);
+
+  --vp-c-tip-1: #c2412b;
+  --vp-c-tip-2: #d9533b;
+  --vp-c-tip-3: #f0644b;
+  --vp-c-tip-soft: rgba(240, 100, 75, 0.12);
+
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, #16213e 10%, #2f5bd3 55%, #f0644b);
+  --vp-home-hero-image-background-image: linear-gradient(
+    -45deg,
+    rgba(111, 147, 240, 0.55) 50%,
+    rgba(240, 100, 75, 0.4) 50%
+  );
+  --vp-home-hero-image-filter: blur(44px);
+
+  --vp-button-brand-bg: #2f5bd3;
+  --vp-button-brand-hover-bg: #4570e0;
+  --vp-button-brand-active-bg: #2549ad;
+}
+
+.dark {
+  --vp-c-bg: #10172c;
+  --vp-c-bg-alt: #0b1122;
+  --vp-c-bg-elv: #17203b;
+  --vp-c-bg-soft: #17203b;
+
+  --vp-c-brand-1: #8eabf5;
+  --vp-c-brand-2: #6f93f0;
+  --vp-c-brand-3: #2f5bd3;
+  --vp-c-brand-soft: rgba(111, 147, 240, 0.2);
+
+  --vp-c-tip-1: #f7a48f;
+  --vp-c-tip-2: #f0644b;
+  --vp-c-tip-3: #d9533b;
+  --vp-c-tip-soft: rgba(240, 100, 75, 0.16);
+
+  --vp-home-hero-name-background: linear-gradient(120deg, #8eabf5 10%, #f7a48f);
+  --vp-home-hero-image-background-image: linear-gradient(
+    -45deg,
+    rgba(47, 91, 211, 0.7) 50%,
+    rgba(240, 100, 75, 0.35) 50%
+  );
+}
+
+@media (min-width: 640px) {
+  :root {
+    --vp-home-hero-image-filter: blur(56px);
+  }
+}
+
+@media (min-width: 960px) {
+  :root {
+    --vp-home-hero-image-filter: blur(68px);
+  }
+}
+
+/* Option tables carry long dotted paths. */
+.vp-doc table code {
+  white-space: nowrap;
+}

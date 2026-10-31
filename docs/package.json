@@ -1,0 +1,14 @@
+{
+  "name": "collaborate-docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "markdownlint-cli2": "^0.23.3",
+    "vitepress": "1.6.4"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "Disable": {
+    "IndentSize": true
+  },
+  "Exclude": [
+    "^vendor/",
+    "^node_modules/",
+    "^var/",
+    "^coverage/",
+    "^test-results/",
+    "^playwright-report/",
+    "^tests/Application/.*/var/",
+    "^tests/Application/var/",
+    "^docs/node_modules/",
+    "^docs/\\.vitepress/(cache|dist)/",
+    "\\.lock$",
+    "package-lock\\.json$",
+    "\\.png$",
+    "\\.ico$"
+  ]
+}

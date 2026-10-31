@@ -1,0 +1,53 @@
+name: Bug report
+description: Something that goes wrong in shared drafts, cursors, presence, the saved-view refresh or the installation.
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Shared drafts (text, choices, collections, save, discard, conflicts)
+        - Rich text (CKEditor plugin, Markdown source mode)
+        - Cursors and presence
+        - Saved-view refresh
+        - EasyAdmin adapter
+        - Integration without EasyAdmin
+        - Mercure hub, grants and tokens
+        - Installation and configuration
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What each editor did, in order, and what each page showed. Include errors from the browser console and the `collaborate` log channel.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: The smallest form type, entity and page that show it, your `collaborate` configuration, and how many browsers or tabs it takes.
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: janalis/collaborate, PHP, Symfony, EasyAdmin (if used), CKEditor, database server, Mercure hub.
+      placeholder: "collaborate 0.1.0, PHP 8.5, Symfony 8.1, EasyAdmin 5.0, CKEditor 48.2.0, MariaDB 11.4, FrankenPHP 1.x"
+    validations:
+      required: true
+  - type: input
+    id: browsers
+    attributes:
+      label: Browsers
+      placeholder: Firefox 140 and Chrome 141 on macOS

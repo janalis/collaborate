@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://janalis.github.io/collaborate/
+    about: Installation, configuration, rich-text integration, EasyAdmin and the behavior of shared drafts.
+  - name: Questions and ideas
+    url: https://github.com/janalis/collaborate/discussions
+    about: Ask how to do something or discuss an idea before opening an issue.

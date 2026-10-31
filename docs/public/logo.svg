@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="collaborate">
+  <title>collaborate</title>
+  <!-- A shared document with two collaborators' pointers. -->
+  <path d="M26 12h50l22 22v78a6 6 0 0 1-6 6H26a6 6 0 0 1-6-6V18a6 6 0 0 1 6-6z" fill="#ffffff" stroke="#16213e" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M76 12v16a6 6 0 0 0 6 6h16" fill="#e6ecfb" stroke="#16213e" stroke-width="4" stroke-linejoin="round"/>
+  <g stroke-linecap="round" stroke-width="5">
+    <path d="M34 50h40" stroke="#6f93f0"/>
+    <path d="M34 64h24" stroke="#c9d5f6"/>
+    <path d="M34 78h18" stroke="#f7a48f"/>
+    <path d="M34 92h30" stroke="#c9d5f6"/>
+  </g>
+  <path d="M50.0 40.0 L50.0 84.2 L60.4 73.8 L67.7 90.7 L74.4 87.8 L67.4 71.2 L81.2 71.2Z" fill="#2f5bd3" stroke="#ffffff" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M70.0 58.0 L70.0 102.2 L80.4 91.8 L87.7 108.7 L94.4 105.8 L87.4 89.2 L101.2 89.2Z" fill="#f0644b" stroke="#ffffff" stroke-width="4" stroke-linejoin="round"/>
+</svg>

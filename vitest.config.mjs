@@ -25,6 +25,8 @@ export default defineConfig({
       include: ['assets/**/*.js'],
       reportsDirectory: 'var/coverage-vitest',
       reporter: ['html', 'text'],
+      // `npm run test:coverage` fails below full coverage.
+      thresholds: { statements: 100, branches: 100, functions: 100, lines: 100 },
     },
   },
 });

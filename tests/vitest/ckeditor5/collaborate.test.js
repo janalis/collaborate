@@ -377,3 +377,38 @@ test('settles unapplied source typing before a remote edit lands, so an overlapp
   expect(a.buffer.hasPending()).toBe(true);
   field.remove();
 });
+
+test('moves a focused source selection inside text a remote edit replaced to the end of the replacement', async () => {
+  const a = await peer();
+  const b = await peer();
+  const field = document.createElement('textarea');
+  document.body.append(field);
+  a.editor.sourceElement = field;
+  field.value = a.editor.getData();
+  a.editor.model.document.on('change:data', () => {
+    field.value = a.editor.getData();
+  });
+  field.focus();
+  // `<p>abcd</p>`: the selection covers `c`, which the remote edit replaces with `XY`.
+  field.setSelectionRange(5, 6);
+  b.editor.model.change((writer) => {
+    const paragraph = b.editor.model.document.getRoot().getChild(0);
+    writer.remove(writer.createRange(writer.createPositionAt(paragraph, 1), writer.createPositionAt(paragraph, 3)));
+    writer.insertText('XY', paragraph, 1);
+  });
+  while (b.buffer.hasPending()) accept(b, [a, b]);
+  expect(field.value).toBe('<p>aXYd</p>');
+  expect(field.selectionStart).toBe(6);
+  expect(field.selectionEnd).toBe(6);
+  field.remove();
+});
+
+test('replaces a paragraph holding an inline image when source splits it, rather than splitting its text', async () => {
+  const a = await peer('<p>ab<img src="/inline.png">cd</p>');
+  const b = await peer('<p>ab<img src="/inline.png">cd</p>');
+  const plugin = a.editor.plugins.get('Collaborate');
+  plugin.applySource('<p>ab</p><p><img src="/inline.png">cd</p>');
+  expect(a.editor.getData()).toBe('<p>ab</p><p><img src="/inline.png">cd</p>');
+  while (a.buffer.hasPending()) accept(a, [a, b]);
+  expect(b.editor.getData()).toBe(a.editor.getData());
+});

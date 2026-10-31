@@ -115,7 +115,7 @@ export function initializeCollections(session) {
       }
       session.initializeControls();
       // The host builds its widgets on each row added, once the row's own controls follow the draft.
-      for (const node of added) initializeRow(nodes.get(node.dataset.collaborateItem) || node);
+      for (const node of added) initializeRow(nodes.get(node.dataset.collaborateItem));
       renderedOrder = ownNodes().map(keyOf);
       // A hidden `position` child is posted from the page, not the draft: once rows move, number it in the order shown.
       if (renderedOrder.join() === shown) return;
@@ -220,10 +220,8 @@ export function initializeCollections(session) {
 
   scan();
   // Typing in a rich editor and status updates rewrite nodes too; neither adds or removes an entry.
-  const ignored = (node) =>
-    (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement)?.closest(
-      '.ck, [data-collaborate-bar], [data-collaborate-conflicts]'
-    );
+  // A childList record's target is the element whose children changed.
+  const ignored = (target) => target.closest('.ck, [data-collaborate-bar], [data-collaborate-conflicts]');
   // Widgets redraw their options and messages as the user types: only an entry, a collection or a control is scanned for.
   const relevant = '.field-collection-item, [data-collaborate-collection], [name]';
   const structural = (node) =>

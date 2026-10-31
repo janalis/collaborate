@@ -252,3 +252,22 @@ test('bounds the labels it sends to the length the form configures', () => {
   control.dispatchEvent(new Event('change'));
   expect(adapter.next()).toMatchObject({ value: '42', labels: { 42: 'Configured' } });
 });
+
+test('turns a pure deletion into a removal alone', () => {
+  const { control, adapter } = setup('<input name="field">', 'abcd', true);
+  control.value = 'ad';
+  control.dispatchEvent(new Event('input'));
+  const update = adapter.next();
+  expect(update.operations.map((operation) => operation.__className)).toEqual(['MoveOperation']);
+  adapter.receive(update);
+  expect(control.value).toBe('ad');
+});
+
+test('empties a plain control a peer cleared to no value', () => {
+  const { control, adapter } = setup('<input name="field">', 'kept');
+  expect(control.value).toBe('kept');
+  adapter.receive({ id: 'peer', version: 0, value: null });
+  expect(control.value).toBe('');
+  control.dispatchEvent(new Event('change'));
+  expect(adapter.next()).toBeNull();
+});

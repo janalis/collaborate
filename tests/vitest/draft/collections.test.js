@@ -457,3 +457,122 @@ test('runs the host row initializers on the decorated row a peer added, and on n
     stop();
   }
 });
+
+test('names a peer-added row from the default placeholder when the collection names none', () => {
+  const { session, form, container, stop } = fixture();
+  container.removeAttribute('data-form-type-name-placeholder');
+  session.state.fields['Record[items][@remote]'] = { type: 'member', value: { alive: true, order: 2 } };
+  session.scanCollections();
+  expect(form.querySelector('[data-collaborate-item="remote"] input').name).toBe('Record[items][remote][title]');
+  stop();
+});
+
+test('adds no row for a peer entry when the prototype renders no element', () => {
+  const { session, form, container, stop } = fixture();
+  container.dataset.prototype = 'text only';
+  session.state.fields['Record[items][@remote]'] = { type: 'member', value: { alive: true, order: 2 } };
+  session.scanCollections();
+  expect(form.querySelectorAll('.field-collection-item')).toHaveLength(1);
+  expect(container.querySelector('.accordion').textContent).toBe('');
+  expect(session.setStatus).not.toHaveBeenCalled();
+  stop();
+});
+
+test('initializes the row a peer added when a host listener takes it out of the collection', () => {
+  const initialize = vi.fn();
+  const remove = addRowInitializer(initialize);
+  const { session, form, stop } = fixture();
+  const detach = ({ detail }) => detail.newElement.remove();
+  document.addEventListener('ea.collection.item-added', detach);
+  try {
+    session.state.fields['Record[items][@remote]'] = { type: 'member', value: { alive: true, order: 2 } };
+    session.scanCollections();
+    expect(initialize).toHaveBeenCalledOnce();
+    const row = initialize.mock.calls[0][0];
+    expect(row.dataset.collaborateItem).toBe('remote');
+    expect(row.isConnected).toBe(false);
+    expect(form.querySelectorAll('.field-collection-item')).toHaveLength(1);
+  } finally {
+    document.removeEventListener('ea.collection.item-added', detach);
+    remove();
+    stop();
+  }
+});
+
+test('neither registers nor sends a row added locally whose membership the grant does not define', () => {
+  const { session, stop } = positioned({ a: 1 });
+  session.register = vi.fn(session.register);
+  const accordion = document.querySelector('.accordion');
+  accordion.insertAdjacentHTML(
+    'beforeend',
+    '<div class="field-collection-item"><input name="Record[items][0][title]"></div><div class="field-collection-item"><span>No control</span></div>'
+  );
+  document.dispatchEvent(new Event('ea.collection.item-added'));
+  const [, added, keyless] = accordion.children;
+  // The added row takes a stable key all the same; one without a named control names no entry.
+  expect(added.dataset.collaborateItem).toMatch(/^n/);
+  expect(keyless.dataset.collaborateItem).toBeUndefined();
+  expect(session.register).not.toHaveBeenCalled();
+  expect(session.schedule).not.toHaveBeenCalled();
+  expect(session.adapters.get('Record[items][@a]').next()).toBeNull();
+  stop();
+});
+
+test('keeps an unsent local reorder over a peer order heard before it is sent', () => {
+  const { session, stop } = positioned({ a: 1, b: 2 });
+  const accordion = document.querySelector('.accordion');
+  // The editor drags the second row first: both memberships wait to be sent.
+  accordion.prepend(accordion.lastElementChild);
+  document.dispatchEvent(new Event('ea.collection.item-added'));
+  const a = session.adapters.get('Record[items][@a]');
+  expect(a.next().value.order).toBe(2);
+  a.receive({ id: 'peer', version: 0, value: { alive: true, order: 1, recordId: 'a' } });
+  expect(a.value.order).toBe(2);
+  expect(a.next().value.order).toBe(2);
+  expect(Array.from(accordion.children, (row) => row.dataset.collaborateItem)).toEqual(['b', 'a']);
+  stop();
+});
+
+test('projects the memberships a reopened page replays only once every member has registered', () => {
+  document.body.innerHTML =
+    '<form><div data-collaborate-collection="Record[items]"><div class="ea-form-collection-items"><div class="accordion"><div class="field-collection-item"><input name="Record[items][a][title]" value="a"></div><div class="field-collection-item"><input name="Record[items][b][title]" value="b"></div></div></div></div></form>';
+  const form = document.querySelector('form');
+  const member = (order) => ({ type: 'member', initial: { alive: true, order }, value: { alive: true, order } });
+  // The journal moved `b` first; replaying `a`'s event alone would render it before `b` is a member.
+  const history = new Map([['Record[items][@a]', [{ id: 'move', version: 0, value: { alive: true, order: 2 } }]]]);
+  const session = {
+    form,
+    state: { fields: { 'Record[items][@a]': member(1), 'Record[items][@b]': member(1) } },
+    adapters: new Map(),
+    editorWaiters: new Map(),
+    initializeControls: vi.fn(),
+    schedule: vi.fn(),
+    setStatus: vi.fn(),
+    ensureField(name) {
+      return this.state.fields[name];
+    },
+    register(name, adapter) {
+      this.adapters.set(name, adapter);
+      for (const event of history.get(name) || []) adapter.receive(event);
+    },
+    formName: (name) => name,
+  };
+  const stop = initializeCollections(session);
+  expect(session.adapters.get('Record[items][@a]').value.order).toBe(2);
+  expect(Array.from(form.querySelectorAll('input'), (input) => input.value)).toEqual(['b', 'a']);
+  expect(session.schedule).not.toHaveBeenCalled();
+  stop();
+});
+
+test('leaves in place a row the page loaded without a named control', () => {
+  const { session, stop } = positioned({ a: 1 });
+  stop();
+  const accordion = document.querySelector('.accordion');
+  accordion.insertAdjacentHTML('afterbegin', '<div class="field-collection-item"><span>Header</span></div>');
+  const restart = initializeCollections({ ...session, adapters: new Map() });
+  const [keyless, row] = accordion.children;
+  expect(keyless.isConnected).toBe(true);
+  expect(keyless.dataset.collaborateItem).toBeUndefined();
+  expect(row.dataset.collaborateItem).toBe('a');
+  restart();
+});

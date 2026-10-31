@@ -36,6 +36,7 @@ use Psr\Log\NullLogger;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\AssetMapper\ImportMap\ImportMapConfigReader;
 use Symfony\Component\AssetMapper\ImportMap\RemotePackageStorage;
+use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\Form\CallbackTransformer;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\CollectionType;
@@ -44,6 +45,7 @@ use Symfony\Component\Form\Extension\Core\Type\FormType;
 use Symfony\Component\Form\Extension\Core\Type\HiddenType;
 use Symfony\Component\Form\Extension\Core\Type\PasswordType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
+use Symfony\Component\Form\FormBuilder;
 use Symfony\Component\Form\FormError;
 use Symfony\Component\Form\FormEvents;
 use Symfony\Component\Form\FormInterface;
@@ -83,8 +85,10 @@ final class CollaborateFormExtensionTest extends TypeTestCase
     private bool $canEdit = true;
     /** @var array<string, list<string>> what the edited record's draft saved for its plain lists */
     private array $listKeys = [];
+    /** @var array<string, array<array-key, string>> the keys the edited record's draft gave its collections' entries, by record id */
+    private array $aliases = [];
     private DraftSave&MockObject $save;
-    /** @var \Closure(bool, ?ImportMapConfigReader=, ?LoggerInterface=, Options=, bool=, RecordIdentifier=): CollaborateFormExtension */
+    /** @var \Closure(bool, ?ImportMapConfigReader=, ?LoggerInterface=, Options=, bool=, RecordIdentifier=, ?DraftAccess=, bool=, bool=): CollaborateFormExtension */
     private \Closure $extensionFactory;
     private ImportMapConfigReader $importMap;
     /** @var list<string> */
@@ -125,9 +129,9 @@ final class CollaborateFormExtensionTest extends TypeTestCase
             string $id,
             array $parameters = [],
             ?string $domain = null,
-        ): string => 'collaborate' === $domain ? $id : 'not in the collaborate domain');
+        ): string => 'collaborate' === $domain ? '[' . $id . ']' : 'not in the collaborate domain');
         $journal = $this->createStub(DraftJournal::class);
-        $journal->method('aliases')->willReturn([]);
+        $journal->method('aliases')->willReturnCallback(fn(): array => $this->aliases);
         $journal->method('listKeys')->willReturnCallback(fn(): array => $this->listKeys);
         $this->save = $this->createMock(DraftSave::class);
         $this->importMap = $this->importMap(['ckeditor5' => ['version' => '49.1.0']]);
@@ -138,8 +142,11 @@ final class CollaborateFormExtensionTest extends TypeTestCase
             array $options = [],
             bool $context = true,
             RecordIdentifier $identifier = new RecordIdentifier(),
+            ?DraftAccess $access = null,
+            bool $importMapped = true,
+            bool $defaults = true,
         ): CollaborateFormExtension => new CollaborateFormExtension(
-            $this->access($enabled),
+            $access ?? $this->access($enabled),
             $journal,
             $this->save,
             $context ? $this->page : null,
@@ -152,26 +159,36 @@ final class CollaborateFormExtensionTest extends TypeTestCase
             $translator,
             $identifier,
             new TranslatableFieldKeyResolver($requests, 'en'),
-            $importMap ?? $this->importMap,
+            $importMapped ? $importMap ?? $this->importMap : null,
             'ROLE_EDITOR',
             $options
-            + [
-                'rich_text' => ['block_prefixes' => ['rich_text'], 'schema_option' => 'compact'],
-                'replay' => ['connected' => 20, 'disconnected' => 4, 'join_retry' => 10],
-                'label_length' => 120,
-            ],
+            + (
+                $defaults
+                    ? [
+                        'rich_text' => ['block_prefixes' => ['rich_text'], 'schema_option' => 'compact'],
+                        'replay' => ['connected' => 20, 'disconnected' => 4, 'join_retry' => 10],
+                        'label_length' => 120,
+                    ] : []
+            ),
             $logger ?? new NullLogger(),
         );
         $this->extension = ($this->extensionFactory)(true);
         parent::setUp();
     }
 
-    private function access(bool $enabled = true): DraftAccess
+    private function access(bool $enabled = true, int $maxRequestBytes = 2_097_152): DraftAccess
     {
         $checker = $this->createStub(DraftAccessCheckerInterface::class);
         $checker->method('canEdit')->willReturn(true);
 
-        return new DraftAccess('secret', $enabled, new Topics(), new SecurityCollaboratorProvider(), $checker);
+        return new DraftAccess(
+            'secret',
+            $enabled,
+            new Topics(),
+            new SecurityCollaboratorProvider(),
+            $checker,
+            maxRequestBytes: $maxRequestBytes,
+        );
     }
 
     /** Rebuilds the form factory around the current extension. */
@@ -265,6 +282,35 @@ final class CollaborateFormExtensionTest extends TypeTestCase
 
         // Without a schema option every editor is the full build.
         self::assertSame('ckeditor5-48.0.0:collaborate-2:rich:full', $fields['en:Article[body]']['schema'] ?? null);
+        // The configured version prevails over the import map's, and needs no import map at all.
+        foreach ([null, false] as $importMapped) {
+            $this->extension = ($this->extensionFactory)(
+                true,
+                null,
+                null,
+                [
+                    'rich_text' => ['block_prefixes' => ['rich_text'], 'ckeditor_version' => '48.0.0'],
+                ],
+                true,
+                new RecordIdentifier(),
+                null,
+                null === $importMapped,
+            );
+            $this->rebuild();
+            self::assertSame(
+                'ckeditor5-48.0.0:collaborate-2:text:full',
+                $this->scope($this->form()->createView())['fields']['en:Article[title]']['schema'] ?? null,
+            );
+        }
+    }
+
+    public function testWithoutAnImportMapTheCkeditorVersionMustBeConfigured(): void
+    {
+        $this->extension = ($this->extensionFactory)(true, null, null, [], true, new RecordIdentifier(), null, false);
+        $this->rebuild();
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('Set collaborate.drafts.rich_text.ckeditor_version');
+        $this->form()->createView();
     }
 
     public function testCapabilityContainsOnlyEditableFieldsAndKeepsTheExistingEditor(): void
@@ -303,10 +349,11 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         $messages = $configuration['messages'];
         // The bar's states, its dialogs and the notices name who did what with a %name% placeholder.
         self::assertSame(array_keys(CollaborateFormExtension::MESSAGES), array_keys($messages));
-        self::assertSame('Shared draft saved by %name%.', $messages['savedBy']);
-        self::assertSame('Discard the shared draft?', $messages['confirmDiscardTitle']);
-        self::assertSame('Use the saved record?', $messages['confirmSavedTitle']);
-        self::assertSame('Copy invitation link', $messages['copyInvitation']);
+        // Each in the page's language, from the collaborate domain.
+        self::assertSame('[Shared draft saved by %name%.]', $messages['savedBy']);
+        self::assertSame('[Discard the shared draft?]', $messages['confirmDiscardTitle']);
+        self::assertSame('[Use the saved record?]', $messages['confirmSavedTitle']);
+        self::assertSame('[Copy invitation link]', $messages['copyInvitation']);
         self::assertArrayNotHasKey('confirmDiscard', $messages);
     }
 
@@ -324,14 +371,20 @@ final class CollaborateFormExtensionTest extends TypeTestCase
     {
         yield 'not hex' => ['manualcheck', '&page=2'];
         yield 'too short' => ['abc123', ''];
+        yield 'prefixed' => ['x' . str_repeat('ab', 16), ''];
+        yield 'suffixed' => [str_repeat('ab', 16) . 'x', ''];
+        yield 'with a trailing line feed' => [str_repeat('ab', 16) . "\n", ''];
     }
 
     #[DataProvider('malformedDraftKeys')]
     public function testANewFormPostsTheDraftItsGrantWasIssuedFor(string $key, string $rest): void
     {
         // The page's own key is drawn again on every request: the form posts the one it was shown with.
-        $this->request->server->set('REQUEST_URI', '/admin/article/new?draft=' . $key . $rest);
+        $this->request->server->set('REQUEST_URI', '/admin/article/new?draft=' . rawurlencode($key) . $rest);
         $this->request->query->set('draft', $key);
+        if ('' !== $rest) {
+            $this->request->query->set('page', '2');
+        }
 
         $view = $this->form()->createView();
 
@@ -344,9 +397,13 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         self::assertIsString($action['draft'] ?? null);
         self::assertMatchesRegularExpression('/^[a-f0-9]{32}$/D', $action['draft']);
         self::assertSame($action['draft'], $invitation['draft'] ?? null);
+        self::assertNotSame($key, $action['draft']);
+        self::assertSame('/admin/article/new', parse_url((string) $view->vars['action'], \PHP_URL_PATH));
         self::assertSame($this->access()->draftId(Article::class, 'new:' . $action['draft']), $scope['id']);
         if ('' !== $rest) {
             self::assertSame('2', $action['page'] ?? null);
+            // The invitation opens the same page, with the draft's key.
+            self::assertSame('2', $invitation['page'] ?? null);
         }
         // The same request renders the same key again.
         self::assertSame($scope['id'], $this->scope($this->form()->createView())['id']);
@@ -440,8 +497,27 @@ final class CollaborateFormExtensionTest extends TypeTestCase
             ((array) $view->children['children']->vars['row_attr'])['data-collaborate-collection'],
         );
         $scope = $this->scope($view);
-        self::assertSame('42', ((array) $scope['fields']['Article[children][@i42]']['initial'])['recordId']);
-        self::assertArrayHasKey('Article[children][__member__]', $scope['fields']);
+        self::assertSame(
+            [
+                'type' => 'member',
+                'initial' => ['alive' => true, 'order' => 1, 'recordId' => '42'],
+                'unordered' => true,
+            ],
+            $scope['fields']['Article[children][@i42]'],
+        );
+        // An entry the page adds is not alive until it is.
+        self::assertSame(
+            [
+                'type' => 'member',
+                'initial' => ['alive' => false, 'order' => 0, 'recordId' => null],
+                'unordered' => true,
+            ],
+            $scope['fields']['Article[children][__member__]'],
+        );
+        self::assertSame(
+            ['type' => 'collection', 'initial' => ['i42'], 'unordered' => true],
+            $scope['fields']['Article[children][__collection__]'],
+        );
         // Without a `position` child the submitted order is not stored.
         foreach (['[@i42]', '[__member__]', '[__collection__]'] as $suffix) {
             self::assertTrue($scope['fields']['Article[children]' . $suffix]['unordered'] ?? false);
@@ -475,18 +551,115 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         self::assertArrayNotHasKey('unordered', $scope['fields']['Article[children][__member__]']);
     }
 
-    public function testACollectionRowNamesItsCollectionOnEveryPageThatSharesDrafts(): void
+    public function testACollectionRowIsMarkedOnlyOnAPageThatSharesItsForm(): void
     {
-        $this->page->page = null;
-        $view = $this->factory->createNamedBuilder('Article', FormType::class, $this->article, [
+        $build = fn(): FormView => $this->factory->createNamedBuilder('Article', FormType::class, $this->article, [
             'data_class' => Article::class,
         ])->add('children', CollectionType::class, ['entry_type' => FormType::class])->getForm()->createView();
-
         self::assertSame(
             'Article[children]',
-            ((array) $view->children['children']->vars['row_attr'])['data-collaborate-collection'],
+            ((array) $build()->children['children']->vars['row_attr'])['data-collaborate-collection'] ?? null,
         );
-        self::assertArrayNotHasKey('data-collaborate', (array) $view->vars['attr']);
+        // No draft, no collection controller: its rows stay as rendered.
+        $this->page->page = null;
+        self::assertArrayNotHasKey(
+            'data-collaborate-collection',
+            (array) $build()->children['children']->vars['row_attr'],
+        );
+        $this->page->page = PageContext::NEW;
+        $this->granted = false;
+        self::assertArrayNotHasKey(
+            'data-collaborate-collection',
+            (array) $build()->children['children']->vars['row_attr'],
+        );
+    }
+
+    /** @return iterable<string, array{array<string, mixed>, array<string, mixed>}> */
+    public static function collectionsOutsideTheSchema(): iterable
+    {
+        yield 'disabled' => [['disabled' => true], []];
+        yield 'unmapped' => [['mapped' => false], []];
+        yield 'under a disabled form' => [[], ['disabled' => true]];
+        yield 'under an unmapped form' => [[], ['mapped' => false]];
+    }
+
+    /**
+     * @param array<string, mixed> $options      the collection's
+     * @param array<string, mixed> $groupOptions its parent's, a form between it and the root form
+     */
+    #[DataProvider('collectionsOutsideTheSchema')]
+    public function testACollectionLeftOutOfTheSchemaIsNotMarked(array $options, array $groupOptions): void
+    {
+        $child = new Article();
+        $child->id = 42;
+        $this->article->children->add($child);
+        if (false === ($options['mapped'] ?? true)) {
+            // An unmapped collection shows the entries it is given.
+            $options['data'] = [$child];
+        }
+        $builder = $this->factory->createNamedBuilder('Article', FormType::class, $this->article, [
+            'data_class' => Article::class,
+        ]);
+        $builder->add($builder->create('group', FormType::class, ['inherit_data' => true]
+        + $groupOptions)->add('children', CollectionType::class, [
+            'entry_type' => PositionedEntryType::class,
+            'allow_add' => true,
+        ] + $options));
+        $builder->add('categories', CollectionType::class, ['entry_type' => FormType::class]);
+        $view = $builder->getForm()->createView();
+
+        $collection = $view->children['group']->children['children'];
+        self::assertArrayNotHasKey('data-collaborate-collection', (array) $collection->vars['row_attr']);
+        // Nor is a collection inside its entries or its prototype.
+        $fields = $this->scope($view)['fields'];
+        self::assertSame([], array_filter(array_keys($fields), static fn(string $key): bool => str_contains(
+            $key,
+            '[children]',
+        )));
+        // Its rows render, and the collections of the schema are still marked.
+        self::assertCount(1, $collection->children);
+        self::assertSame(
+            'Article[categories]',
+            ((array) $view->children['categories']->vars['row_attr'])['data-collaborate-collection'] ?? null,
+        );
+    }
+
+    public function testACollectionWithASensitiveNameIsNotMarked(): void
+    {
+        $account = new Account(['ROLE_USER']);
+        $this->page->entity = $account;
+        $view = $this->factory->createNamedBuilder('Account', FormType::class, $account, [
+            'data_class' => Account::class,
+        ])->add('api_key', CollectionType::class, [
+            'entry_type' => TextType::class,
+            'property_path' => 'roles',
+        ])->getForm()->createView();
+
+        self::assertArrayNotHasKey('data-collaborate-collection', (array) $view->children['api_key']->vars['row_attr']);
+        self::assertSame([], $this->scope($view)['fields']);
+    }
+
+    public function testANestedCollectionIsMarkedWithItsPath(): void
+    {
+        $child = new Article();
+        $child->id = 42;
+        $this->article->children->add($child);
+        $view = $this->factory
+            ->createNamedBuilder('Article', FormType::class, $this->article, [
+                'data_class' => Article::class,
+            ])
+            ->add('children', CollectionType::class, [
+                'entry_type' => FormType::class,
+                'entry_options' => ['data_class' => Article::class],
+            ])
+            ->getForm();
+        $view->get('children')->get('i42')->add('children', CollectionType::class, ['entry_type' => FormType::class]);
+
+        self::assertSame(
+            'Article[children][i42][children]',
+            ((array) $view->createView()->children['children']->children['i42']->children['children']->vars['row_attr'])['data-collaborate-collection']
+            ?? null,
+        );
     }
 
     public function testOrdinarySubmissionsAndNonEditPagesRemainUsable(): void
@@ -918,6 +1091,8 @@ final class CollaborateFormExtensionTest extends TypeTestCase
             'data_class' => Account::class,
         ])->add('roles', CollectionType::class, ['entry_type' => TextType::class])->getForm();
         self::assertTrue($form->get('roles')->has('0'));
+        // The page shares the form of its own record only.
+        self::assertArrayNotHasKey('data-collaborate', (array) $form->createView()->vars['attr']);
         $record = new \stdClass();
         $record->items = null;
         $this->page->entity = $record;
@@ -1004,5 +1179,420 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         ($this->extensionFactory)(false)->buildForm($builder, []);
         ($this->extensionFactory)(true, null, null, [], false)->buildForm($builder, []);
         self::assertCount($before, $builder->getEventDispatcher()->getListeners(FormEvents::PRE_SUBMIT));
+    }
+
+    public function testTheClientConfigurationDefaults(): void
+    {
+        $this->extension = ($this->extensionFactory)(
+            true,
+            null,
+            null,
+            ['rich_text' => ['block_prefixes' => ['rich_text']]],
+            true,
+            new RecordIdentifier(),
+            null,
+            true,
+            false,
+        );
+        $this->rebuild();
+
+        self::assertSame(
+            ['replayConnected' => 30_000, 'replayDisconnected' => 5000, 'joinRetry' => 12_000, 'labelLength' => 255],
+            $this->configuration($this->form()->createView())['config'],
+        );
+    }
+
+    public function testTheConfiguredPositionFieldOrdersTheEntries(): void
+    {
+        $child = new Article();
+        $child->id = 42;
+        $this->article->children->add($child);
+        foreach (['title' => false, 'rank' => true] as $field => $unordered) {
+            $this->extension = ($this->extensionFactory)(true, null, null, ['position_field' => $field]);
+            $this->rebuild();
+            $form = $this->factory->createNamedBuilder('Article', FormType::class, $this->article, [
+                'data_class' => Article::class,
+            ])->add('children', CollectionType::class, ['entry_type' => PositionedEntryType::class])->getForm();
+
+            $fields = $this->scope($form->createView())['fields'];
+
+            self::assertSame($unordered, $fields['Article[children][@i42]']['unordered'] ?? false);
+        }
+    }
+
+    /** @param Options $options */
+    private function sharedWithin(int $maxRequestBytes, array $options = []): bool
+    {
+        $this->extension = ($this->extensionFactory)(
+            true,
+            null,
+            null,
+            $options,
+            true,
+            new RecordIdentifier(),
+            $this->access(true, $maxRequestBytes),
+        );
+        $this->rebuild();
+
+        return \array_key_exists('data-collaborate', (array) $this->form()->createView()->vars['attr']);
+    }
+
+    public function testAFormIsSharedWhileItsGrantFitsARequestBesideAnUpdateAndAnEnvelope(): void
+    {
+        $this->page->page = PageContext::EDIT;
+        $this->request->server->set('REQUEST_TIME_FLOAT', 1_761_900_000.5);
+        $grant = \strlen($this->configuration($this->form()->createView())['grant']);
+
+        // An update of 256 KiB by default, and 1 KiB for the rest of the request.
+        self::assertTrue($this->sharedWithin($grant + 262_144 + 1024));
+        self::assertFalse($this->sharedWithin($grant + 262_144 + 1023));
+        self::assertTrue($this->sharedWithin($grant + 1000 + 1024, ['max_update_bytes' => 1000]));
+        self::assertFalse($this->sharedWithin($grant + 1000 + 1023, ['max_update_bytes' => 1000]));
+    }
+
+    public function testAGrantRecordsWhenItsPageWasRequested(): void
+    {
+        $this->request->server->set('REQUEST_TIME_FLOAT', '1761900000.5');
+        self::assertSame(1_761_900_000.5, $this->scope($this->form()->createView())['requestedAt'] ?? null);
+
+        $this->request->server->remove('REQUEST_TIME_FLOAT');
+        $before = microtime(true);
+        $requestedAt = $this->scope($this->form()->createView())['requestedAt'] ?? null;
+        self::assertIsFloat($requestedAt);
+        self::assertGreaterThanOrEqual($before, $requestedAt);
+        self::assertLessThanOrEqual(microtime(true), $requestedAt);
+    }
+
+    public function testAnEntryKeepsTheKeyItsDraftGaveIt(): void
+    {
+        $child = new Article();
+        $child->id = 42;
+        $this->article->children->add($child);
+        $this->page->page = PageContext::EDIT;
+        $this->aliases = ['Article[children]' => ['42' => 'nadded']];
+
+        $form = $this->factory
+            ->createNamedBuilder('Article', FormType::class, $this->article, [
+                'data_class' => Article::class,
+            ])
+            ->add('children', CollectionType::class, [
+                'entry_type' => FormType::class,
+                'entry_options' => ['data_class' => Article::class],
+            ])
+            ->getForm();
+
+        self::assertSame(['nadded'], array_keys($form->get('children')->all()));
+    }
+
+    public function testAListThatIsNoCollectionKeepsItsKeys(): void
+    {
+        $record = (object) ['pair' => ['first', 'second']];
+        $this->page->entity = $record;
+        $builder = $this->factory->createNamedBuilder('Record', FormType::class, $record);
+        $builder->add($builder->create('pair', FormType::class)->add('0', TextType::class)->add('1', TextType::class));
+
+        $form = $builder->getForm();
+
+        self::assertSame('first', $form->get('pair')->get('0')->getData());
+        self::assertSame('second', $form->get('pair')->get('1')->getData());
+    }
+
+    public function testASubmittedListFollowsTheSubmittedOrderPastUnknownEntries(): void
+    {
+        $account = new Account(['ROLE_USER', 'ROLE_ADMIN']);
+        $this->page->entity = $account;
+        $this->page->page = PageContext::EDIT;
+        $form = $this->factory->createNamedBuilder('Account', FormType::class, $account, [
+            'data_class' => Account::class,
+        ])->add('roles', CollectionType::class, ['entry_type' => TextType::class])->getForm();
+
+        $form->submit(['roles' => ['unknown' => 'ROLE_EDITOR', 'p1' => 'ROLE_ADMIN', 'p0' => 'ROLE_USER']]);
+
+        self::assertSame(['p1', 'p0'], array_keys($form->get('roles')->all()));
+        self::assertSame(['ROLE_ADMIN', 'ROLE_USER'], $account->roles);
+    }
+
+    public function testADisabledEntryAddedToAListDoesNotEnterIt(): void
+    {
+        $account = new Account(['ROLE_USER']);
+        $this->page->entity = $account;
+        $this->page->page = PageContext::EDIT;
+        $form = $this->factory
+            ->createNamedBuilder('Account', FormType::class, $account, [
+                'data_class' => Account::class,
+            ])
+            ->add('roles', CollectionType::class, [
+                'entry_type' => TextType::class,
+                'entry_options' => ['disabled' => true],
+                'allow_add' => true,
+            ])
+            ->getForm();
+
+        $form->submit(['roles' => ['p0' => 'ROLE_ADMIN', 'added' => 'ROLE_EDITOR']]);
+
+        self::assertSame(['ROLE_USER'], $account->roles);
+    }
+
+    public function testItsListenersRunAroundTheFormComponentsOwn(): void
+    {
+        $dispatcher = new EventDispatcher();
+        $this->extension->buildForm(new FormBuilder('Article', null, $dispatcher, $this->factory), []);
+        $priorities = [];
+        foreach ($dispatcher->getListeners() as $event => $listeners) {
+            foreach ($listeners as $listener) {
+                $priorities[$event][] = $dispatcher->getListenerPriority($event, $listener);
+            }
+        }
+
+        // Collections are rekeyed before ResizeFormListener (0) and the host's listeners build their entries,
+        // and reordered after it resizes them (PRE_SUBMIT 0, SUBMIT 50); a signed submission takes the save
+        // lock before any other listener reads it.
+        self::assertSame(
+            [
+                FormEvents::PRE_SET_DATA => [512],
+                FormEvents::PRE_SUBMIT => [2048, -1024],
+                FormEvents::SUBMIT => [-1024],
+            ],
+            $priorities,
+        );
+    }
+
+    public function testAControlShowingOtherDataThanItsPropertyIsDescribedAsShown(): void
+    {
+        $form = $this->factory->createNamedBuilder('Article', FormType::class, $this->article, [
+            'data_class' => Article::class,
+        ])->add('title', TextType::class, ['data' => 'Shown'])->getForm();
+
+        self::assertSame('Shown', $this->scope($form->createView())['fields']['en:Article[title]']['initial']);
+    }
+
+    public function testUnmappedAndDisabledControlsStayOutOfTheSchema(): void
+    {
+        $form = $this->factory
+            ->createNamedBuilder('Article', FormType::class, $this->article, ['data_class' => Article::class])
+            ->add('token', HiddenType::class, ['mapped' => false])
+            ->add('title', TextType::class)
+            ->add('body', TextType::class, ['disabled' => true])
+            ->add('note', TextType::class, ['mapped' => false])
+            ->getForm();
+
+        self::assertSame(['en:Article[title]'], array_keys($this->scope($form->createView())['fields']));
+    }
+
+    public function testAPrototypeDescribesTheFieldsOfTheEntriesAPageAdds(): void
+    {
+        $form = $this->factory->createNamedBuilder('Article', FormType::class, $this->article, [
+            'data_class' => Article::class,
+        ])->add('children', CollectionType::class, [
+            'entry_type' => PositionedEntryType::class,
+            'allow_add' => true,
+        ])->getForm();
+
+        $fields = $this->scope($form->createView())['fields'];
+
+        self::assertSame(
+            'Article[children][__name__][title]',
+            $fields['en:Article[children][__name__][title]']['formName'] ?? null,
+        );
+        $record = (object) ['items' => []];
+        $this->page->entity = $record;
+        $form = $this->factory
+            ->createNamedBuilder('Record', FormType::class, $record)
+            ->add('items', CollectionType::class, ['entry_type' => HiddenType::class, 'allow_add' => true])
+            ->getForm();
+
+        // A hidden entry has no value of its own in the draft: only its membership.
+        self::assertSame(
+            ['Record[items][__collection__]', 'Record[items][__member__]'],
+            array_keys($this->scope($form->createView())['fields']),
+        );
+    }
+
+    /** @param callable(string): void $submit */
+    private function snapshot(FormInterface $form, callable $submit): array
+    {
+        $configuration = $this->configuration($form->createView());
+        $this->request->request->set('_collaborate_grant', $configuration['grant']);
+        $this->save
+            ->method('begin')
+            ->willReturnCallback(static function (Request $request): void {
+                $request->attributes->set('_collaborate_save', true);
+            });
+        $submit($configuration['grant']);
+        /** @var callable(): array<string, mixed> $snapshot */
+        $snapshot = $this->request->attributes->get('_collaborate_snapshot');
+
+        return $snapshot();
+    }
+
+    public function testASavedSnapshotReadsAnArrayPropertyAndKeepsTheShownValueOfAnEmptyObject(): void
+    {
+        $record = (object) ['meta' => ['note' => 'saved'], 'tag' => null];
+        $this->page->entity = $record;
+        $this->page->page = PageContext::EDIT;
+        $builder = $this->factory->createNamedBuilder('Record', FormType::class, $record);
+        $builder->add($builder->create('meta', FormType::class)->add('note', TextType::class));
+        $builder
+            ->get('meta')
+            ->get('note')
+            ->addModelTransformer(
+                new CallbackTransformer(
+                    static fn(mixed $value): mixed => $value,
+                    static fn(mixed $value): string => strtolower((string) $value),
+                ),
+            );
+        $builder->add($builder->create('tag', FormType::class, [
+            'data_class' => Tag::class,
+            'empty_data' => null,
+            'required' => false,
+        ])->add('name', TextType::class));
+        $form = $builder->getForm();
+
+        $values = $this->snapshot($form, static function () use ($form): void {
+            $form->submit(['meta' => ['note' => 'EDITED'], 'tag' => ['name' => '']]);
+        });
+
+        // The saved array holds what the model transformer stored.
+        self::assertSame('edited', $values['Record[meta][note]']);
+        self::assertNull($record->tag);
+        self::assertSame('', $values['Record[tag][name]']);
+    }
+
+    public function testASavedSnapshotReadsAListPropertyAsItsFormTransformsIt(): void
+    {
+        $record = (object) ['pair' => ['x']];
+        $this->page->entity = $record;
+        $this->page->page = PageContext::EDIT;
+        $builder = $this->factory->createNamedBuilder('Record', FormType::class, $record);
+        $builder->add($builder->create('pair', FormType::class)->add('0', TextType::class));
+        // The record stores its entries in capitals.
+        $builder->get('pair')->addViewTransformer(
+            new CallbackTransformer(
+                static fn(mixed $value): mixed => $value,
+                static fn(mixed $value): array => array_map(strtoupper(...), (array) $value),
+            ),
+        );
+        $form = $builder->getForm();
+
+        $values = $this->snapshot($form, static function () use ($form): void {
+            $form->submit(['pair' => ['0' => 'a']]);
+        });
+
+        self::assertSame(['A'], $record->pair);
+        self::assertSame('A', $values['Record[pair][0]']);
+    }
+
+    public function testASavedSnapshotReadsThePropertyThroughViewTransformers(): void
+    {
+        $builder = $this->factory->createNamedBuilder('Article', FormType::class, $this->article, [
+            'data_class' => Article::class,
+        ]);
+        $builder->add('title', TextType::class);
+        $builder->get('title')->addViewTransformer(
+            new CallbackTransformer(
+                static fn(mixed $value): string => strtoupper((string) $value),
+                static fn(mixed $value): string => strtolower((string) $value),
+            ),
+        );
+        $form = $builder->getForm();
+
+        $values = $this->snapshot($form, function () use ($form): void {
+            $form->submit(['title' => 'EDITOR']);
+            $this->article->title = 'persisted';
+        });
+
+        self::assertSame('PERSISTED', $values['en:Article[title]']);
+    }
+
+    public function testOnlyTextControlsAreTextAndKeepTheirValuesType(): void
+    {
+        $record = new class {
+            /** @var list<string> */
+            public array $roles = ['ROLE_USER'];
+            public int $count = 3;
+            public bool $flag = true;
+        };
+        $this->page->entity = $record;
+        $form = $this->factory
+            ->createNamedBuilder('Record', FormType::class, $record, [
+                'data_class' => $record::class,
+            ])
+            ->add('roles', ChoiceType::class, ['multiple' => true, 'choices' => ['User' => 'ROLE_USER']])
+            ->add('count', FormType::class, ['compound' => false])
+            ->add('flag', TextType::class)
+            ->getForm();
+
+        $fields = $this->scope($form->createView())['fields'];
+
+        self::assertSame(
+            ['type' => 'value', 'initial' => ['ROLE_USER'], 'formName' => 'Record[roles][]'],
+            $fields['Record[roles][]'],
+        );
+        self::assertSame('text', $fields['Record[flag]']['type']);
+        // The saved record is read from its properties: only a text control shows a number as a string, and
+        // keeps any other value as it is.
+        $this->page->page = PageContext::EDIT;
+        $values = $this->snapshot($form, static function () use ($form): void {
+            $form->submit(['roles' => ['ROLE_USER'], 'count' => '4', 'flag' => '1']);
+        });
+        self::assertSame(4, $values['Record[count]']);
+        self::assertTrue($values['Record[flag]']);
+    }
+
+    public function testAnEntryWhoseIdIsNoFormKeyIsKeyedByItsPositionOrItsHash(): void
+    {
+        $record = (object) ['items' => [(object) ['id' => 1.5], (object) ['id' => "abc\n"]]];
+        $this->page->entity = $record;
+
+        $form = $this->factory
+            ->createNamedBuilder('Record', FormType::class, $record)
+            ->add('items', CollectionType::class, [
+                'entry_type' => FormType::class,
+                'entry_options' => ['compound' => false],
+            ])
+            ->getForm();
+
+        self::assertSame(['p0', 'h' . hash('sha256', "abc\n")], array_keys($form->get('items')->all()));
+    }
+
+    public function testANewPageReadsNoSavedListKeys(): void
+    {
+        $account = new Account(['ROLE_B', 'ROLE_C']);
+        $this->page->entity = $account;
+        $this->listKeys = ['Account[roles]' => ['p1', 'nadded']];
+
+        $form = $this->factory->createNamedBuilder('Account', FormType::class, $account, [
+            'data_class' => Account::class,
+        ])->add('roles', CollectionType::class, ['entry_type' => TextType::class])->getForm();
+
+        self::assertSame(['p0', 'p1'], array_keys($form->get('roles')->all()));
+    }
+
+    public function testOnlyTheRootFormCarriesTheDraft(): void
+    {
+        $builder = $this->factory->createNamedBuilder('Article', FormType::class, $this->article, [
+            'data_class' => Article::class,
+        ]);
+        $builder->add($builder->create('details', FormType::class, [
+            'inherit_data' => true,
+        ])->add('title', TextType::class));
+
+        $view = $builder->getForm()->createView();
+
+        self::assertArrayHasKey('data-collaborate', (array) $view->vars['attr']);
+        self::assertArrayNotHasKey('data-collaborate', (array) $view->children['details']->vars['attr']);
+    }
+
+    public function testANewFormKeepsTheQueryOfItsAction(): void
+    {
+        $view = $this->factory->createNamedBuilder('Article', FormType::class, $this->article, [
+            'data_class' => Article::class,
+            'action' => '/admin/article/new?next=/a?b',
+        ])->add('title', TextType::class)->getForm()->createView();
+
+        $query = [];
+        parse_str((string) parse_url((string) $view->vars['action'], \PHP_URL_QUERY), $query);
+        self::assertSame('/a?b', $query['next'] ?? null);
+        self::assertSame($this->scope($view)['draft'], $query['draft'] ?? null);
     }
 }

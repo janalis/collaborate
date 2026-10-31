@@ -20,6 +20,7 @@ use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Gedmo\TranslationMapper;
 use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Tests\Fixtures\Doctrine\Folder;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Article;
 use Janalis\Collaborate\Tests\Fixtures\Draft\ArticleTranslation;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Category;
@@ -85,22 +86,6 @@ final class ChangeCollectorMetadataTest extends TestCase
         array $deletions = [],
         int $depth = 2,
     ): Request {
-        $real = self::em();
-        $uow = $this->createStub(UnitOfWork::class);
-        $uow->method('getScheduledEntityInsertions')->willReturn([]);
-        $uow->method('getScheduledEntityUpdates')->willReturn($updates);
-        $uow->method('getScheduledEntityDeletions')->willReturn([]);
-        $uow->method('getScheduledCollectionUpdates')->willReturn($collections);
-        $uow->method('getScheduledCollectionDeletions')->willReturn($deletions);
-        $uow->method('getEntityChangeSet')->willReturn($changes + ['name' => ['old', 'new']]);
-        $uow->method('isInIdentityMap')->willReturnCallback(static fn(object $entity): bool => isset($ids[$entity]));
-        $uow->method('getEntityIdentifier')->willReturnCallback(static fn(object $entity): array => (
-            \is_array($ids[$entity]) ? $ids[$entity] : ['id' => $ids[$entity]]
-        ));
-        $em = $this->createStub(EntityManagerInterface::class);
-        $em->method('getUnitOfWork')->willReturn($uow);
-        $em->method('getClassMetadata')->willReturnCallback($real->getClassMetadata(...));
-        $em->method('getMetadataFactory')->willReturn($real->getMetadataFactory());
         $request = Request::create('/admin/article/1/edit');
         $requests = new RequestStack();
         $requests->push($request);
@@ -109,9 +94,71 @@ final class ChangeCollectorMetadataTest extends TestCase
             $requests,
             ['enabled' => true, 'association_depth' => $depth],
             new TranslationMapper(),
-        )->onFlush(new OnFlushEventArgs($em));
+        )->onFlush($this->event(
+            updates: $updates,
+            collections: $collections,
+            ids: $ids,
+            changes: $changes,
+            deletions: $deletions,
+        ));
 
         return $request;
+    }
+
+    /**
+     * A flush of a unit of work holding these scheduled writes, on the fixtures' real mapping.
+     *
+     * @param list<object>                                  $insertions
+     * @param list<object>                                  $updates
+     * @param list<PersistentCollection<array-key, object>> $collections
+     * @param \WeakMap<object, mixed>                       $ids         the stored entities and their ids
+     * @param array<string, mixed>                          $changes     the change set of every entity not in `$changeSets`, `name` changed
+     * @param list<PersistentCollection<array-key, object>> $deletions
+     * @param \WeakMap<object, array<string, mixed>>        $changeSets  the change sets of given entities
+     */
+    private function event(
+        array $insertions = [],
+        array $updates = [],
+        array $collections = [],
+        \WeakMap $ids = new \WeakMap(),
+        array $changes = [],
+        array $deletions = [],
+        \WeakMap $changeSets = new \WeakMap(),
+    ): OnFlushEventArgs {
+        $real = self::em();
+        $uow = $this->createStub(UnitOfWork::class);
+        $uow->method('getScheduledEntityInsertions')->willReturn($insertions);
+        $uow->method('getScheduledEntityUpdates')->willReturn($updates);
+        $uow->method('getScheduledEntityDeletions')->willReturn([]);
+        $uow->method('getScheduledCollectionUpdates')->willReturn($collections);
+        $uow->method('getScheduledCollectionDeletions')->willReturn($deletions);
+        $uow->method('getEntityChangeSet')->willReturnCallback(
+            static fn(object $entity): array => $changeSets[$entity] ?? ($changes + ['name' => ['old', 'new']]),
+        );
+        $uow->method('isInIdentityMap')->willReturnCallback(static fn(object $entity): bool => isset($ids[$entity]));
+        $uow->method('getEntityIdentifier')->willReturnCallback(static fn(object $entity): array => (
+            \is_array($ids[$entity]) ? $ids[$entity] : ['id' => $ids[$entity]]
+        ));
+        $em = $this->createStub(EntityManagerInterface::class);
+        $em->method('getUnitOfWork')->willReturn($uow);
+        $em->method('getClassMetadata')->willReturnCallback($real->getClassMetadata(...));
+        $em->method('getMetadataFactory')->willReturn($real->getMetadataFactory());
+
+        return new OnFlushEventArgs($em);
+    }
+
+    /**
+     * @param array{enabled?: bool, association_depth?: int} $options
+     *
+     * @return array{ChangeCollector, Request} a collector with the given configuration, and the admin request it writes to
+     */
+    private function collector(array $options = ['enabled' => true], bool $drafts = false): array
+    {
+        $request = Request::create('/admin/article/1/edit');
+        $requests = new RequestStack();
+        $requests->push($request);
+
+        return [new ChangeCollector($this->access(), $requests, $options, new TranslationMapper(), $drafts), $request];
     }
 
     /**
@@ -274,16 +321,20 @@ final class ChangeCollectorMetadataTest extends TestCase
         $article = new Article();
         $kept = new Section();
         $added = new Section();
+        $other = new Section();
         $collection = $this->collection(Article::class, 'categories', Category::class, $article, [$kept]);
         $collection->add($added);
+        $collection->add($other);
         $ids = new \WeakMap();
         $ids[$article] = 11;
         $ids[$kept] = 12;
         $ids[$added] = 13;
+        $ids[$other] = 15;
 
         self::assertEqualsCanonicalizing(
             [
                 ...$this->drafts('13', Section::class, Category::class),
+                ...$this->drafts('15', Section::class, Category::class),
                 ...$this->drafts('11', Article::class, Publication::class),
             ],
             $this->records([], [$collection], $ids),
@@ -300,7 +351,7 @@ final class ChangeCollectorMetadataTest extends TestCase
             'categories',
             Category::class,
             $article,
-            [$section, $composite, 'stray'],
+            ['stray', $section, $composite],
         );
         $ids = new \WeakMap();
         $ids[$article] = 11;
@@ -314,5 +365,142 @@ final class ChangeCollectorMetadataTest extends TestCase
             ],
             $this->records([], [], $ids, deletions: [$collection]),
         );
+    }
+
+    public function testAnOutboundAssociationReachesItsTarget(): void
+    {
+        // Nothing but a tagging lists tags: a tag is one of its associations' targets, never its source.
+        self::assertContains(Tag::class, $this->affected([new Tagging()], 1));
+        self::assertContains(Article::class, $this->affected([new Tagging()], 1));
+    }
+
+    public function testWithoutConfigurationNothingIsCollected(): void
+    {
+        $request = Request::create('/admin/article/1/edit');
+        $requests = new RequestStack();
+        $requests->push($request);
+        new ChangeCollector($this->access(), $requests)->onFlush($this->event(updates: [new Tag()]));
+
+        self::assertFalse($request->attributes->has('_collaborate_data_changed'));
+        self::assertFalse($request->attributes->has('_collaborate_records_changed'));
+    }
+
+    public function testByDefaultAChangeReachesTwoAssociationsAwayAndAnUpdatedAtAloneIsNoise(): void
+    {
+        [$collector, $request] = $this->collector();
+        $collector->onFlush($this->event(updates: [new Tag()]));
+        $affected = $request->attributes->all('_collaborate_data_changed');
+
+        self::assertContains(Article::class, $affected);
+        // Three associations away: tag, tagging, article, category.
+        self::assertNotContains(Category::class, $affected);
+
+        [$collector, $request] = $this->collector();
+        $stamped = new \WeakMap();
+        $tag = new Tag();
+        $stamped[$tag] = ['updatedAt' => [null, 'now']];
+        $collector->onFlush($this->event(updates: [$tag], changeSets: $stamped));
+        self::assertFalse($request->attributes->has('_collaborate_data_changed'));
+    }
+
+    public function testInsertedEntitiesAreCollected(): void
+    {
+        [$collector, $request] = $this->collector();
+        $collector->onFlush($this->event(insertions: [new Setting()]));
+
+        self::assertContains(Setting::class, $request->attributes->all('_collaborate_data_changed'));
+    }
+
+    public function testEveryEntityOfAFlushIsCollectedAfterNoiseAndTranslations(): void
+    {
+        $noise = new Tag();
+        $tag = new Tag();
+        $translation = new ArticleTranslation();
+        $translation->setObjectClass(Article::class);
+        new \ReflectionProperty(AbstractTranslation::class, 'foreignKey')->setValue($translation, 5);
+        $setting = new Setting();
+        $ids = new \WeakMap();
+        $ids[$tag] = 3;
+        $ids[$setting] = 9;
+        $changeSets = new \WeakMap();
+        $changeSets[$noise] = ['updatedAt' => [null, 'now']];
+        [$collector, $request] = $this->collector();
+
+        $collector->onFlush($this->event(
+            updates: [$noise, $tag, $translation, $setting],
+            ids: $ids,
+            changeSets: $changeSets,
+        ));
+
+        self::assertSame(
+            [Tag::class, Article::class, Setting::class],
+            array_values(array_intersect(
+                [Tag::class, Article::class, Setting::class],
+                $request->attributes->all('_collaborate_data_changed'),
+            )),
+        );
+        self::assertEqualsCanonicalizing(
+            [
+                ...$this->drafts('3', Tag::class),
+                ...$this->drafts('5', Article::class, Publication::class),
+                ...$this->drafts('9', Setting::class),
+            ],
+            $request->attributes->all('_collaborate_records_changed'),
+        );
+    }
+
+    public function testAParentMappedAfterAToManyAssociationIsNotified(): void
+    {
+        $article = new Article();
+        $folder = new Folder($article);
+        $ids = new \WeakMap();
+        $ids[$article] = 4;
+        self::assertSame(
+            ['tags', 'article'],
+            array_keys(self::em()->getClassMetadata(Folder::class)->getAssociationMappings()),
+        );
+
+        self::assertSame($this->drafts('4', Article::class, Publication::class), $this->records([$folder], [], $ids));
+    }
+
+    public function testAnEntryMovedOutOfItsParentNotifiesTheFormerOne(): void
+    {
+        $before = new Article();
+        $ids = new \WeakMap();
+        $ids[$before] = 7;
+
+        self::assertSame(
+            $this->drafts('7', Article::class, Publication::class),
+            $this->records([new Tagging()], [], $ids, ['article' => [$before, null]]),
+        );
+    }
+
+    public function testFlushesOfOneRequestAddUpTheirRecords(): void
+    {
+        $first = new Tag();
+        $second = new Tag();
+        $ids = new \WeakMap();
+        $ids[$first] = 1;
+        $ids[$second] = 2;
+        [$collector, $request] = $this->collector();
+
+        $collector->onFlush($this->event(updates: [$first], ids: $ids));
+        $collector->onFlush($this->event(updates: [$second], ids: $ids));
+
+        self::assertSame(
+            [...$this->drafts('1', Tag::class), ...$this->drafts('2', Tag::class)],
+            $request->attributes->all('_collaborate_records_changed'),
+        );
+    }
+
+    public function testAStringIdNamesARecordAndAnyOtherScalarNone(): void
+    {
+        $uuid = new Tag();
+        $float = new Tag();
+        $ids = new \WeakMap();
+        $ids[$uuid] = 'uuid-1';
+        $ids[$float] = 1.5;
+
+        self::assertSame($this->drafts('uuid-1', Tag::class), $this->records([$uuid, $float], [], $ids));
     }
 }

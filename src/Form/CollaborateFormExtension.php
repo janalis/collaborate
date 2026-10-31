@@ -46,6 +46,8 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  * @phpstan-import-type SchemaField from DraftJournal
  * @phpstan-import-type FormRecord from FormContextInterface
  *
+ * @phpstan-type Sharing array{user: UserInterface, record: FormRecord, context: FormContextInterface, request: Request, permission: 'create'|'update'}
+ *
  * @phpstan-type Options array{max_update_bytes?: int, rich_text?: array{block_prefixes?: list<string>, schema_option?: string|null, ckeditor_version?: string|null, ...}, position_field?: string, sensitive_fields?: list<string>, replay?: array{connected?: int, disconnected?: int, join_retry?: int, ...}, label_length?: int, ...}
  */
 final class CollaborateFormExtension extends AbstractTypeExtension
@@ -105,7 +107,7 @@ final class CollaborateFormExtension extends AbstractTypeExtension
     /** Block prefixes of the controls a draft edits as plain text. */
     private const array TEXT = ['text', 'textarea', 'email', 'url', 'tel', 'search'];
 
-    /** @var \WeakMap<FormInterface, true> Collections whose list data was rekeyed by stable keys. */
+    /** @var \WeakMap<FormInterface, string> Collections whose list data was rekeyed by stable keys, with their paths. */
     private \WeakMap $lists;
 
     /** @var list<string> */
@@ -172,17 +174,18 @@ final class CollaborateFormExtension extends AbstractTypeExtension
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
-        if (!$this->access->enabled || null === $this->context) {
+        $context = $this->context;
+        if (!$this->access->enabled || null === $context) {
             return;
         }
         $builder->addEventListener(
             FormEvents::PRE_SET_DATA,
-            function (FormEvent $event): void {
+            function (FormEvent $event) use ($context): void {
                 $form = $event->getForm();
                 if (!$this->isCollection($form) || !$this->security->isGranted($this->role)) {
                     return;
                 }
-                $record = $this->context?->current();
+                $record = $context->current();
                 if (null === $record || $form->getRoot()->getConfig()->getData() !== $record['entity']) {
                     return;
                 }
@@ -210,7 +213,7 @@ final class CollaborateFormExtension extends AbstractTypeExtension
                     $keyed[$stable] = $item;
                 }
                 if (\is_array($data) && array_is_list($data)) {
-                    $this->lists[$form] = true;
+                    $this->lists[$form] = $path;
                 }
                 $event->setData($data instanceof Collection ? new ArrayCollection($keyed) : $keyed);
             },
@@ -256,12 +259,12 @@ final class CollaborateFormExtension extends AbstractTypeExtension
             FormEvents::PRE_SUBMIT,
             function (FormEvent $event): void {
                 $form = $event->getForm();
-                $scope = $this->scope($form);
-                $request = $this->requests->getMainRequest();
-                $user = $this->user();
-                if (null === $scope || null === $request || null === $user) {
+                $sharing = $this->sharing($form);
+                if (null === $sharing) {
                     return;
                 }
+                ['user' => $user, 'request' => $request] = $sharing;
+                $scope = $this->scope($form, $sharing);
                 // Validation re-renders must describe the saved record, not the
                 // submitted values that Symfony is about to map onto its entity.
                 $request->attributes->set('_collaborate_form_scope', ['form' => $form, 'scope' => $scope]);
@@ -277,44 +280,32 @@ final class CollaborateFormExtension extends AbstractTypeExtension
                 }
                 $values = array_map(static fn(array $field): mixed => $field['initial'], $scope['fields']);
                 $this->save->begin($request, $authorized, $values, $this->collaborators->label($user));
-            },
-            2048,
-        );
-        $builder->addEventListener(
-            FormEvents::POST_SUBMIT,
-            function (FormEvent $event): void {
-                $request = $this->requests->getMainRequest();
-                if (
-                    null === $event->getForm()->getParent()
-                    && null !== $request
-                    && $request->attributes->has('_collaborate_save')
-                ) {
-                    $new = $this->context?->current()['new'] ?? false;
+                if ($request->attributes->has('_collaborate_save')) {
                     // Read once the admin has persisted the record (DraftSave::completed()).
                     $request->attributes->set('_collaborate_snapshot', fn(): array => array_map(
                         static fn(array $field): mixed => $field['initial'],
-                        $this->fields($event->getForm(), $new, fresh: true),
+                        $this->fields($form, $scope['new'], fresh: true),
                     ));
                 }
             },
-            -2048,
+            2048,
         );
     }
 
     public function finishView(FormView $view, FormInterface $form, array $options): void
     {
-        if ($this->access->enabled && null !== $this->context && $this->isCollection($form)) {
+        if ($this->isCollection($form) && $this->inSchema($form)) {
             /** @var array<string, mixed> $rowAttributes */
             $rowAttributes = $view->vars['row_attr'];
             $rowAttributes['data-collaborate-collection'] = $this->path($form);
             $view->vars['row_attr'] = $rowAttributes;
         }
-        $scope = $this->scope($form);
-        $user = $this->user();
-        $request = $this->requests->getMainRequest();
-        if (null === $scope || null === $user || null === $request || null === $this->context) {
+        $sharing = $this->sharing($form);
+        if (null === $sharing) {
             return;
         }
+        ['user' => $user, 'request' => $request, 'context' => $context] = $sharing;
+        $scope = $this->scope($form, $sharing);
         $grant = $this->access->issue(
             $scope,
             (int) $this->collaborators->id($user),
@@ -344,7 +335,7 @@ final class CollaborateFormExtension extends AbstractTypeExtension
                     'collaborate',
                 ), self::MESSAGES),
                 'isNew' => $scope['new'],
-                'editUrl' => $this->context->editUrl(),
+                'editUrl' => $context->editUrl(),
                 'invitation' => $scope['new']
                     ? $request->getPathInfo() . '?' . http_build_query(array_replace($request->query->all(), [
                         'draft' => $scope['draft'],
@@ -381,24 +372,77 @@ final class CollaborateFormExtension extends AbstractTypeExtension
         return $user;
     }
 
-    /** @return Scope|null */
-    private function scope(FormInterface $form): ?array
+    /**
+     * Whether a form of the page is part of the shared schema: its root form shares a draft, and neither it nor
+     * an ancestor is left out of the schema {@see fields()} describes.
+     */
+    private function inSchema(FormInterface $form): bool
+    {
+        for ($parent = $form->getParent(); null !== $parent; $parent = $form->getParent()) {
+            if ($this->excluded($form)) {
+                return false;
+            }
+            $form = $parent;
+        }
+
+        return null !== $this->sharing($form);
+    }
+
+    /** A form whose value, and its children's, never enters a draft. */
+    private function excluded(FormInterface $form): bool
+    {
+        $config = $form->getConfig();
+
+        return (
+            !$config->getMapped()
+            || $config->getDisabled()
+            || $this->sensitive($form->getName())
+            || $this->uneditable($this->types($form))
+        );
+    }
+
+    /**
+     * Who shares the draft of the root form `$form`, its record, the page's context, the main request and the
+     * permission the draft needs; null when the form shares none.
+     *
+     * @return Sharing|null
+     */
+    private function sharing(FormInterface $form): ?array
     {
         if (!$this->access->enabled || null !== $form->getParent()) {
             return null;
         }
+        $context = $this->context;
         $user = $this->user();
-        $record = $this->context?->current();
+        $record = $context?->current();
         $request = $this->requests->getMainRequest();
         if (null === $user || null === $record || null === $request || $form->getData() !== $record['entity']) {
             return null;
         }
-        $new = $record['new'];
-        $entityClass = $record['class'];
-        $permission = $new ? DraftAccessCheckerInterface::CREATE : DraftAccessCheckerInterface::UPDATE;
-        if (!$this->checker->canEdit($user, $permission, $entityClass)) {
+        $permission = $record['new'] ? DraftAccessCheckerInterface::CREATE : DraftAccessCheckerInterface::UPDATE;
+        if (!$this->checker->canEdit($user, $permission, $record['class'])) {
             return null;
         }
+
+        return [
+            'user' => $user,
+            'record' => $record,
+            'context' => $context,
+            'request' => $request,
+            'permission' => $permission,
+        ];
+    }
+
+    /**
+     * @param Sharing $sharing
+     *
+     * @return Scope
+     */
+    private function scope(FormInterface $form, array $sharing): array
+    {
+        ['record' => $record, 'request' => $request, 'permission' => $permission] = $sharing;
+        $new = $record['new'];
+        $entityClass = $record['class'];
         $draft = null;
         if ($new) {
             $draft = $record['draft'];
@@ -411,7 +455,7 @@ final class CollaborateFormExtension extends AbstractTypeExtension
                 $draft = $drawn;
             }
         }
-        $identity = null === $draft ? (string) $record['id'] : 'new:' . $draft;
+        $identity = null === $draft ? $record['id'] ?? '' : 'new:' . $draft;
 
         /** @var array{form: FormInterface, scope: Scope}|null $submitted */
         $submitted = $request->attributes->get('_collaborate_form_scope');
@@ -444,29 +488,20 @@ final class CollaborateFormExtension extends AbstractTypeExtension
         $fields = [];
         $name = '' === $prefix ? $form->getName() : $prefix;
         foreach ($form as $child) {
+            if ($this->excluded($child)) {
+                continue;
+            }
             $config = $child->getConfig();
-            if (!$config->getMapped() || $config->getDisabled() || $this->sensitive($child->getName())) {
-                continue;
-            }
             $types = $this->types($child);
-            if ($this->uneditable($types)) {
-                continue;
-            }
             $path = $name . '[' . $child->getName() . ']';
             if (\in_array('collection', $types, true)) {
                 $prototype = $config->getAttribute('prototype');
                 // Entries store their order in a position child; without one, the record reloads in
                 // database order whatever order was submitted.
-                $unordered = $prototype instanceof FormInterface && $prototype->has($this->positionField)
-                    ? []
-                    : ['unordered' => true];
-                foreach ($child as $entry) {
-                    if (!$entry->has($this->positionField)) {
-                        continue;
-                    }
-
-                    $unordered = [];
-                }
+                $ordered =
+                    $prototype instanceof FormInterface && $prototype->has($this->positionField)
+                    || array_any($child->all(), fn(FormInterface $entry): bool => $entry->has($this->positionField));
+                $unordered = $ordered ? [] : ['unordered' => true];
                 $keys = [];
                 foreach ($child as $key => $entry) {
                     $keys[] = $key;
@@ -489,7 +524,7 @@ final class CollaborateFormExtension extends AbstractTypeExtension
                         ] + $unordered;
                     $fields += $prototype->getConfig()->getCompound()
                         ? $this->fields($prototype, $new, $path . '[__name__]')
-                        : $this->describe($prototype, $path . '[__name__]', $new);
+                        : $this->describe($prototype, $path . '[__name__]', $new, null, $fresh);
                 }
             }
             if ($config->getCompound() && !\in_array('choice', $types, true)) {
@@ -503,13 +538,8 @@ final class CollaborateFormExtension extends AbstractTypeExtension
     }
 
     /** @return array<string, SchemaField> */
-    private function describe(
-        FormInterface $child,
-        string $path,
-        bool $new,
-        ?FormInterface $form = null,
-        bool $fresh = false,
-    ): array {
+    private function describe(FormInterface $child, string $path, bool $new, ?FormInterface $form, bool $fresh): array
+    {
         $config = $child->getConfig();
         $types = $this->types($child);
         if ($this->uneditable($types)) {
@@ -530,7 +560,7 @@ final class CollaborateFormExtension extends AbstractTypeExtension
             foreach ($form->getConfig()->getViewTransformers() as $transformer) {
                 $owner = $transformer->transform($owner);
             }
-            \assert(\is_object($owner) || \is_array($owner), 'A compound form holds an object or an array.');
+            /** @var array<array-key, mixed>|object $owner A compound form holds an object or an array. */
             if (isset($this->lists[$form]) && \is_array($owner) && array_is_list($owner)) {
                 // SUBMIT stored the entries as a list; the stable keys name the children only, which hold
                 // the entries it was built from.

@@ -51,7 +51,7 @@ Presence, rendered by `collaborate_presence()`:
 <div class="collaborate-presence" data-collaborate-presence role="group" aria-label="Also on this page" hidden></div>
 ```
 
-A shared form carries `data-collaborate` (JSON): `grant`, `url` (with an `__action__` placeholder), `csrf`, `messages`, `isNew`, `editUrl` (with `__record__`), `invitation` (new records), and `config`: `{"replayConnected":30000,"replayDisconnected":5000,"joinRetry":12000,"labelLength":255}`. Collection rows carry `data-collaborate-collection`.
+A shared form carries `data-collaborate` (JSON): `grant`, `url` (with an `__action__` placeholder), `csrf`, `messages`, `isNew`, `editUrl` (with `__record__`), `invitation` (new records), and `config`: `{"replayConnected":30000,"replayDisconnected":5000,"joinRetry":12000,"labelLength":255}`. The rows of the collections in the field schema carry `data-collaborate-collection`; a collection the schema leaves out (unmapped, disabled, sensitive, or under such a form) has none, and its rows stay as rendered.
 
 CSS classes: `.collaborate-cursor*`, `.collaborate-caret*`, `.collaborate-presence*`, `.collaborate-bar*`, `.collaborate-conflicts*`; colours by `[data-color]`, field marks by `[data-peer-focus]` / `data-peer-focus-label`.
 

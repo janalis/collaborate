@@ -166,7 +166,8 @@ Collections are synchronized through the markup EasyAdmin renders. A form
 theme of your own must keep:
 
 - the collection's row attributes (`form.vars.row_attr`), which carry
-  `data-collaborate-collection`, and a `data-prototype` attribute holding
+  `data-collaborate-collection` when the draft shares the collection, and a
+  `data-prototype` attribute holding
   one rendered entry with `__name__` (or the placeholder named in
   `data-form-type-name-placeholder`) for its key;
 - an `.ea-form-collection-items` element containing the entries;

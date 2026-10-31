@@ -190,11 +190,12 @@ final class ChangeCollector
      */
     private function affected(EntityManagerInterface $em, array $changed): array
     {
+        // A set, keyed by class name.
         $classes = [];
         foreach ($changed as $class) {
             $metadata = $em->getClassMetadata($class);
             foreach ([$metadata->getName(), ...$metadata->parentClasses, ...$metadata->subClasses] as $related) {
-                $classes[$related] = true;
+                $classes[$related] = $related;
             }
         }
         if (null === $this->inbound) {
@@ -208,12 +209,13 @@ final class ChangeCollector
         $inbound = $this->inbound;
         // Two hops by default: a join entity sits between a record and the records it lists.
         for ($hop = 0; $hop < $this->associationDepth; ++$hop) {
-            foreach (array_keys($classes) as $class) {
+            // foreach walks a copy: the classes this hop adds are walked by the next one.
+            foreach ($classes as $class) {
                 foreach ($em->getClassMetadata($class)->getAssociationMappings() as $association) {
-                    $classes[$association->targetEntity] = true;
+                    $classes[$association->targetEntity] = $association->targetEntity;
                 }
                 foreach ($inbound[$class] ?? [] as $source) {
-                    $classes[$source] = true;
+                    $classes[$source] = $source;
                 }
             }
         }

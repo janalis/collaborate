@@ -13,6 +13,7 @@ use Janalis\Collaborate\Hub\Admission;
 use Janalis\Collaborate\Hub\HubGuard;
 use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Tests\Fixtures\Arrays;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -99,6 +100,46 @@ final class HubControllerTest extends HubTestCase
         );
         $this->expectException(BadRequestHttpException::class);
         $controller($this->request('/cursors/session', ['drafts' => ['a', 'b', 'c']]));
+    }
+
+    public function testByDefaultASessionLastsFiveMinutesSkipsSavedViewsAndProvesEightDrafts(): void
+    {
+        $expires = [];
+        $factory = $this->createStub(TokenFactoryInterface::class);
+        $factory
+            ->method('create')
+            ->willReturnCallback(static function (array $grants, array $claims) use (&$expires): string {
+                $expires[] = $claims['exp'] ?? null;
+
+                return json_encode($grants[0] instanceof Grant ? $grants[0]->topics : null, \JSON_THROW_ON_ERROR);
+            });
+        $this->hub->method('getFactory')->willReturn($factory);
+        $controller = new HubController($this->guard(), $this->drafts, new Topics(), $this->hub);
+
+        $before = time();
+        $data = $this->decode($controller($this->request('/cursors/session', [
+            'updates' => true,
+            'drafts' => array_fill(0, 8, 'grant'),
+        ])));
+        $after = time();
+        self::assertIsString($data['token']);
+        self::assertCount(1, Arrays::json($data['token']));
+        self::assertInstanceOf(\DateTimeImmutable::class, $expires[0]);
+        self::assertGreaterThanOrEqual($before + 300, $expires[0]->getTimestamp());
+        self::assertLessThanOrEqual($after + 300, $expires[0]->getTimestamp());
+        $this->expectException(BadRequestHttpException::class);
+        $controller($this->request('/cursors/session', ['drafts' => array_fill(0, 9, 'grant')]));
+    }
+
+    public function testADraftProvedTwiceIsSubscribedOnce(): void
+    {
+        $first = $this->draftGrant('first');
+        $data = $this->sessionTopics(['drafts' => [$first, $first, $this->draftGrant('second')]]);
+        self::assertSame(
+            [$this->drafts->topic('first'), $this->drafts->topic('second')],
+            \array_slice($data['topics'], 1),
+        );
+        self::assertTrue(array_is_list($data['topics']));
     }
 
     public function testOneSessionSubscribesToThePageCursorsSavedViewsAndEveryDraftItsGrantsProve(): void

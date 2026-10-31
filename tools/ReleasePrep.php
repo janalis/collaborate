@@ -52,8 +52,13 @@ final class ReleasePrep
     }
 
     /** Updates the changelog, writes the notes and returns the new version. */
-    public function prepare(string $bump, string $date, ?string $notes, string $changelog, string $gitDirectory): string
-    {
+    private function prepare(
+        string $bump,
+        string $date,
+        ?string $notes,
+        string $changelog,
+        string $gitDirectory,
+    ): string {
         $parsed = \DateTimeImmutable::createFromFormat('!Y-m-d', $date);
         if (false === $parsed || $parsed->format('Y-m-d') !== $date) {
             throw new \RuntimeException(\sprintf('bad date "%s" (want YYYY-MM-DD)', $date));
@@ -82,10 +87,8 @@ final class ReleasePrep
     {
         $latest = [0, 0, 0];
         foreach ($tags as $tag) {
-            $version = self::semver(str_starts_with($tag, 'v') ? substr($tag, 1) : $tag);
-            if (null !== $version && $version > $latest) {
-                $latest = $version;
-            }
+            /** @var array{int, int, int} $latest */
+            $latest = max($latest, self::semver(str_starts_with($tag, 'v') ? substr($tag, 1) : $tag) ?? $latest);
         }
         $next = match ($bump) {
             'major' => [$latest[0] + 1, 0, 0],
@@ -98,12 +101,12 @@ final class ReleasePrep
         if ($next <= $latest) {
             throw new \RuntimeException(\sprintf(
                 'version %s is not greater than the latest tag v%s',
-                implode('.', $next),
-                implode('.', $latest),
+                self::format($next[0], $next[1], $next[2]),
+                self::format($latest[0], $latest[1], $latest[2]),
             ));
         }
 
-        return implode('.', $next);
+        return self::format($next[0], $next[1], $next[2]);
     }
 
     /**
@@ -118,9 +121,9 @@ final class ReleasePrep
         if (false === $start) {
             throw new \RuntimeException('the changelog has no "' . self::UNRELEASED . '" heading');
         }
-        // The heading line, then its body up to the next section or the links.
+        // The heading line, then its body (from the heading's line break) up to the next section or the links.
         ++$start;
-        $bodyStart = $start + \strlen(self::UNRELEASED) + 1;
+        $bodyStart = $start + \strlen(self::UNRELEASED);
         $end = \strlen($changelog);
         $offset = $bodyStart;
         foreach (explode("\n", substr($changelog, $bodyStart)) as $line) {
@@ -135,7 +138,7 @@ final class ReleasePrep
             throw new \RuntimeException('the [Unreleased] changelog section is empty');
         }
         $heading = \sprintf('## [%s] - %s', $version, $date);
-        $rest = ltrim(substr($changelog, $end), "\n");
+        $rest = substr($changelog, $end);
         $updated =
             substr($changelog, 0, $start)
             . self::UNRELEASED
@@ -185,14 +188,15 @@ final class ReleasePrep
     /** @return list<string> the repository's `v*` tags */
     private function tags(string $directory): array
     {
+        // exec() strips each line's trailing whitespace; git prints a tag per line.
         $output = [];
-        $status = 0;
+        $status = null;
         exec('git -C ' . escapeshellarg($directory) . " tag --list 'v*' 2>&1", $output, $status);
         if (0 !== $status) {
-            throw new \RuntimeException('git tag: ' . trim(implode("\n", $output)));
+            throw new \RuntimeException('git tag: ' . implode("\n", $output));
         }
 
-        return array_values(array_filter(array_map(trim(...), $output), static fn(string $tag): bool => '' !== $tag));
+        return $output;
     }
 
     /** Writes a file, reporting a failure as an exception rather than a warning. */
@@ -237,10 +241,17 @@ final class ReleasePrep
     private static function semver(string $version): ?array
     {
         $match = [];
-        if (1 !== preg_match('/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/D', $version, $match)) {
+        if (
+            1 !== preg_match('/^(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*)$/D', $version, $match)
+        ) {
             return null;
         }
 
-        return [(int) $match[1], (int) $match[2], (int) $match[3]];
+        return [(int) $match['major'], (int) $match['minor'], (int) $match['patch']];
+    }
+
+    private static function format(int $major, int $minor, int $patch): string
+    {
+        return $major . '.' . $minor . '.' . $patch;
     }
 }

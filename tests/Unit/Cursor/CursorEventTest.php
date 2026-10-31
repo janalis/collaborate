@@ -55,6 +55,8 @@ final class CursorEventTest extends TestCase
 
     public function testAcceptsTheBoundsOfAnchorsAndCarets(): void
     {
+        // A tab's first event is its sequence 0.
+        self::assertSame(0, $this->event(['sequence' => 0])['sequence']);
         $anchor = ['selector' => str_repeat('a', 1024), 'region' => 'body', 'x' => 0, 'y' => 1];
         self::assertSame($anchor, $this->event(['anchor' => $anchor])['anchor']);
         $caret = ['selector' => 'x', 'region' => 'modal', 'start' => 0, 'end' => 10_485_760];
@@ -131,6 +133,9 @@ final class CursorEventTest extends TestCase
         yield 'x type' => [$box(['x' => 'oops', 'y' => 0]), $anchor];
         yield 'y type' => [$box(['x' => 0, 'y' => 'oops']), $anchor];
         yield 'numeric string x' => [$box(['x' => '1e999', 'y' => 0]), $anchor];
+        yield 'numeric string x inside the box' => [$box(['x' => '0.5', 'y' => 0]), $anchor];
+        yield 'numeric string y inside the box' => [$box(['x' => 0, 'y' => '1']), $anchor];
+        yield 'numeric string start' => [$text(['start' => '0', 'end' => 0]), $caret];
         yield 'infinite x' => [$box(['x' => \INF, 'y' => 0]), $anchor];
         yield 'not a number y' => [$box(['x' => 0, 'y' => \NAN]), $anchor];
     }

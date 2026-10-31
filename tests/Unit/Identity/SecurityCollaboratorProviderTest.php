@@ -46,12 +46,11 @@ final class SecurityCollaboratorProviderTest extends TestCase
 
     public function testAdmitsByTheDistinctRoles(): void
     {
-        self::assertSame(
-            ['ROLE_ADMIN', 'ROLE_USER'],
-            new SecurityCollaboratorProvider()->authorization(
-                new TestUser(1, 'alice', ['ROLE_ADMIN', 'ROLE_USER', 'ROLE_ADMIN']),
-            ),
-        );
+        self::assertSame(['ROLE_ADMIN', 'ROLE_USER'], new SecurityCollaboratorProvider()->authorization(new TestUser(
+            1,
+            'alice',
+            ['ROLE_ADMIN', 'ROLE_ADMIN', 'ROLE_USER', 'ROLE_ADMIN'],
+        )));
     }
 
     private static function withGetter(mixed $id): UserInterface

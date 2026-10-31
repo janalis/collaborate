@@ -36,16 +36,23 @@ final class ReleasePrepTest extends TestCase
 
         MD;
 
-    private string $directory;
+    private const string USAGE = 'usage: relprep.php --bump X.Y.Z|patch|minor|major [--date YYYY-MM-DD] [--notes file] [--changelog file] [--git dir]';
 
+    private string $directory;
+    private string $previous;
+
+    /** Runs in a scratch directory: the default changelog and repository are the scratch ones, never this checkout's. */
     protected function setUp(): void
     {
         $this->directory = sys_get_temp_dir() . '/relprep-' . bin2hex(random_bytes(6));
         mkdir($this->directory);
+        $this->previous = (string) getcwd();
+        chdir($this->directory);
     }
 
     protected function tearDown(): void
     {
+        chdir($this->previous);
         exec('rm -rf ' . escapeshellarg($this->directory));
     }
 
@@ -53,6 +60,7 @@ final class ReleasePrepTest extends TestCase
     public static function versions(): iterable
     {
         yield 'patch of the latest tag' => ['patch', ['v0.1.0', 'v0.2.3', 'v0.10.1', 'other'], '0.10.2'];
+        yield 'the latest tag wherever git lists it' => ['patch', ['v0.10.1', 'v0.2.3', 'v0.9.0'], '0.10.2'];
         yield 'minor' => ['minor', ['v1.2.3'], '1.3.0'];
         yield 'major' => ['major', ['v1.2.3'], '2.0.0'];
         yield 'first patch' => ['patch', [], '0.0.1'];
@@ -79,10 +87,20 @@ final class ReleasePrepTest extends TestCase
         new ReleasePrep()->nextVersion('0.1.0', ['v0.1.0']);
     }
 
-    public function testRefusesAMalformedVersion(): void
+    /** @return iterable<string, array{string}> */
+    public static function malformedVersions(): iterable
     {
-        $this->expectExceptionMessage('bad version "1.0" (want X.Y.Z, patch, minor or major)');
-        new ReleasePrep()->nextVersion('1.0', []);
+        yield 'two numbers' => ['1.0'];
+        yield 'a leading zero' => ['01.2.3'];
+        yield 'a trailing line break' => ["1.2.3\n"];
+        yield 'a prerelease' => ['1.2.3-rc.1'];
+    }
+
+    #[DataProvider('malformedVersions')]
+    public function testRefusesAMalformedVersion(string $version): void
+    {
+        $this->expectExceptionMessage('bad version "' . $version . '" (want X.Y.Z, patch, minor or major)');
+        new ReleasePrep()->nextVersion($version, []);
     }
 
     public function testCutsTheUnreleasedSectionAndUpdatesTheLinks(): void
@@ -144,6 +162,45 @@ final class ReleasePrepTest extends TestCase
         self::assertSame("# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-10-31\n\n- One.\n", $changelog);
     }
 
+    public function testCutsABodyThatFollowsTheHeadingWithoutABlankLine(): void
+    {
+        [$changelog, $notes] = new ReleasePrep()->cutChangelog(
+            "# Changelog\n\n## [Unreleased]\n- One.\n",
+            '1.0.0',
+            '2026-10-31',
+        );
+
+        self::assertSame('- One.', $notes);
+        self::assertSame("# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-10-31\n\n- One.\n", $changelog);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function foreignLinks(): iterable
+    {
+        yield 'a comparison quoted in a line' => ['- See [Unreleased]: https://example.com/compare/v0.1.0...HEAD'];
+        yield 'a comparison followed by text' => ['[Unreleased]: https://example.com/compare/v0.1.0...HEAD soon'];
+        yield 'a history quoted in a line' => ['- See [Unreleased]: https://example.com/commits/main'];
+        yield 'a history followed by text' => ['[Unreleased]: https://example.com/commits/main soon'];
+    }
+
+    /** Only a line that is wholly an [Unreleased] link is one. */
+    #[DataProvider('foreignLinks')]
+    public function testLeavesLinesThatAreNotTheUnreleasedLinkAlone(string $line): void
+    {
+        [$changelog] = new ReleasePrep()->cutChangelog(
+            "# Changelog\n\n## [Unreleased]\n\n- One.\n\n## [0.1.0] - 2026-01-02\n\n" . $line . "\n",
+            '0.2.0',
+            '2026-10-31',
+        );
+
+        self::assertSame(
+            "# Changelog\n\n## [Unreleased]\n\n## [0.2.0] - 2026-10-31\n\n- One.\n\n## [0.1.0] - 2026-01-02\n\n"
+            . $line
+            . "\n",
+            $changelog,
+        );
+    }
+
     public function testRefusesAnEmptyUnreleasedSection(): void
     {
         $this->expectExceptionMessage('the [Unreleased] changelog section is empty');
@@ -154,10 +211,18 @@ final class ReleasePrepTest extends TestCase
         );
     }
 
-    public function testRefusesAChangelogWithoutUnreleasedHeading(): void
+    /** @return iterable<string, array{string}> */
+    public static function headingless(): iterable
+    {
+        yield 'released sections only' => ["# Changelog\n\n## [0.1.0] - 2026-01-02\n"];
+        yield 'a heading with more on its line' => ["# Changelog\n\n## [Unreleased] - soon\n\n- One.\n"];
+    }
+
+    #[DataProvider('headingless')]
+    public function testRefusesAChangelogWithoutUnreleasedHeading(string $changelog): void
     {
         $this->expectExceptionMessage('the changelog has no "## [Unreleased]" heading');
-        new ReleasePrep()->cutChangelog("# Changelog\n\n## [0.1.0] - 2026-01-02\n", '0.2.0', '2026-10-31');
+        new ReleasePrep()->cutChangelog($changelog, '0.2.0', '2026-10-31');
     }
 
     public function testRunUpdatesTheChangelogWritesTheNotesAndPrintsTheOutputs(): void
@@ -200,13 +265,7 @@ final class ReleasePrepTest extends TestCase
     {
         $this->git('init', '-q');
         file_put_contents($this->directory . '/CHANGELOG.md', self::CHANGELOG);
-        $previous = getcwd();
-        chdir($this->directory);
-        try {
-            [$status, $stdout] = $this->relprep(['--bump', '0.2.0']);
-        } finally {
-            chdir((string) $previous);
-        }
+        [$status, $stdout] = $this->relprep(['--bump', '0.2.0']);
 
         self::assertSame([0, "version=0.2.0\ntag=v0.2.0\n"], [$status, $stdout]);
         self::assertStringContainsString(
@@ -224,6 +283,9 @@ final class ReleasePrepTest extends TestCase
         yield 'missing value' => [['--bump']];
         yield 'unknown option' => [['--bump', 'patch', '--force', 'yes']];
         yield 'positional argument' => [['patch']];
+        yield 'an option inside an argument' => [['x--bump=patch']];
+        yield 'an option name with a suffix' => [['--bump-x', 'patch']];
+        yield 'an option name with a line break' => [["--bump\n", 'patch']];
     }
 
     /** @param list<string> $arguments */
@@ -232,9 +294,7 @@ final class ReleasePrepTest extends TestCase
     {
         [$status, $stdout, $stderr] = $this->relprep($arguments);
 
-        self::assertSame(2, $status);
-        self::assertSame('', $stdout);
-        self::assertStringStartsWith('usage: relprep.php --bump', $stderr);
+        self::assertSame([2, '', self::USAGE . "\n"], [$status, $stdout, $stderr]);
     }
 
     /** @return iterable<string, array{list<string>, string}> */
@@ -242,6 +302,10 @@ final class ReleasePrepTest extends TestCase
     {
         yield 'bad date' => [['--date', '2026-02-30'], 'relprep: bad date "2026-02-30" (want YYYY-MM-DD)'];
         yield 'not a date' => [['--date', 'tomorrow'], 'relprep: bad date "tomorrow" (want YYYY-MM-DD)'];
+        yield 'a value across lines' => [
+            ["--date=2026-10-31\nx"],
+            "relprep: bad date \"2026-10-31\nx\" (want YYYY-MM-DD)",
+        ];
         yield 'missing changelog' => [['--changelog', '{dir}/missing.md'], 'relprep: cannot read {dir}/missing.md'];
         yield 'unwritable notes' => [
             ['--notes', '{dir}/no/such/notes.md'],
@@ -272,6 +336,58 @@ final class ReleasePrepTest extends TestCase
         self::assertSame([1, ''], [$status, $stdout]);
         self::assertTrue(str_starts_with($stderr, str_replace('{dir}', $this->directory, $message)), $stderr);
         self::assertSame(self::CHANGELOG, file_get_contents($this->directory . '/CHANGELOG.md'));
+    }
+
+    public function testRunReportsGitsOwnError(): void
+    {
+        [$status, , $stderr] = $this->relprep(['--bump=patch', '--git=' . $this->directory . '/missing']);
+
+        self::assertSame(1, $status);
+        self::assertMatchesRegularExpression('/^relprep: git tag: \S.*\S\n$/s', $stderr);
+        self::assertStringContainsString($this->directory . '/missing', $stderr);
+    }
+
+    public function testAWriteFailureRaisesNoWarningAndRestoresTheErrorHandler(): void
+    {
+        $this->git('init', '-q');
+        file_put_contents($this->directory . '/CHANGELOG.md', self::CHANGELOG);
+        error_clear_last();
+        [$status] = $this->relprep(['--bump=patch', '--notes=' . $this->directory . '/no/such/notes.md']);
+        self::assertSame(1, $status);
+        self::assertNull(error_get_last());
+
+        $handler = static fn(): bool => false;
+        set_error_handler($handler);
+        $this->expectException(\ValueError::class);
+        try {
+            $this->relprep(['--bump=patch', "--notes=notes\0.md"]);
+        } finally {
+            $current = set_error_handler(null);
+            restore_error_handler();
+            restore_error_handler();
+            self::assertSame($handler, $current);
+        }
+    }
+
+    public function testRunBumpsTheHighestOfTheRepositorysTags(): void
+    {
+        $this->git('init', '-q');
+        $this->git(
+            '-c',
+            'user.name=t',
+            '-c',
+            'user.email=t@example.com',
+            'commit',
+            '-q',
+            '--allow-empty',
+            '-m',
+            'init',
+        );
+        $this->git('tag', 'v0.1.0');
+        $this->git('tag', 'v0.3.0');
+        file_put_contents($this->directory . '/CHANGELOG.md', self::CHANGELOG);
+
+        self::assertSame([0, "version=0.3.1\ntag=v0.3.1\n", ''], $this->relprep(['--bump', 'patch']));
     }
 
     public function testRunReportsAnUnwritableChangelog(): void

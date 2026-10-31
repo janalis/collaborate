@@ -138,7 +138,8 @@ final class DraftControllerTest extends TestCase
 
     public function testJoinsAndReplaysOnlyCapabilityFields(): void
     {
-        $this->journal->expects($this->once())->method('join')->with('record', [])->willReturn(['revision' => 0]);
+        // A grant that names no request time reads every field as unchanged since its form was rendered.
+        $this->journal->expects($this->once())->method('join')->with('record', [], 0.0)->willReturn(['revision' => 0]);
         $this->journal
             ->expects($this->exactly(2))
             ->method('replay')
@@ -149,7 +150,7 @@ final class DraftControllerTest extends TestCase
                 float $at,
                 ?string $digest,
             ): array {
-                self::assertSame(['record', [], 3], [$id, $fields, $since]);
+                self::assertSame(['record', [], 3, 0.0], [$id, $fields, $since, $at]);
 
                 return ['revision' => 3, 'digest' => $digest];
             });
@@ -181,6 +182,41 @@ final class DraftControllerTest extends TestCase
             ),
         );
         $this->hub->expects($this->never())->method('publish');
+    }
+
+    public function testJoinReplayAndReconciliationReadTheFieldsAsTheGrantsRequestTimeSawThem(): void
+    {
+        $this->grant = $this->access->issue(
+            [
+                'id' => 'record',
+                'entity' => TestUser::class,
+                'permission' => 'update',
+                'new' => false,
+                'draft' => null,
+                'fields' => [],
+                'requestedAt' => 1_700_000_000.25,
+            ],
+            7,
+            time(),
+            $this->user->getRoles(),
+        );
+        $this->journal->expects($this->once())->method('join')->with('record', [], 1_700_000_000.25)->willReturn([]);
+        $this->journal
+            ->expects($this->once())
+            ->method('replay')
+            ->with('record', [], 3, 1_700_000_000.25, null)
+            ->willReturn([]);
+        $this->journal
+            ->expects($this->once())
+            ->method('reconcile')
+            ->with('record', 1, 2, [], false, 1_700_000_000.25, 7, 'Alice')
+            ->willReturn([]);
+        self::assertSame(200, $this->handle('join')->getStatusCode());
+        self::assertSame(200, $this->handle('replay', ['since' => 3])->getStatusCode());
+        self::assertSame(
+            200,
+            $this->handle('reconcile', ['generation' => 1, 'revision' => 2, 'keep' => false])->getStatusCode(),
+        );
     }
 
     public function testAppendNotifiesWithoutPublishingDraftValuesAndToleratesHubFailure(): void
@@ -273,19 +309,27 @@ final class DraftControllerTest extends TestCase
     public function testInvalidRequestShapesAreRejected(): void
     {
         foreach ([
-            ['replay', []],
-            ['discard', ['generation' => '2']],
-            ['unknown', []],
-        ] as [$action, $body]) {
+            ['replay', [], 'Invalid Collaborate since.'],
+            ['replay', ['since' => -1], 'Invalid Collaborate since.'],
+            ['discard', ['generation' => '2'], 'Invalid Collaborate generation.'],
+            ['discard', ['generation' => 2], 'Invalid Collaborate revision.'],
+            ['unknown', [], 'Unknown Collaborate action.'],
+        ] as [$action, $body, $message]) {
             try {
                 $this->handle($action, $body);
                 self::fail('Invalid request was accepted.');
-            } catch (BadRequestHttpException) {
-                self::assertTrue(true);
+            } catch (BadRequestHttpException $invalid) {
+                self::assertSame($message, $invalid->getMessage());
             }
         }
+        // A request may fill the draft request limit exactly.
+        $this->journal->method('append')->willReturn(['revision' => 1]);
+        $padding = 2_097_152 - \strlen(json_encode(['padding' => '', 'grant' => $this->grant], \JSON_THROW_ON_ERROR));
+        \assert($padding > 0);
+        self::assertSame(200, $this->handle('append', ['padding' => str_repeat('x', $padding)])->getStatusCode());
         $this->expectException(BadRequestHttpException::class);
-        $this->handle('append', ['padding' => str_repeat('x', 2_097_152)]);
+        $this->expectExceptionMessage('Collaborate request is too large.');
+        $this->handle('append', ['padding' => str_repeat('x', $padding + 1)]);
     }
 
     public function testRateLimitDoesNotTouchTheJournal(): void
@@ -301,6 +345,7 @@ final class DraftControllerTest extends TestCase
         $limited = $this->handle('join');
         self::assertSame(429, $limited->getStatusCode());
         self::assertSame('1', $limited->headers->get('Retry-After'));
+        self::assertSame('{"error":"Collaborate rate limit exceeded."}', $limited->getContent());
     }
 
     public function testWithoutALimiterEveryRequestReachesTheJournal(): void

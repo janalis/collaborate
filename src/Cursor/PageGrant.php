@@ -52,8 +52,8 @@ final readonly class PageGrant
         if (
             5 !== \count($parts)
             || $parts[0] !== (string) $userId
-            || !ctype_digit($parts[1])
-            || (int) $parts[1] <= $now
+            // Signed by issue(), whose expiry is a canonical integer: a later one than now.
+            || false === filter_var($parts[1], \FILTER_VALIDATE_INT, ['options' => ['min_range' => $now + 1]])
             || $parts[2] !== Grant::authorizationHash($authorization)
             || !preg_match('/^[a-f0-9]{64}$/D', $parts[3])
             || !hash_equals(hash_hmac('sha256', implode('.', \array_slice($parts, 0, 4)), $this->secret), $parts[4])

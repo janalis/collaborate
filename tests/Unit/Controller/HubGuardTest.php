@@ -86,9 +86,18 @@ final class HubGuardTest extends HubTestCase
 
     public function testRefusesABodyOverTheLimitOrNotJson(): void
     {
+        $request = $this->request('/cursors/events');
+        $limit = \strlen($request->getContent());
+        self::assertInstanceOf(Admission::class, $this->guard()->admit($request, $limit));
         try {
             $this->guard()->admit($this->request('/cursors/events', ['extra' => str_repeat('x', 100)]), 100);
             self::fail('Accepted an oversized body.');
+        } catch (BadRequestHttpException $error) {
+            self::assertSame('Cursor event is too large.', $error->getMessage());
+        }
+        try {
+            $this->guard()->admit($this->request('/cursors/events'), $limit - 1);
+            self::fail('Accepted a body one byte over the limit.');
         } catch (BadRequestHttpException $error) {
             self::assertSame('Cursor event is too large.', $error->getMessage());
         }

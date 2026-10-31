@@ -67,7 +67,7 @@ final readonly class HubController
             'url' => $this->hub->getPublicUrl(),
             'topics' => $topics,
             'token' => $factory->create([new Grant([Grant::ACTION_SUBSCRIBE], $topics)], [
-                'exp' => new \DateTimeImmutable('+' . $this->subscriptionTtl . ' seconds'),
+                'exp' => new \DateTimeImmutable()->add(new \DateInterval('PT' . $this->subscriptionTtl . 'S')),
             ]),
             'userId' => $admission->userId,
             'resend' => $resend,

@@ -150,7 +150,8 @@ jobs:
 
   e2e:
     name: Browser scenarios (Playwright)
-    runs-on: ubuntu-latest
+    # Playwright 1.59 installs its browsers on Ubuntu 24.04 at most.
+    runs-on: ubuntu-24.04
     services:
       database:
         image: mariadb:11.4

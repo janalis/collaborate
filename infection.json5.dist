@@ -15,14 +15,12 @@
     "logs": {
         "text": "var/infection/infection.log",
         "html": "var/infection/infection.html",
-        "summary": "var/infection/summary.log",
-        "json": "var/infection/infection.json"
+        "summary": "var/infection/summary.log"
     },
     "mutators": {
         "@default": true
     },
-    // The scores measured (MSI 91.99%, every mutant covered), rounded down. 233 mutants escape: mostly the
-    // form extension's and the journal's, and casts of mb_convert_encoding() whose result is always a string.
-    "minMsi": 91,
-    "minCoveredMsi": 91
+    // Every mutant is killed. The few equivalent ones carry an @infection-ignore-all naming why no test can tell them apart.
+    "minMsi": 100,
+    "minCoveredMsi": 100
 }

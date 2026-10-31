@@ -160,6 +160,19 @@ final class DraftTextTest extends TestCase
         ];
         yield 'pair after the change' => ['x😀', 'y😀', [['move', 0, 1], ['insert', 0, 'y']]];
         yield 'pair inside a prefix' => ['ab😀cd', 'ab😁cd', [['move', 2, 2], ['insert', 2, '😁']]];
+        yield 'grown into a repeat' => ['ab', 'abab', [['insert', 2, 'ab']]];
+        // The common prefix and suffix overlap in the shorter text: the suffix keeps what the prefix left.
+        yield 'shrunk across a repeat' => ['aaXaa', 'aaa', [['move', 2, 2]]];
+        // U+0061 and U+0161 share their UTF-16LE low byte.
+        yield 'same low byte' => ['a', 'š', [['move', 0, 1], ['insert', 0, 'š']]];
+        yield 'highest high surrogate' => [
+            "a\u{10FFFD}b",
+            "a\u{10FFFC}b",
+            [
+                ['move',   1, 2],
+                ['insert', 1, "\u{10FFFC}"],
+            ],
+        ];
     }
 
     /** @param list<list<bool|int|string>> $expected */

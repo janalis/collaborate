@@ -14,7 +14,7 @@ final class DraftText
      */
     public function apply(string $value, int $graveyard, array $operations): array
     {
-        $text = (string) mb_convert_encoding($value, 'UTF-16LE', 'UTF-8');
+        $text = $this->convert($value, 'UTF-16LE', 'UTF-8');
         foreach ($operations as $operation) {
             if ('NoOperation' === ($operation['__className'] ?? null)) {
                 continue;
@@ -44,7 +44,7 @@ final class DraftText
                     }
                     $inserted .= $node['data'];
                 }
-                $units = (string) mb_convert_encoding($inserted, 'UTF-16LE', 'UTF-8');
+                $units = $this->convert($inserted, 'UTF-16LE', 'UTF-8');
                 if ($removed) {
                     $graveyard += intdiv(\strlen($units), 2);
                 } else {
@@ -65,17 +65,14 @@ final class DraftText
             }
         }
 
-        return ['text' => (string) mb_convert_encoding($text, 'UTF-8', 'UTF-16LE'), 'graveyard' => $graveyard];
+        return ['text' => $this->convert($text, 'UTF-8', 'UTF-16LE'), 'graveyard' => $graveyard];
     }
 
     /** @return list<array<string, mixed>> */
     public function diff(string $before, string $after, int $version): array
     {
-        if ($before === $after) {
-            return [];
-        }
-        $old = (string) mb_convert_encoding($before, 'UTF-16LE', 'UTF-8');
-        $new = (string) mb_convert_encoding($after, 'UTF-16LE', 'UTF-8');
+        $old = $this->convert($before, 'UTF-16LE', 'UTF-8');
+        $new = $this->convert($after, 'UTF-16LE', 'UTF-8');
         // Trimming must preserve the existing core text, including concurrent edits to it.
         if ('' !== $new && false !== ($inside = strpos($old, $new)) && 0 === ($inside % 2)) {
             $operations = [];
@@ -89,24 +86,13 @@ final class DraftText
 
             return $operations;
         }
-        $prefix = 0;
-        while ($prefix < min(\strlen($old), \strlen($new)) && substr($old, $prefix, 2) === substr($new, $prefix, 2)) {
-            $prefix += 2;
-        }
-        if ($this->splits($old, intdiv($prefix, 2)) || $this->splits($new, intdiv($prefix, 2))) {
+        // Both texts are valid UTF-16: a common prefix that ends inside a surrogate pair does so in both.
+        $prefix = $this->common($old, $new);
+        if ($this->splits($old, intdiv($prefix, 2))) {
             $prefix -= 2;
         }
-        $suffix = 0;
-        while (
-            $suffix < min(\strlen($old) - $prefix, \strlen($new) - $prefix)
-            && substr($old, -$suffix - 2, 2) === substr($new, -$suffix - 2, 2)
-        ) {
-            $suffix += 2;
-        }
-        if (
-            $this->splits($old, intdiv(\strlen($old) - $suffix, 2))
-            || $this->splits($new, intdiv(\strlen($new) - $suffix, 2))
-        ) {
+        $suffix = min($this->common(strrev($old), strrev($new)), \strlen($old) - $prefix, \strlen($new) - $prefix);
+        if ($this->splits($old, intdiv(\strlen($old) - $suffix, 2))) {
             $suffix -= 2;
         }
         $operations = [];
@@ -120,7 +106,7 @@ final class DraftText
                 '__className' => 'InsertOperation',
                 'baseVersion' => $version,
                 'position' => ['root' => 'main', 'path' => [0, intdiv($prefix, 2)], 'stickiness' => 'toNone'],
-                'nodes' => [['data' => mb_convert_encoding($inserted, 'UTF-8', 'UTF-16LE')]],
+                'nodes' => [['data' => $this->convert($inserted, 'UTF-8', 'UTF-16LE')]],
                 'shouldReceiveAttributes' => false,
             ];
         }
@@ -167,14 +153,29 @@ final class DraftText
         }
     }
 
+    /** The bytes of the whole UTF-16 units two texts start with. */
+    private function common(string $first, string $second): int
+    {
+        return intdiv(strspn($first ^ $second, "\0"), 2) * 2;
+    }
+
+    /** Whether an offset falls inside a surrogate pair: the unit before it is a high surrogate (0xD800-0xDBFF). */
     private function splits(string $text, int $offset): bool
     {
-        if ($offset < 1 || ($offset * 2) >= \strlen($text)) {
+        if ($offset < 1) {
             return false;
         }
-        $unit = \ord($text[$offset * 2]) | (\ord($text[($offset * 2) + 1]) << 8);
-        $previous = \ord($text[($offset * 2) - 2]) | (\ord($text[($offset * 2) - 1]) << 8);
+        $high = \ord($text[($offset * 2) - 1]);
 
-        return $unit >= 0xDC00 && $unit <= 0xDFFF && $previous >= 0xD800 && $previous <= 0xDBFF;
+        return $high >= 0xD8 && $high <= 0xDB;
+    }
+
+    /** mbstring converts any string between UTF-8 and UTF-16LE: it answers false only to an unknown encoding name. */
+    private function convert(string $text, string $to, string $from): string
+    {
+        $converted = mb_convert_encoding($text, $to, $from);
+        \assert(\is_string($converted));
+
+        return $converted;
     }
 }

@@ -8,3 +8,6 @@
 /auth.json
 /.env.local
 /coverage/
+# Written by Symfony 8 when a debug test kernel boots.
+/config/reference.php
+/tests/Fixtures/**/config/reference.php

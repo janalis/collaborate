@@ -1,0 +1,209 @@
+@import 'bootstrap/scss/functions';
+@import 'bootstrap/scss/variables';
+
+// Bootstrap's full base-color palette, in the server's stable modulo order.
+@each $name, $value in $colors {
+  [data-collaborate-layer] [data-color='#{$name}'],
+  .collaborate-presence [data-color='#{$name}'],
+  [data-peer-focus='#{$name}'] {
+    --cursor-color: #{$value};
+    --cursor-contrast: #{color-contrast($value)};
+  }
+}
+
+[data-collaborate-layer] {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.collaborate-cursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  will-change: transform;
+  transition: opacity 200ms ease;
+
+  &--fading { opacity: 0; }
+  &[data-edge='right'] .collaborate-cursor__label { left: auto; right: 4px; }
+  &[data-bottom='true'] .collaborate-cursor__label { top: auto; bottom: 0; }
+
+  color: var(--cursor-color);
+
+  &[hidden] { display: none; }
+
+  svg {
+    display: block;
+    width: 24px;
+    height: 27px;
+    overflow: visible;
+    fill: currentColor;
+    fill-rule: evenodd;
+    stroke: var(--cursor-contrast);
+    // Paths trace the fill; the outline sits outside it, about 1 px wide, as in the platforms' own cursors.
+    stroke-width: 2.7;
+    stroke-linejoin: round;
+    paint-order: stroke;
+    filter: drop-shadow(0 1px 1px rgb(0 0 0 / 35%));
+  }
+
+  &[data-style='touch'] svg {
+    transform: translate(-50%, -50%);
+    fill-opacity: 0.45;
+  }
+
+  &__label {
+    position: absolute;
+    top: 24px;
+    left: 14px;
+    max-width: min(220px, 40vw);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 2px 6px;
+    border: 1px solid var(--cursor-contrast);
+    border-radius: 4px;
+    background: var(--cursor-color);
+    color: var(--cursor-contrast);
+    font: 600 12px/1.4 system-ui, sans-serif;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 20%);
+  }
+}
+
+// A peer's caret: a bar at the selection focus, the selection tinted, a name flag while it changes.
+.collaborate-caret {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+
+  &[hidden] { display: none; }
+
+  &__selection > div {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: var(--cursor-color);
+    opacity: 0.25;
+  }
+
+  &__bar {
+    position: absolute;
+    top: 0;
+    left: -1px;
+    width: 2px;
+    background: var(--cursor-color);
+    box-shadow: 0 0 0 0.5px var(--cursor-contrast);
+  }
+
+  &__label {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    max-width: min(220px, 40vw);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 4px;
+    border-radius: 3px 3px 3px 0;
+    background: var(--cursor-color);
+    color: var(--cursor-contrast);
+    font: 600 11px/1.5 system-ui, sans-serif;
+    opacity: 0;
+    transition: opacity 300ms ease;
+  }
+
+  &--labelled &__label { opacity: 1; transition: none; }
+  &[data-edge='right'] &__label { left: auto; right: 0; border-radius: 3px 3px 0; }
+  &[data-top='true'] &__label { bottom: auto; top: 100%; border-radius: 0 3px 3px; }
+}
+
+@media (prefers-reduced-motion: reduce) { .collaborate-cursor, .collaborate-caret__label { transition: none; } }
+
+// The field a peer is in, outlined in its colour and named above its top right corner. The name is
+// decoration: the alternative text after the slash keeps it out of the accessibility tree.
+[data-peer-focus] {
+  position: relative;
+  outline: 2px solid var(--cursor-color);
+  outline-offset: 3px;
+  border-radius: 2px;
+
+  &::after {
+    content: attr(data-peer-focus-label) / '';
+    position: absolute;
+    right: -3px;
+    bottom: calc(100% + 3px);
+    z-index: 1;
+    max-width: min(220px, 60%);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 4px;
+    border-radius: 3px 3px 0 0;
+    background: var(--cursor-color);
+    color: var(--cursor-contrast);
+    font: 600 11px/1.5 system-ui, sans-serif;
+    pointer-events: none;
+  }
+}
+
+// Peers on the page, beside the header's own avatar, each ringed in its cursor color.
+.collaborate-presence {
+  --presence-ring: var(--body-bg);
+  align-items: center;
+  display: flex;
+
+  &[hidden] { display: none; }
+
+  &__user,
+  &__more {
+    align-items: center;
+    border-radius: 50%;
+    box-sizing: border-box;
+    display: inline-flex;
+    flex: none;
+    font-size: 0.75rem;
+    font-weight: 600;
+    height: 28px;
+    justify-content: center;
+    overflow: hidden;
+    width: 28px;
+
+    & + & { margin-left: -6px; }
+  }
+
+  &__user {
+    background: var(--cursor-color);
+    border: 2px solid var(--cursor-color);
+    // Separates overlapping avatars against the header, light or dark.
+    box-shadow: 0 0 0 2px var(--presence-ring);
+    color: var(--cursor-contrast);
+
+    img {
+      height: 100%;
+      object-fit: cover;
+      width: 100%;
+    }
+  }
+
+  &__more {
+    background: var(--gray-200);
+    box-shadow: 0 0 0 2px var(--presence-ring);
+    color: var(--text-color);
+  }
+}
+
+// The mobile header keeps the strip just before the own avatar, which yields its auto margin.
+.responsive-header {
+  .collaborate-presence {
+    --presence-ring: var(--responsive-header-bg);
+    margin-left: auto;
+    order: 1;
+  }
+  .user-menu-wrapper,
+  .dropdown-settings,
+  .language-menu-wrapper { order: 2; }
+  &:has(.collaborate-presence:not([hidden])) .user-menu-wrapper { margin-left: 0.5rem !important; }
+}

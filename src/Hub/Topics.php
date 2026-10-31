@@ -14,16 +14,16 @@ final readonly class Topics
     /** @param string $room the HMAC of a page's identity */
     public function cursors(string $room): string
     {
-        return $this->prefix.'cursors:'.$room;
+        return $this->prefix . 'cursors:' . $room;
     }
 
     public function draft(string $id): string
     {
-        return $this->prefix.'draft:'.$id;
+        return $this->prefix . 'draft:' . $id;
     }
 
     public function updates(): string
     {
-        return $this->prefix.'updates';
+        return $this->prefix . 'updates';
     }
 }

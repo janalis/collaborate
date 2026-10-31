@@ -49,7 +49,8 @@ final readonly class DraftAccess
     public function issue(array $scope, int $userId, int $now, array $authorization = []): string
     {
         $payload = base64_encode(json_encode(
-            $scope + [
+            $scope
+            + [
                 'userId' => $userId,
                 'expires' => $now + $this->lifetime,
                 'rolesHash' => Grant::authorizationHash($authorization),
@@ -57,7 +58,7 @@ final readonly class DraftAccess
             \JSON_THROW_ON_ERROR,
         ));
 
-        return $payload.'.'.hash_hmac('sha256', $payload, $this->secret);
+        return $payload . '.' . hash_hmac('sha256', $payload, $this->secret);
     }
 
     /**
@@ -71,7 +72,7 @@ final readonly class DraftAccess
             throw new AccessDeniedHttpException('Invalid Collaborate grant.');
         }
         if (1 === preg_match('/^[0-9a-f]{64}$/D', $grant)) {
-            $item = $this->scopes->getItem(self::CACHE_PREFIX.$grant);
+            $item = $this->scopes->getItem(self::CACHE_PREFIX . $grant);
             if (!$item->isHit()) {
                 throw new PreconditionFailedHttpException('Collaborate grant must be sent in full.');
             }
@@ -95,7 +96,7 @@ final readonly class DraftAccess
     /** The draft of one record (`$identity` is its id), or of one New page (`new:<draft>`). */
     public function draftId(string $entityClass, string $identity): string
     {
-        return hash('sha256', $entityClass.':'.$identity);
+        return hash('sha256', $entityClass . ':' . $identity);
     }
 
     public function topic(string $id): string
@@ -116,7 +117,7 @@ final readonly class DraftAccess
         }
         /** @var SignedScope $scope */
         $scope = json_decode($decoded, true, flags: \JSON_THROW_ON_ERROR);
-        $item = $this->scopes->getItem(self::CACHE_PREFIX.$parts[1]);
+        $item = $this->scopes->getItem(self::CACHE_PREFIX . $parts[1]);
         // Each rendered form mints a grant: a short lifetime keeps the cached scopes few. A grant sent
         // in full again (each Save renews it) is already cached: a large form's scope is not rewritten.
         if (!$item->isHit()) {

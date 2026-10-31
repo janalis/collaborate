@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en">
+<body>
+<header>{{ collaborate_presence() }}</header>
+<main>
+{% for type, messages in app.flashes %}
+    {% for message in messages %}<p class="flash flash-{{ type }}">{{ message }}</p>{% endfor %}
+{% endfor %}
+</main>
+{{ collaborate_layer() }}
+</body>
+</html>

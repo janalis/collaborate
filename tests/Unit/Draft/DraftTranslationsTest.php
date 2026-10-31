@@ -1,0 +1,46 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Janalis\Collaborate\Tests\Unit\Draft;
+
+use Janalis\Collaborate\Draft\DraftJournal;
+use Janalis\Collaborate\Draft\DraftSave;
+use Janalis\Collaborate\Form\CollaborateFormExtension;
+use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
+use Symfony\Component\Yaml\Yaml;
+
+/** Every string the shared drafts show is translated, in each catalogue of the `collaborate` domain. */
+#[CoversNothing]
+final class DraftTranslationsTest extends TestCase
+{
+    /** @return iterable<string, array{string}> */
+    public static function locales(): iterable
+    {
+        yield 'English' => ['en'];
+        yield 'French' => ['fr'];
+    }
+
+    #[DataProvider('locales')]
+    public function testTheCatalogueTranslatesEveryDraftString(string $locale): void
+    {
+        $catalogue = Yaml::parseFile(\dirname(__DIR__, 3) . '/translations/collaborate.' . $locale . '.yaml');
+        self::assertIsArray($catalogue);
+        $keys = [
+            ...array_values(CollaborateFormExtension::MESSAGES),
+            DraftSave::CHANGED,
+            DraftSave::BUSY,
+            DraftSave::SYNC,
+            DraftJournal::ALREADY_CREATED,
+            // The presence component's label.
+            'Also on this page',
+        ];
+
+        foreach ($keys as $key) {
+            self::assertIsString($catalogue[$key] ?? null, $key);
+            self::assertNotSame('', $catalogue[$key]);
+        }
+    }
+}

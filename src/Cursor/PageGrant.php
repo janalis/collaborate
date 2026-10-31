@@ -39,9 +39,10 @@ final readonly class PageGrant
             \JSON_THROW_ON_ERROR,
         );
         $room = hash_hmac('sha256', $identity, $this->secret);
-        $payload = $userId.'.'.($now + $this->lifetime).'.'.Grant::authorizationHash($authorization).'.'.$room;
+        $payload =
+            $userId . '.' . ($now + $this->lifetime) . '.' . Grant::authorizationHash($authorization) . '.' . $room;
 
-        return $payload.'.'.hash_hmac('sha256', $payload, $this->secret);
+        return $payload . '.' . hash_hmac('sha256', $payload, $this->secret);
     }
 
     /** @param array<array-key, string> $authorization */

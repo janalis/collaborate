@@ -23,21 +23,21 @@ return static function (ContainerConfigurator $container): void {
     $services->set(Topics::class)->args([param('collaborate.hub.topic_prefix')]);
 
     // The page grant also admits a page to the hub when cursors are disabled.
-    $services
-        ->set(PageGrant::class)
-        ->args([param('kernel.secret'), service(Topics::class), param('collaborate.cursors.grant_ttl')]);
+    $services->set(PageGrant::class)->args([
+        param('kernel.secret'),
+        service(Topics::class),
+        param('collaborate.cursors.grant_ttl'),
+    ]);
 
-    $services
-        ->set(DraftAccess::class)
-        ->args([
-            param('kernel.secret'),
-            param('collaborate.drafts.enabled'),
-            service(Topics::class),
-            service(CollaboratorProviderInterface::class),
-            service(DraftAccessCheckerInterface::class),
-            service('janalis_collaborate.grant_cache'),
-            param('collaborate.drafts.grant_ttl'),
-            param('collaborate.drafts.signature_ttl'),
-            param('collaborate.drafts.max_request_bytes'),
-        ]);
+    $services->set(DraftAccess::class)->args([
+        param('kernel.secret'),
+        param('collaborate.drafts.enabled'),
+        service(Topics::class),
+        service(CollaboratorProviderInterface::class),
+        service(DraftAccessCheckerInterface::class),
+        service('janalis_collaborate.grant_cache'),
+        param('collaborate.drafts.grant_ttl'),
+        param('collaborate.drafts.signature_ttl'),
+        param('collaborate.drafts.max_request_bytes'),
+    ]);
 };

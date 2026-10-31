@@ -1,0 +1,11 @@
+<div data-collaborate-layer aria-hidden="true"
+     data-grant="{{ grant }}"
+     data-csrf="{{ csrf_token('collaborate-hub') }}"
+     data-session-url="{{ path('collaborate_session') }}"
+{%- if cursors %}
+     data-event-url="{{ path('collaborate_cursor_events') }}"
+{%- endif %}
+{%- if updates %}
+     data-updates="true"
+{%- endif %}
+     data-config="{{ config|json_encode }}"></div>

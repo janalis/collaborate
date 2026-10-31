@@ -1,0 +1,50 @@
+// Shared draft: the form's state bar and its conflict review (draft/bar.js, draft/conflicts.js).
+.collaborate-bar {
+  font-size: 0.875rem;
+
+  &__icon {
+    flex: none;
+  }
+
+  &__text {
+    min-width: 0;
+  }
+
+  &__notice .btn-close {
+    padding: 0.75rem;
+  }
+}
+
+.collaborate-conflicts {
+  &__title:focus {
+    outline: none;
+  }
+
+  &__side {
+    margin: 0.5rem 0 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  &__value {
+    max-height: 12rem;
+    margin: 0;
+    padding: 0.5rem;
+    overflow: auto;
+    white-space: pre-wrap;
+    background: var(--bs-body-bg);
+    border-radius: var(--bs-border-radius-sm);
+
+    del {
+      color: var(--bs-danger-text-emphasis);
+      background: var(--bs-danger-bg-subtle);
+    }
+
+    ins {
+      color: var(--bs-success-text-emphasis);
+      text-decoration: none;
+      background: var(--bs-success-bg-subtle);
+    }
+  }
+}

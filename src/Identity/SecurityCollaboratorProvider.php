@@ -21,7 +21,7 @@ final class SecurityCollaboratorProvider implements CollaboratorProviderInterfac
             return $id > 0 ? $id : null;
         }
 
-        return \is_string($id) && ctype_digit($id) && '0' !== ltrim($id, '0') ? (int) $id : null;
+        return \is_string($id) && ctype_digit($id) && '' !== ltrim($id, '0') ? (int) $id : null;
     }
 
     public function label(UserInterface $user): string

@@ -63,6 +63,28 @@ final class PageGrantTest extends TestCase
         $pages->topic($grant, 1, 160);
     }
 
+    public function testAGrantLastsTenHoursByDefault(): void
+    {
+        $pages = $this->pages();
+        $grant = $pages->issue($this->request('en', []), 1, 100);
+        self::assertSame('36100', explode('.', $grant)[1]);
+        self::assertStringStartsWith('urn:collaborate:cursors:', $pages->topic($grant, 1, 36_099));
+    }
+
+    public function testEveryParameterOfTheViewSeparatesRooms(): void
+    {
+        $pages = $this->pages();
+        $room = static fn(Request $request): string => $pages->topic($pages->issue($request, 1, 100), 1, 100);
+        self::assertNotSame(
+            $room($this->request('en', ['a' => '1', 'b' => '2'])),
+            $room($this->request('en', ['a' => '1', 'b' => '3'])),
+        );
+        self::assertNotSame(
+            $room($this->request('en', ['filters' => ['a' => '1', 'b' => '2']])),
+            $room($this->request('en', ['filters' => ['a' => '1', 'b' => '3']])),
+        );
+    }
+
     public function testTheIgnoredParametersAreConfigured(): void
     {
         $pages = new PageGrant('secret', new Topics(), ignoredParameters: ['tab']);
@@ -92,6 +114,11 @@ final class PageGrantTest extends TestCase
             ['1.999.' . $hash . '.bad.x', 1, 100, []],
             [$this->forge('1.999.' . $hash . '.bad'), 1, 100, []],
             [$this->forge('1.999.' . $hash), 1, 100, []],
+            // Signed, so only the format checks behind the signature's refuse them.
+            [$this->forge('1.no.' . $hash . '.' . str_repeat('a', 64)), 1, 100, []],
+            [$this->forge('1.999.' . $hash . '.x' . str_repeat('a', 64)), 1, 100, []],
+            [$this->forge('1.999.' . $hash . '.' . str_repeat('a', 64) . 'x'), 1, 100, []],
+            [$this->forge('1.999.' . $hash . '.' . str_repeat('a', 64) . "\n"), 1, 100, []],
             [$valid, 1, 100, [], 'another-secret'],
         ] as $case) {
             [$grant, $id, $now, $roles] = $case;

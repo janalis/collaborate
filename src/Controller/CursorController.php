@@ -45,7 +45,7 @@ final readonly class CursorController
         $event['label'] = $this->collaborators->label($admission->user);
         $event['color'] = $this->colors[$admission->userId % \count($this->colors)];
         $event['avatar'] = $this->collaborators->avatarUrl($admission->user);
-        $event['timestamp'] = (int) floor(microtime(true) * 1000);
+        $event['timestamp'] = (int) (microtime(true) * 1000);
         $event['channel'] = 'cursors';
         // The client backs off on an error; a 204 would bring its next move 100 ms later.
         if (!$this->publisher->available()) {

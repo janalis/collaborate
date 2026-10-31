@@ -85,6 +85,24 @@ final class HubPublisherTest extends TestCase
         self::assertSame(['urn:a', 'urn:b'], $published);
     }
 
+    public function testAFailurePausesFiveSecondsByDefaultToTheMicrosecondAndLogsItsException(): void
+    {
+        $offline = new \RuntimeException('offline');
+        $hub = $this->createStub(HubInterface::class);
+        $hub->method('publish')->willThrowException($offline);
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects($this->once())->method('warning')->with('failed', ['exception' => $offline]);
+        $clock = new MockClock('2026-01-01 00:00:00.750000');
+        $publisher = new HubPublisher($hub, $logger, $clock);
+        $publisher->defer(new Update('urn:a', '{}', true), 'failed');
+        $publisher->publish();
+
+        $clock->sleep(4.999_999);
+        self::assertFalse($publisher->available());
+        $clock->sleep(0.000_001);
+        self::assertTrue($publisher->available());
+    }
+
     public function testResetDropsUpdatesOfAnUnfinishedRequest(): void
     {
         $hub = $this->createMock(HubInterface::class);

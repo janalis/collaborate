@@ -19,24 +19,16 @@ final class CursorPosition
         if (null === $anchor) {
             return null;
         }
-        if (
-            !\is_array($anchor)
-            || !self::isRatio($anchor['x'] ?? null)
-            || !self::isRatio($anchor['y'] ?? null)
-            || !self::isLocated($anchor)
-        ) {
-            throw new BadRequestHttpException('Invalid cursor anchor.');
+        if (\is_array($anchor)) {
+            $location = self::location($anchor);
+            $x = self::ratio($anchor['x'] ?? null);
+            $y = self::ratio($anchor['y'] ?? null);
+            if (null !== $location && null !== $x && null !== $y) {
+                return $location + ['x' => $x, 'y' => $y];
+            }
         }
-        \assert(\is_string($anchor['selector']) && \is_string($anchor['region']), 'isLocated() checked both.');
-        \assert(\is_int($anchor['x']) || \is_float($anchor['x']), 'isRatio() checked it.');
-        \assert(\is_int($anchor['y']) || \is_float($anchor['y']), 'isRatio() checked it.');
 
-        return [
-            'selector' => $anchor['selector'],
-            'region' => $anchor['region'],
-            'x' => $anchor['x'],
-            'y' => $anchor['y'],
-        ];
+        throw new BadRequestHttpException('Invalid cursor anchor.');
     }
 
     /** @return array{selector: string, region: string, start: int, end: int}|null */
@@ -45,43 +37,44 @@ final class CursorPosition
         if (null === $caret) {
             return null;
         }
-        if (
-            !\is_array($caret)
-            || !self::isOffset($caret['start'] ?? null)
-            || !self::isOffset($caret['end'] ?? null)
-            || !self::isLocated($caret)
-        ) {
-            throw new BadRequestHttpException('Invalid cursor caret.');
+        if (\is_array($caret)) {
+            $location = self::location($caret);
+            $start = self::offset($caret['start'] ?? null);
+            $end = self::offset($caret['end'] ?? null);
+            if (null !== $location && null !== $start && null !== $end) {
+                return $location + ['start' => $start, 'end' => $end];
+            }
         }
-        \assert(\is_string($caret['selector']) && \is_string($caret['region']), 'isLocated() checked both.');
-        \assert(\is_int($caret['start']) && \is_int($caret['end']), 'isOffset() checked both.');
 
-        return [
-            'selector' => $caret['selector'],
-            'region' => $caret['region'],
-            'start' => $caret['start'],
-            'end' => $caret['end'],
-        ];
+        throw new BadRequestHttpException('Invalid cursor caret.');
     }
 
-    /** @param array<array-key, mixed> $position */
-    private static function isLocated(array $position): bool
+    /**
+     * @param array<array-key, mixed> $position
+     *
+     * @return array{selector: string, region: string}|null
+     */
+    private static function location(array $position): ?array
     {
-        return (
-            \is_string($position['selector'] ?? null)
-            && \strlen($position['selector']) <= self::MAX_SELECTOR_BYTES
-            && \in_array($position['region'] ?? null, self::REGIONS, true)
-        );
+        if (
+            !\is_string($position['selector'] ?? null)
+            || \strlen($position['selector']) > self::MAX_SELECTOR_BYTES
+            || !\in_array($position['region'] ?? null, self::REGIONS, true)
+        ) {
+            return null;
+        }
+
+        return ['selector' => $position['selector'], 'region' => $position['region']];
     }
 
-    /** A finite fraction of the anchor element's box, from 0 to 1. */
-    private static function isRatio(mixed $value): bool
+    /** A fraction of the anchor element's box, from 0 to 1: NaN and the infinities compare outside it. */
+    private static function ratio(mixed $value): int|float|null
     {
-        return (\is_int($value) || \is_float($value)) && is_finite((float) $value) && $value >= 0 && $value <= 1;
+        return (\is_int($value) || \is_float($value)) && $value >= 0 && $value <= 1 ? $value : null;
     }
 
-    private static function isOffset(mixed $value): bool
+    private static function offset(mixed $value): ?int
     {
-        return \is_int($value) && $value >= 0 && $value <= self::MAX_CARET_OFFSET;
+        return \is_int($value) && $value >= 0 && $value <= self::MAX_CARET_OFFSET ? $value : null;
     }
 }

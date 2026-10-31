@@ -61,6 +61,19 @@ final class RenewSubscriberTest extends TestCase
         self::assertSame(['success' => ['Saved', 'Added']], $session->getFlashBag()->peekAll());
     }
 
+    public function testEveryMessageOfAReadTypeComesBackEvenUnderANumericType(): void
+    {
+        $session = $this->session(['success' => ['Saved', 'Published'], '404' => ['Missing']]);
+        $request = $this->request($session, true);
+        $subscriber = new RenewSubscriber();
+
+        $subscriber->keep($this->requestEvent($request));
+        $session->getFlashBag()->all();
+        $subscriber->restore($this->responseEvent($request));
+
+        self::assertSame(['success' => ['Saved', 'Published'], 404 => ['Missing']], $session->getFlashBag()->peekAll());
+    }
+
     public function testOtherRequestsReadTheFlashes(): void
     {
         $subscriber = new RenewSubscriber();
@@ -106,7 +119,7 @@ final class RenewSubscriberTest extends TestCase
         self::assertFalse($request->attributes->has('_collaborate_renew'));
     }
 
-    /** @param array<string, list<string>> $flashes */
+    /** @param array<array-key, list<string>> $flashes */
     private function session(array $flashes): Session
     {
         $session = new Session(new MockArraySessionStorage());

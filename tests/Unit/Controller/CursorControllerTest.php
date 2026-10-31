@@ -80,6 +80,42 @@ final class CursorControllerTest extends CursorTestCase
         self::assertTrue($response->headers->hasCacheControlDirective('no-store'));
     }
 
+    public function testStampsTheEventWithTheServerTimeInMilliseconds(): void
+    {
+        $before = (int) (microtime(true) * 1000);
+        $published = $this->publish();
+        $after = (int) (microtime(true) * 1000);
+        self::assertIsInt($published[0]['timestamp']);
+        self::assertGreaterThanOrEqual($before, $published[0]['timestamp']);
+        self::assertLessThanOrEqual($after, $published[0]['timestamp']);
+    }
+
+    public function testByDefaultCursorsAreOnInBlueAndAnEventMayFillFourKibibytes(): void
+    {
+        $published = [];
+        $this->hub
+            ->method('publish')
+            ->willReturnCallback(static function (Update $update) use (&$published): string {
+                $published[] = $update->getData();
+
+                return 'id';
+            });
+        $publisher = new HubPublisher($this->hub, $this->logger);
+        $controller = new CursorController($this->guard(), $this->collaborators, $publisher);
+        $padding = 4096 - \strlen($this->request('/cursors/events', ['extra' => ''])->getContent());
+        \assert($padding > 0);
+
+        $response = $controller($this->request('/cursors/events', ['extra' => str_repeat('x', $padding)]));
+        self::assertSame(204, $response->getStatusCode());
+        $publisher->publish();
+        self::assertCount(1, $published);
+        self::assertStringContainsString('"color":"blue"', $published[0]);
+
+        $this->expectException(BadRequestHttpException::class);
+        $this->expectExceptionMessage('Cursor event is too large.');
+        $controller($this->request('/cursors/events', ['extra' => str_repeat('x', $padding + 1)]));
+    }
+
     public function testAllNonMovementEventsMayOmitTheirAnchor(): void
     {
         $published = [];

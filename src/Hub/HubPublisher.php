@@ -26,8 +26,8 @@ final class HubPublisher implements EventSubscriberInterface, ResetInterface
     /** @var list<array{Update, string}> */
     private array $pending = [];
 
-    /** Describes the hub, not a request: {@see reset()} keeps it. */
-    private float $pausedUntil = 0.0;
+    /** In microseconds. Describes the hub, not a request: {@see reset()} keeps it. */
+    private int $pausedUntil = 0;
 
     public function __construct(
         private readonly HubInterface $hub,
@@ -65,7 +65,7 @@ final class HubPublisher implements EventSubscriberInterface, ResetInterface
             try {
                 $this->hub->publish($update);
             } catch (\Throwable $error) {
-                $this->pausedUntil = $this->now() + $this->pauseSeconds;
+                $this->pausedUntil = $this->now() + ($this->pauseSeconds * 1_000_000);
                 $this->logger->warning($failure, ['exception' => $error]);
             }
         }
@@ -76,10 +76,9 @@ final class HubPublisher implements EventSubscriberInterface, ResetInterface
         $this->pending = [];
     }
 
-    private function now(): float
+    /** In microseconds. */
+    private function now(): int
     {
-        $now = $this->clock->now();
-
-        return $now->getTimestamp() + ((int) $now->format('u') / 1_000_000);
+        return (int) $this->clock->now()->format('Uu');
     }
 }

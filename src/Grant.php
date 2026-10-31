@@ -10,7 +10,7 @@ final class Grant
     /** @param array<array-key, string> $authorization */
     public static function authorizationHash(array $authorization): string
     {
-        $authorization = array_values(array_unique($authorization));
+        $authorization = array_unique($authorization);
         sort($authorization);
 
         return hash('sha256', json_encode($authorization, \JSON_THROW_ON_ERROR));

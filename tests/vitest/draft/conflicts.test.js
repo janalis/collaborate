@@ -140,6 +140,34 @@ test('labels a field by its own label, its group, its collection, or its name at
   expect(fieldLabel(current, 'Record[alone]')).toBe('Record[alone]');
 });
 
+test('names an entry and a collection order after their collection, and a control by its accessible name', () => {
+  const current = session(
+    '<fieldset data-collaborate-collection="Record[items]"><legend>Items</legend>' +
+      '<div class="field-collection-item" data-collaborate-item="a"><input type="hidden" name="Record[items][a][position]" value="1">' +
+      '<input aria-label="Name" name="Record[items][a][name]" value=" alpha "></div>' +
+      '<div class="field-collection-item" data-collaborate-item="b"><input name="Record[items][b][name]" value=""></div>' +
+      '</fieldset><div data-collaborate-collection="Record[bare]"></div>',
+    {
+      'Record[items][@a]': { type: 'member' },
+      'Record[items][@b]': { type: 'member' },
+      'Record[items][@gone]': { type: 'member' },
+      'Record[items][__collection__]': { type: 'collection' },
+      'Record[bare][@a]': { type: 'member' },
+      'Record[items][a][name]': { type: 'text' },
+      'Record[other][@a]': { type: 'value' },
+    }
+  );
+  expect(fieldLabel(current, 'Record[items][@a]')).toBe('Items › alpha');
+  // A row whose text is empty, or that is no longer on the page, is named after its collection alone.
+  expect(fieldLabel(current, 'Record[items][@b]')).toBe('Items');
+  expect(fieldLabel(current, 'Record[items][@gone]')).toBe('Items');
+  expect(fieldLabel(current, 'Record[items][__collection__]')).toBe('Items');
+  // A collection without a label, a state of another type: the usual lookup, down to the name.
+  expect(fieldLabel(current, 'Record[bare][@a]')).toBe('Record[bare][@a]');
+  expect(fieldLabel(current, 'Record[other][@a]')).toBe('Record[other][@a]');
+  expect(fieldLabel(current, 'Record[items][a][name]')).toBe('Items › Name');
+});
+
 test('marks the words a draft removed and added, as text only', () => {
   document.body.innerHTML = '<pre></pre><pre></pre>';
   const [saved, draft] = document.querySelectorAll('pre');

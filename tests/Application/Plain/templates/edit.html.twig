@@ -2,11 +2,20 @@
 {% block title %}{{ new ? 'New article' : article.title }}{% endblock %}
 {% block body %}
     <h1>{{ new ? 'New article' : 'Edit ' ~ article.title }}</h1>
+    {# Each row is a `.form-group`: peers outline the group of the field someone is in, a hidden rich-text source's included. #}
+    {% set row = {row_attr: {class: 'mb-3 form-group'}} %}
     {{ form_start(form) }}
-        {{ form_row(form.title) }}
-        {{ form_row(form.summary) }}
-        {{ form_row(form.content) }}
-        {{ form_row(form.status) }}
+        {{ form_row(form.title, row) }}
+        {{ form_row(form.summary, row) }}
+        {{ form_row(form.content, row) }}
+        {{ form_row(form.notes, row) }}
+        {{ form_row(form.status, row) }}
+        {{ form_row(form.audience, row) }}
+        {{ form_row(form.featured, row) }}
+        {{ form_row(form.rating, row) }}
+        {{ form_row(form.publishedOn, row) }}
+        {{ form_row(form.category, row) }}
+        {{ form_row(form.previewPassword, row) }}
         {# The markup the bundle's collections.js reads: a container naming its prototype, `.ea-form-collection-items`, one `.field-collection-item` per entry. #}
         <fieldset class="mb-3"{% for name, value in form.tags.vars.row_attr %} {{ name }}="{{ value }}"{% endfor %} data-prototype="{{ include('_tag.html.twig', {tag: form.tags.vars.prototype})|e('html_attr') }}" data-tags>
             <legend>Tags</legend>

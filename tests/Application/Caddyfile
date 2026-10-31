@@ -1,6 +1,7 @@
 # The test applications under FrankenPHP, each with its own Mercure hub on its own origin:
 #   frankenphp run --config tests/Application/Caddyfile   (from the repository root)
-# Ports: PLAIN_PORT (8710) and EASYADMIN_PORT (8720). Database: COLLABORATE_DATABASE_URL.
+# Ports: PLAIN_PORT (8710), EASYADMIN_PORT (8720) and LIMITS_PORT (8730: the plain application in its
+# `e2e_limits` environment). Database: COLLABORATE_DATABASE_URL.
 {
 	auto_https off
 	admin off
@@ -15,7 +16,7 @@
 		# Mercure 1.0: tokens are verified with the key of the issuer their `iss` claim names (AppKernel's
 		# `collaborate-<app>`); their `aud` is the hub URL each request contacts.
 		mercure {
-			name {args[2]}
+			name {args[2]}-{args[3]}
 			transport local
 			issuer collaborate-{args[2]} {
 				publisher {
@@ -27,7 +28,7 @@
 			}
 		}
 		php_server {
-			env APP_ENV e2e
+			env APP_ENV {args[3]}
 			env COLLABORATE_DATABASE_URL "{$COLLABORATE_DATABASE_URL}"
 			env MERCURE_URL http://127.0.0.1:{args[1]}/.well-known/mercure
 			env MERCURE_JWT_SECRET "{$MERCURE_JWT_SECRET:!ChangeThisMercureHubJWTSecretKey!}"
@@ -36,9 +37,13 @@
 }
 
 :{$PLAIN_PORT:8710} {
-	import app Plain {$PLAIN_PORT:8710} plain
+	import app Plain {$PLAIN_PORT:8710} plain e2e
 }
 
 :{$EASYADMIN_PORT:8720} {
-	import app EasyAdmin {$EASYADMIN_PORT:8720} easyadmin
+	import app EasyAdmin {$EASYADMIN_PORT:8720} easyadmin e2e
+}
+
+:{$LIMITS_PORT:8730} {
+	import app Plain {$LIMITS_PORT:8730} plain e2e_limits
 }

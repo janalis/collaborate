@@ -3,7 +3,7 @@ import { defineConfig } from 'vitepress';
 
 const repo = 'https://github.com/janalis/collaborate';
 const base = '/collaborate/';
-const site = 'https://janalis.github.io' + base;
+const site = `https://janalis.github.io${base}`;
 
 // Latest release tag, shown in the nav ("dev" before the first release or outside a git checkout).
 function version(): string {
@@ -27,7 +27,7 @@ export default defineConfig({
   srcExclude: ['internals/**'],
   sitemap: { hostname: site },
   head: [
-    ['link', { rel: 'icon', type: 'image/svg+xml', href: base + 'favicon.svg' }],
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}favicon.svg` }],
     ['meta', { name: 'theme-color', content: '#2f5bd3' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:site_name', content: 'collaborate' }],
@@ -41,7 +41,7 @@ export default defineConfig({
         text: version(),
         items: [
           { text: 'Changelog', link: '/changelog' },
-          { text: 'Releases', link: repo + '/releases' },
+          { text: 'Releases', link: `${repo}/releases` },
         ],
       },
     ],

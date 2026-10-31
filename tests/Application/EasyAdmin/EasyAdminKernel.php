@@ -36,6 +36,7 @@ final class EasyAdminKernel extends AppKernel
         $services->set(DashboardController::class);
         $services->set(ArticleCrudController::class);
         $services->set(TagCrudController::class);
+        $services->set(CategoryCrudController::class);
     }
 
     protected function configureAppRoutes(RoutingConfigurator $routes): void

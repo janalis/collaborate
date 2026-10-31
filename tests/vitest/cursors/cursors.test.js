@@ -312,6 +312,44 @@ test('hides on pointer exit, leaves on pagehide and tears down', async () => {
   expect(stream.signal.aborted).toBe(true);
 });
 
+test('leaves when the back/forward cache keeps the page, and joins again when it is restored', async () => {
+  const strip = document.querySelector('[data-collaborate-presence]');
+  await start();
+  receive();
+  expect(instance.peers.size).toBe(1);
+  pointer('pointermove');
+  const hide = new Event('pagehide');
+  Object.defineProperty(hide, 'persisted', { value: true });
+  window.dispatchEvent(hide);
+  const leave = JSON.parse(fetcher.mock.calls.at(-1)[1].body);
+  expect(leave).toMatchObject({ kind: 'leave', anchor: null, caret: null });
+  expect(fetcher.mock.calls.at(-1)[1].keepalive).toBe(true);
+  expect(stream.signal.aborted).toBe(true);
+  expect(instance.peers.size).toBe(0);
+  expect(strip.hidden).toBe(true);
+  // A show the cache did not restore is the page's first: nothing to rejoin.
+  const sessions = () => fetcher.mock.calls.filter(([url]) => url === '/session').length;
+  const before = sessions();
+  window.dispatchEvent(new Event('pageshow'));
+  await flush();
+  expect(sessions()).toBe(before);
+  const show = new Event('pageshow');
+  Object.defineProperty(show, 'persisted', { value: true });
+  window.dispatchEvent(show);
+  await flush();
+  expect(sessions()).toBe(before + 1);
+  now = 1000;
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(fetcher.mock.calls.map(([, init]) => init?.body && JSON.parse(init.body).kind)).toContain('hello');
+  receive({ sequence: 5 });
+  expect(instance.peers.size).toBe(1);
+  // Once stopped, a restore joins nothing.
+  instance.stop();
+  window.dispatchEvent(show);
+  await flush();
+  expect(sessions()).toBe(before + 1);
+});
+
 test('lists peers on the page beside the own avatar until they leave or expire', async () => {
   const strip = document.querySelector('[data-collaborate-presence]');
   const users = () => [...strip.querySelectorAll('.collaborate-presence__user')].map((user) => user.dataset.userId);

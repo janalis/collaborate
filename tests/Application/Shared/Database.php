@@ -8,6 +8,7 @@ use Doctrine\DBAL\DriverManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Janalis\Collaborate\Tests\Application\Shared\Entity\Article;
+use Janalis\Collaborate\Tests\Application\Shared\Entity\Category;
 use Janalis\Collaborate\Tests\Application\Shared\Entity\Tag;
 
 /** The test applications' databases: one per application and environment, next to the one `COLLABORATE_DATABASE_URL` names. */
@@ -51,9 +52,15 @@ final class Database
         self::load($em);
     }
 
-    /** One article with two ordered tags. */
+    /** The categories an article can be filed under. */
+    public const array CATEGORIES = ['Science', 'History', 'Arts'];
+
+    /** The categories, and one article with two ordered tags. */
     public static function load(EntityManagerInterface $em): Article
     {
+        foreach (self::CATEGORIES as $name) {
+            $em->persist(new Category($name));
+        }
         $article = new Article('Welcome');
         $article->summary = "First line\nSecond line";
         $article->content = '<p>Hello <strong>world</strong></p>';

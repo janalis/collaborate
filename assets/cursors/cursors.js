@@ -544,9 +544,25 @@ export function initCursors(
         true
       ).catch(() => {});
   }
-  listen(window, 'pagehide', () => {
+  // A page the back/forward cache keeps leaves like a hidden tab and joins again when it is restored.
+  listen(window, 'pagehide', (event) => {
     depart();
-    stop();
+    if (!event.persisted) {
+      stop();
+      return;
+    }
+    anchor = null;
+    lastPointer = null;
+    caret = null;
+    field = null;
+    clearTimeout(touchTimer);
+    pause();
+  });
+  listen(window, 'pageshow', (event) => {
+    if (!event.persisted) return;
+    caret = captureCaret();
+    field = focusedField();
+    connect();
   });
   const observer = new MutationObserver((records) => {
     if (records.some((record) => !layer.contains(record.target))) redraw();

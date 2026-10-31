@@ -28,6 +28,7 @@ final class DashboardController extends AbstractDashboardController
     {
         yield MenuItem::linkTo(ArticleCrudController::class, 'Articles', 'fa fa-file');
         yield MenuItem::linkTo(TagCrudController::class, 'Tags', 'fa fa-tag');
+        yield MenuItem::linkTo(CategoryCrudController::class, 'Categories', 'fa fa-folder');
     }
 
     /** The bundle's styles and the page script that starts it and the rich-text editors. */

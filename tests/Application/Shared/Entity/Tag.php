@@ -6,7 +6,7 @@ namespace Janalis\Collaborate\Tests\Application\Shared\Entity;
 
 use Doctrine\ORM\Mapping as ORM;
 
-/** An ordered entry of an article's form collection. */
+/** An ordered entry of an article's form collection, with a rich-text note of its own. */
 #[ORM\Entity]
 #[ORM\Table(name: 'app_tag')]
 class Tag implements \Stringable
@@ -25,6 +25,9 @@ class Tag implements \Stringable
         public string $name = '',
         #[ORM\Column]
         public int $position = 0,
+        /** HTML written in the entry's own CKEditor. */
+        #[ORM\Column(type: 'text')]
+        public string $note = '',
     ) {}
 
     public function __toString(): string

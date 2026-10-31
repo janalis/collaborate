@@ -73,6 +73,14 @@ final class EasyAdminFormContextTest extends TestCase
         self::assertNull(
             new EasyAdminFormContext($contexts, $this->createStub(AdminUrlGeneratorInterface::class))->current(),
         );
+        // A dashboard page runs in an admin context without a CRUD.
+        $dashboard = $this->createStub(AdminContextInterface::class);
+        $dashboard->method('getCrud')->willReturn(null);
+        $contexts = $this->createStub(AdminContextProviderInterface::class);
+        $contexts->method('getContext')->willReturn($dashboard);
+        self::assertNull(
+            new EasyAdminFormContext($contexts, $this->createStub(AdminUrlGeneratorInterface::class))->current(),
+        );
     }
 
     public function testTheEditUrlLeavesTheSharedGeneratorUntouched(): void

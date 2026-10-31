@@ -299,6 +299,28 @@ final class UpdatesSubscriberTest extends TestCase
         );
     }
 
+    public function testAChunkSizeBelowOneNamesOneDraftPerNotice(): void
+    {
+        $access = $this->access();
+        foreach ([0, 1] as $size) {
+            $published = [];
+            $hub = $this->createStub(HubInterface::class);
+            $hub->method('publish')->willReturnCallback(static function (Update $update) use (&$published): string {
+                $published[] = $update->getTopics();
+
+                return 'id';
+            });
+            $publisher = new HubPublisher($hub, $this->createStub(LoggerInterface::class));
+            $request = Request::create('/admin/tag/1/edit');
+            $request->attributes->set('_collaborate_records_changed', ['first', 'second']);
+
+            new UpdatesSubscriber($access, new Topics(), $publisher, true, $size)->publish($this->response($request));
+            $publisher->publish();
+
+            self::assertSame([[$access->topic('first')], [$access->topic('second')]], $published);
+        }
+    }
+
     public function testSavedViewsAndDraftsAreAnnouncedUnderTheirOwnFlags(): void
     {
         $access = $this->access();

@@ -324,7 +324,7 @@ abstract class CollaborationTestCase extends ApplicationTestCase
     }
 
     /** @return array<string, mixed> */
-    private static function schema(string $grant): array
+    protected static function schema(string $grant): array
     {
         $fields = self::scope($grant)['fields'] ?? null;
         self::assertIsArray($fields);

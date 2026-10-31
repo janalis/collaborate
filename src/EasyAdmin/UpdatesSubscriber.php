@@ -46,11 +46,12 @@ final readonly class UpdatesSubscriber implements EventSubscriberInterface
         $updates = [];
         if ($this->enabled && $request->attributes->has('_collaborate_data_changed')) {
             // EntityDto::getName(): the short class name.
-            $entities = array_values(array_unique(array_map(static fn(string $class): string => basename(str_replace(
+            $entities = array_unique(array_map(static fn(string $class): string => basename(str_replace(
                 '\\',
                 '/',
                 $class,
-            )), $this->strings($request->attributes->all('_collaborate_data_changed')))));
+            )), $this->strings($request->attributes->all('_collaborate_data_changed'))));
+            // sort() lists them again.
             sort($entities);
             $updates[] = new Update(
                 $this->topics->updates(),
@@ -80,10 +81,11 @@ final readonly class UpdatesSubscriber implements EventSubscriberInterface
         }
         // Edit pages of the other changed records compare their form with the saved record again;
         // the draft saved through its own form has just recorded it.
-        $records = array_values(array_diff(
+        $records = array_diff(
             array_unique($this->strings($request->attributes->all('_collaborate_records_changed'))),
             \is_string($draft) ? [$draft] : [],
-        ));
+        );
+        // array_chunk() lists each chunk again.
         foreach (array_chunk($records, max(1, $this->chunk)) as $chunk) {
             // One notice names several drafts: it carries none, and every draft session of the page compares again.
             $updates[] = new Update(

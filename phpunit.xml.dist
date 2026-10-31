@@ -11,6 +11,9 @@
     <testsuites>
         <testsuite name="unit"><directory>tests/Unit</directory></testsuite>
         <testsuite name="functional"><directory>tests/Functional</directory></testsuite>
+        <!-- The bundle inside the test applications of tests/Application, with and without EasyAdmin. -->
+        <testsuite name="integration"><directory>tests/Integration</directory></testsuite>
+        <testsuite name="tools"><directory>tests/Tools</directory></testsuite>
     </testsuites>
-    <source ignoreIndirectDeprecations="true"><include><directory>src</directory></include></source>
+    <source ignoreIndirectDeprecations="true"><include><directory>src</directory><directory>tools</directory></include></source>
 </phpunit>

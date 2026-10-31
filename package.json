@@ -13,10 +13,12 @@
   "devDependencies": {
     "@biomejs/biome": "2.4.15",
     "@microsoft/fetch-event-source": "2.0.1",
+    "@playwright/test": "1.59.1",
     "@vitest/coverage-v8": "^5.0.4",
     "bootstrap": "5.3.8",
     "ckeditor5": "48.2.0",
     "jsdom": "^26.1.0",
+    "sass": "1.107.1",
     "vitest": "^5.0.4"
   }
 }

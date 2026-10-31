@@ -8,7 +8,13 @@ use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Controller\CursorController;
 use Janalis\Collaborate\Controller\HubController;
 use Janalis\Collaborate\Cursor\PageGrant;
+use Janalis\Collaborate\Doctrine\ChangeCollector;
+use Janalis\Collaborate\Doctrine\RecordIdentifier;
 use Janalis\Collaborate\Draft\DraftAccess;
+use Janalis\Collaborate\Draft\DraftJournal;
+use Janalis\Collaborate\Draft\DraftSave;
+use Janalis\Collaborate\EasyAdmin\UpdatesSubscriber;
+use Janalis\Collaborate\Form\CollaborateFormExtension;
 use Janalis\Collaborate\Grant;
 use Janalis\Collaborate\Hub\Admission;
 use Janalis\Collaborate\Hub\HubGuard;
@@ -28,6 +34,12 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
  * hub accepts only access tokens carrying the claims it trusts (`iss`, `aud`…), so the token must carry the
  * claims configured for the hub.
  */
+#[UsesClass(ChangeCollector::class)]
+#[UsesClass(CollaborateFormExtension::class)]
+#[UsesClass(UpdatesSubscriber::class)]
+#[UsesClass(DraftSave::class)]
+#[UsesClass(DraftJournal::class)]
+#[UsesClass(RecordIdentifier::class)]
 #[CoversClass(HubController::class)]
 #[CoversClass(CursorController::class)]
 #[CoversClass(CollaborateExtension::class)]

@@ -193,6 +193,13 @@ final class UpdatesSubscriberTest extends TestCase
         $requests->push($other);
         $disabled->onFlush($this->flush(new Tag()));
         self::assertFalse($other->attributes->has('_collaborate_data_changed'));
+        // Shared drafts alone collect: their pages hear of changes to their records.
+        $draftRequests = new RequestStack();
+        $draftRequests->push($other);
+        new ChangeCollector($this->access(), $draftRequests, ['enabled' => false], null, true)->onFlush($this->flush(
+            new Tag(),
+        ));
+        self::assertContains(Tag::class, $other->attributes->all('_collaborate_data_changed'));
         $this->subscriber($publisher, false)->publish($this->response($request));
         $publisher->publish();
     }
@@ -322,6 +329,49 @@ final class UpdatesSubscriberTest extends TestCase
             $publisher->publish();
 
             self::assertSame($channels, $published);
+        }
+    }
+
+    public function testByDefaultAnnouncesSortedDistinctEntitiesAndPrivateRecordNoticesOfAHundredDrafts(): void
+    {
+        $access = $this->access();
+        $request = Request::create('/admin/article/1/edit', 'POST');
+        $request->attributes->set('_collaborate_data_changed', [
+            'App\Entity\Tag',
+            'App\Entity\Article',
+            'App\Entity\Tag',
+        ]);
+        $records = array_map(static fn(int $id): string => 'record-' . $id, range(1, 101));
+        $request->attributes->set('_collaborate_records_changed', [...$records, 'record-1', 'own']);
+        $request->attributes->set('_collaborate_committed', 'own');
+        /** @var \ArrayObject<int, Update> $log */
+        $log = new \ArrayObject();
+        $hub = $this->createStub(HubInterface::class);
+        $hub->method('publish')->willReturnCallback(static function (Update $update) use ($log): string {
+            $log->append($update);
+
+            return 'id';
+        });
+        $publisher = new HubPublisher($hub, $this->createStub(LoggerInterface::class));
+        $subscriber = new UpdatesSubscriber($access, new Topics(), $publisher);
+
+        // A response that fails announces nothing.
+        $subscriber->publish($this->response($request, 400));
+        $publisher->publish();
+        self::assertCount(0, $log);
+
+        $subscriber->publish($this->response($request, 399));
+        $publisher->publish();
+        $published = array_values($log->getArrayCopy());
+        self::assertCount(4, $published);
+        [$saved, $own, $first, $last] = $published;
+        self::assertSame('{"channel":"updates","kind":"saved","entities":["Article","Tag"]}', $saved->getData());
+        self::assertSame([$access->topic('own')], $own->getTopics());
+        // The other records' drafts, each named once, by notices of a hundred topics at most.
+        self::assertSame(array_map($access->topic(...), array_slice($records, 0, 100)), $first->getTopics());
+        self::assertSame([$access->topic('record-101')], $last->getTopics());
+        foreach ($published as $update) {
+            self::assertTrue($update->isPrivate());
         }
     }
 }

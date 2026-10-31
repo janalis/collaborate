@@ -322,9 +322,7 @@ test('lists peers on the page beside the own avatar until they leave or expire',
   receive();
   expect(strip.hidden).toBe(false);
   expect(users()).toEqual(['2', '3']);
-  expect(strip.querySelector('[data-user-id="3"] img').src).toBe(
-    'http://localhost/avatars/bob.jpg'
-  );
+  expect(strip.querySelector('[data-user-id="3"] img').src).toBe('http://localhost/avatars/bob.jpg');
   expect(strip.querySelector('[data-user-id="2"]').dataset.color).toBe('purple');
   // A pointer leaving the window removes the cursor, not the presence.
   receive({ sequence: 2, kind: 'hide', anchor: null });

@@ -26,7 +26,8 @@
         "symfony/framework-bundle": "^7.4 || ^8.0",
         "symfony/http-foundation": "^7.4 || ^8.0",
         "symfony/http-kernel": "^7.4 || ^8.0",
-        "symfony/mercure-bundle": "^0.3.9 || ^0.4 || ^0.5 || ^0.6",
+        "symfony/mercure": "^0.8 || ^0.9",
+        "symfony/mercure-bundle": "^0.5 || ^0.6",
         "symfony/property-access": "^7.4 || ^8.0",
         "symfony/rate-limiter": "^7.4 || ^8.0",
         "symfony/routing": "^7.4 || ^8.0",
@@ -37,8 +38,9 @@
     },
     "require-dev": {
         "carthage-software/mago": "^1.30",
-        "easycorp/easyadmin-bundle": "^4.24 || ^5.0",
+        "easycorp/easyadmin-bundle": "^5.0",
         "gedmo/doctrine-extensions": "^3.13",
+        "infection/infection": "^0.35.8",
         "phpunit/phpunit": "^12.5",
         "symfony/asset-mapper": "^7.4 || ^8.0",
         "symfony/browser-kit": "^7.4 || ^8.0",
@@ -63,7 +65,10 @@
         }
     },
     "config": {
-        "sort-packages": true
+        "sort-packages": true,
+        "allow-plugins": {
+            "infection/extension-installer": true
+        }
     },
     "scripts": {
         "format": "mago fmt",

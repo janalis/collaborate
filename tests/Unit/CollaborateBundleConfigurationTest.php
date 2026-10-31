@@ -8,9 +8,11 @@ use Doctrine\Bundle\DoctrineBundle\DependencyInjection\DoctrineExtension;
 use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Tests\Fixtures\Arrays;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bundle\FrameworkBundle\DependencyInjection\FrameworkExtension;
 use Symfony\Bundle\TwigBundle\DependencyInjection\TwigExtension;
+use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
 use Symfony\Component\Config\Definition\Processor;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -75,6 +77,9 @@ final class CollaborateBundleConfigurationTest extends TestCase
     public function testPrependsTheAssetTemplateAndMappingPaths(): void
     {
         $container = new ContainerBuilder();
+        // Symfony 7.4.0 reads the environment and build directory while prepending a bundle extension's configuration.
+        $container->setParameter('kernel.environment', 'test');
+        $container->setParameter('kernel.build_dir', sys_get_temp_dir());
         foreach ([new FrameworkExtension(), new TwigExtension(), new DoctrineExtension()] as $extension) {
             $container->registerExtension($extension);
         }
@@ -123,6 +128,80 @@ final class CollaborateBundleConfigurationTest extends TestCase
             new ContainerConfigurator($container, $loader, $instanceof, $file, $file),
             $container,
         );
+    }
+
+    /** @return iterable<string, array{string, int, int}> each integer option: its path, default and minimum */
+    public static function integers(): iterable
+    {
+        $options = [
+            'hub.subscription_ttl' => [300, 30],
+            'hub.renew_interval' => [240, 10],
+            'hub.publish_pause' => [5, 0],
+            'hub.max_drafts' => [8, 1],
+            'cursors.grant_ttl' => [36_000, 60],
+            'cursors.throttle' => [100, 16],
+            'cursors.heartbeat' => [5, 1],
+            'cursors.expiry' => [15, 2],
+            'cursors.max_avatars' => [5, 1],
+            'cursors.max_event_bytes' => [4096, 512],
+            'drafts.grant_ttl' => [36_000, 60],
+            'drafts.signature_ttl' => [900, 10],
+            'drafts.max_request_bytes' => [2_097_152, 65_536],
+            'drafts.max_update_bytes' => [262_144, 4096],
+            'drafts.max_draft_bytes' => [10_485_760, 65_536],
+            'drafts.max_fields' => [10_000, 10],
+            'drafts.max_value_depth' => [8, 1],
+            'drafts.label_length' => [255, 16],
+            'drafts.compact.bytes' => [1_048_576, 1024],
+            'drafts.compact.fields' => [5_000, 1],
+            'drafts.compact.idle' => [60, 0],
+            'drafts.locks.save' => [10, 1],
+            'drafts.locks.writer' => [1, 0],
+            'drafts.purge.clean_days' => [7, 1],
+            'drafts.purge.unsaved_days' => [90, 1],
+            'drafts.replay.connected' => [30, 1],
+            'drafts.replay.disconnected' => [5, 1],
+            'drafts.replay.join_retry' => [12, 0],
+            'updates.association_depth' => [2, 0],
+            'updates.chunk' => [100, 1],
+        ];
+        foreach ($options as $path => [$default, $minimum]) {
+            yield $path => [$path, $default, $minimum];
+        }
+    }
+
+    #[DataProvider('integers')]
+    public function testEachIntegerOptionHasItsDefaultAndItsMinimum(string $path, int $default, int $minimum): void
+    {
+        self::assertSame($default, self::at($this->process([]), $path));
+        self::assertSame($minimum, self::at($this->process(self::option($path, $minimum)), $path));
+
+        $this->expectException(InvalidConfigurationException::class);
+        $this->process(self::option($path, $minimum - 1));
+    }
+
+    /** @return array<string, mixed> the configuration setting `$path` to `$value` */
+    private static function option(string $path, int $value): array
+    {
+        $config = $value;
+        foreach (array_reverse(explode('.', $path)) as $key) {
+            $config = [$key => $config];
+        }
+
+        /** @var array<string, mixed> $config */
+        return $config;
+    }
+
+    /** @param array<array-key, mixed> $config */
+    private static function at(array $config, string $path): mixed
+    {
+        foreach (explode('.', $path) as $key) {
+            self::assertIsArray($config);
+            self::assertArrayHasKey($key, $config);
+            $config = $config[$key];
+        }
+
+        return $config;
     }
 
     /**

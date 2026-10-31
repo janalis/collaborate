@@ -34,16 +34,19 @@ final class ChangeCollector
     private array $ignoredFields;
 
     /**
-     * @param array{enabled?: bool|null, collect?: bool, path_pattern?: string, routes?: list<string>, association_depth?: int, ignored_fields?: list<string>, ...} $options
+     * @param array{enabled?: bool|null, path_pattern?: string, routes?: list<string>, association_depth?: int, ignored_fields?: list<string>, ...} $options
      *     the `collaborate.updates` configuration
+     * @param bool $drafts shared drafts (`collaborate.drafts.enabled`): their pages hear of changes to their records
      */
     public function __construct(
         private readonly DraftAccess $access,
         private readonly RequestStack $requests,
         array $options = [],
         private readonly ?TranslationMapperInterface $translations = null,
+        bool $drafts = false,
     ) {
-        $this->enabled = $options['collect'] ?? $options['enabled'] ?? false;
+        // Saved views need the changed classes, open drafts the changed records: collect for either.
+        $this->enabled = true === ($options['enabled'] ?? false) || $drafts;
         $this->pathPattern = $options['path_pattern'] ?? '#^/admin(?:/|$)#';
         $this->routes = $options['routes'] ?? [];
         $this->associationDepth = $options['association_depth'] ?? 2;

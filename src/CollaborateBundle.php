@@ -347,9 +347,8 @@ final class CollaborateBundle extends AbstractBundle
     {
         $drafts = self::branch($config, 'drafts');
         $updates = self::branch($config, 'updates');
-        $updates['enabled'] ??= true === ($drafts['enabled'] ?? false);
-        // Saved views need the changed classes, open drafts the changed records: collect for either.
-        $updates['collect'] = true === $updates['enabled'] || true === ($drafts['enabled'] ?? false);
+        // The raw value: an env-driven `drafts.enabled` is a placeholder here, resolved when the container runs.
+        $updates['enabled'] ??= $drafts['enabled'];
         $config['updates'] = $updates;
 
         $parameters = $this->flatten('collaborate', $config);
@@ -376,7 +375,9 @@ final class CollaborateBundle extends AbstractBundle
         // Always registered: the cursor events route answers 404 when cursors are disabled.
         $configurator->import(__DIR__ . '/../config/services/cursors.php');
         $configurator->import(__DIR__ . '/../config/services/drafts.php');
-        if (class_exists(EasyAdminBundle::class)) {
+        // Registered, not only installed: EasyAdmin may be a dependency of another package.
+        $bundles = $container->hasParameter('kernel.bundles') ? $container->getParameter('kernel.bundles') : [];
+        if (\is_array($bundles) && \in_array(EasyAdminBundle::class, $bundles, true)) {
             $configurator->import(__DIR__ . '/../config/services/easyadmin.php');
         }
         if (interface_exists(Translatable::class)) {

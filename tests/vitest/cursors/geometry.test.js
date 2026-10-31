@@ -193,6 +193,22 @@ test('names an element by its region path and finds it again', () => {
   expect(resolvePath({ region: 'unknown', selector: '' })).toBeNull();
 });
 
+test('passes over ids drawn anew on every render, which no other page shares', () => {
+  const input = document.querySelector('input');
+  const fieldset = document.createElement('div');
+  input.parentElement.append(fieldset);
+  fieldset.append(input);
+  for (const id of ['content-ea_form_fieldset_01M69G2XVM9WXXTGAVXHAHXH4T', 'f-3f2b8a1c-9d4e-4f6a-8b7c-2d1e0f9a8b7c']) {
+    fieldset.id = id;
+    const path = anchorPath(input);
+    expect(path.selector).not.toContain(id);
+    expect(path.selector).toContain('div:nth-of-type(');
+    expect(resolvePath(path)).toBe(input);
+  }
+  fieldset.id = 'details';
+  expect(anchorPath(input).selector).toContain('div[id="details"]');
+});
+
 test('anchors a point to semantic record and field identifiers', () => {
   const input = document.querySelector('input');
   const anchor = captureAnchor(input, 110, 70);

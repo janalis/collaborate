@@ -7,16 +7,20 @@ namespace Symfony\Component\DependencyInjection\Loader\Configurator;
 use Janalis\Collaborate\Access\DraftAccessCheckerInterface;
 use Janalis\Collaborate\Command\PurgeDraftsCommand;
 use Janalis\Collaborate\Controller\DraftController;
+use Janalis\Collaborate\Doctrine\ChangeCollector;
 use Janalis\Collaborate\Doctrine\RecordIdentifier;
+use Janalis\Collaborate\Doctrine\TranslationMapperInterface;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftSave;
 use Janalis\Collaborate\Draft\DraftText;
 use Janalis\Collaborate\Draft\FieldKeyResolver;
 use Janalis\Collaborate\Draft\FieldKeyResolverInterface;
+use Janalis\Collaborate\EasyAdmin\UpdatesSubscriber;
 use Janalis\Collaborate\Form\CollaborateFormExtension;
 use Janalis\Collaborate\Form\FormContextInterface;
 use Janalis\Collaborate\Hub\HubPublisher;
+use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 
 return static function (ContainerConfigurator $container): void {
@@ -92,4 +96,27 @@ return static function (ContainerConfigurator $container): void {
         ->set(PurgeDraftsCommand::class)
         ->args([service(DraftJournal::class)])
         ->tag('console.command');
+
+    // What a write changed, collected on flush and announced with its response: the saved views it can alter
+    // (refreshed by the EasyAdmin pages), the draft its own form saved and the drafts of the other records it
+    // changed. Registered with or without EasyAdmin: a host's own save announces its draft's checkpoint too.
+    $services->set(ChangeCollector::class)->args([
+        service(DraftAccess::class),
+        service('request_stack'),
+        param('collaborate.updates'),
+        service(TranslationMapperInterface::class)->nullOnInvalid(),
+        param('collaborate.drafts.enabled'),
+    ])->tag('doctrine.event_listener', ['event' => 'onFlush']);
+
+    $services
+        ->set(UpdatesSubscriber::class)
+        ->args([
+            service(DraftAccess::class),
+            service(Topics::class),
+            service(HubPublisher::class),
+            param('collaborate.updates.enabled'),
+            param('collaborate.updates.chunk'),
+            param('collaborate.drafts.enabled'),
+        ])
+        ->tag('kernel.event_subscriber');
 };

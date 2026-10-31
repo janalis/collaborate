@@ -47,10 +47,15 @@ function regionRoot(region) {
   return [...document.querySelectorAll(regions[region] || ':not(*)')].find(visible);
 }
 
+// An id drawn anew on every render names nothing another page can find: EasyAdmin's form fieldsets carry a
+// ULID (`content-ea_form_fieldset_01J…`), other generators a UUID.
+const generatedId = /[0-9A-HJKMNP-TV-Z]{26}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
+
 // Stable semantic attributes survive different scroll positions, translations and viewport widths.
 function segment(element) {
   for (const name of ['data-id', 'data-column', 'name', 'id']) {
     const value = element.getAttribute(name);
+    if (name === 'id' && generatedId.test(value ?? '')) continue;
     if (value && value.length < 160) return `${element.localName}[${name}="${CSS.escape(value)}"]`;
   }
   const index =

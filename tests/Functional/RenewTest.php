@@ -6,7 +6,13 @@ namespace Janalis\Collaborate\Tests\Functional;
 
 use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Cursor\PageGrant;
+use Janalis\Collaborate\Doctrine\ChangeCollector;
+use Janalis\Collaborate\Doctrine\RecordIdentifier;
 use Janalis\Collaborate\Draft\DraftAccess;
+use Janalis\Collaborate\Draft\DraftJournal;
+use Janalis\Collaborate\Draft\DraftSave;
+use Janalis\Collaborate\EasyAdmin\UpdatesSubscriber;
+use Janalis\Collaborate\Form\CollaborateFormExtension;
 use Janalis\Collaborate\Grant;
 use Janalis\Collaborate\Hub\HubPublisher;
 use Janalis\Collaborate\Hub\RenewSubscriber;
@@ -20,6 +26,12 @@ use Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface;
 use Symfony\Component\HttpFoundation\Session\SessionFactoryInterface;
 
 /** A page renewing its page grant in the background leaves the flash messages to the page the user sees next. */
+#[UsesClass(ChangeCollector::class)]
+#[UsesClass(CollaborateFormExtension::class)]
+#[UsesClass(UpdatesSubscriber::class)]
+#[UsesClass(DraftSave::class)]
+#[UsesClass(DraftJournal::class)]
+#[UsesClass(RecordIdentifier::class)]
 #[CoversClass(RenewSubscriber::class)]
 #[UsesClass(CollaborateBundle::class)]
 #[UsesClass(PageGrant::class)]

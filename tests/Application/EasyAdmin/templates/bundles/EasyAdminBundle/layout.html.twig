@@ -1,0 +1,12 @@
+{# The host's layout override: presence in the header, the collaboration layer at the end of the body. #}
+{% extends '@!EasyAdmin/layout.html.twig' %}
+
+{% block header_custom_menu_wrapper %}
+    {{ collaborate_presence() }}
+    {{ parent() }}
+{% endblock %}
+
+{% block configured_body_contents %}
+    {{ parent() }}
+    {{ collaborate_layer() }}
+{% endblock %}

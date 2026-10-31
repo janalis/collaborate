@@ -8,6 +8,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\ORM\Tools\SchemaTool;
 use Janalis\Collaborate\Access\RoleDraftAccessChecker;
+use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Command\PurgeDraftsCommand;
 use Janalis\Collaborate\Controller\DraftController;
 use Janalis\Collaborate\Cursor\PageGrant;
@@ -44,6 +45,7 @@ use Symfony\Component\Console\Command\LazyCommand;
 /** An open edit page refreshes its grant and CSRF tokens through the edit action itself, without the page. */
 #[CoversClass(DraftRefreshSubscriber::class)]
 #[CoversClass(EasyAdminFormContext::class)]
+#[UsesClass(CollaborateBundle::class)]
 #[UsesClass(RoleDraftAccessChecker::class)]
 #[UsesClass(PurgeDraftsCommand::class)]
 #[UsesClass(DraftController::class)]

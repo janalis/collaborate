@@ -1,7 +1,22 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
   "files": {
-    "includes": ["**", "!.*", "!node_modules", "!var", "!vendor", "!composer.lock"]
+    "includes": [
+      "**",
+      "!.*",
+      "!node_modules",
+      "!var",
+      "!vendor",
+      "!composer.lock",
+      "!composer.json",
+      "!tests/Application/var",
+      "!tests/Application/*/public/bundles",
+      "!docs/.vitepress/dist",
+      "!docs/.vitepress/cache",
+      "!docs/node_modules",
+      "!test-results",
+      "!playwright-report"
+    ]
   },
   "formatter": {
     "enabled": true,

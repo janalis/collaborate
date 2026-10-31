@@ -1,0 +1,26 @@
+{
+    "$schema": "vendor/infection/infection/resources/schema.json",
+    "source": {
+        "directories": ["src"]
+    },
+    // Every PHPUnit suite kills mutants: the unit tests, the MariaDB functional tests and the bundle inside
+    // the two test applications (tests/Integration). Each process owns its databases (TEST_TOKEN).
+    "testFrameworkOptions": "--testsuite=unit,functional,integration",
+    "initialTestsPhpOptions": "-d pcov.enabled=1",
+    "threads": "max",
+    "timeout": 60,
+    "tmpDir": "var/infection/tmp",
+    "logs": {
+        "text": "var/infection/infection.log",
+        "html": "var/infection/infection.html",
+        "summary": "var/infection/summary.log",
+        "json": "var/infection/infection.json"
+    },
+    "mutators": {
+        "@default": true
+    },
+    // The scores measured (MSI 91.99%, every mutant covered), rounded down. 233 mutants escape: mostly the
+    // form extension's and the journal's, and casts of mb_convert_encoding() whose result is always a string.
+    "minMsi": 91,
+    "minCoveredMsi": 91
+}

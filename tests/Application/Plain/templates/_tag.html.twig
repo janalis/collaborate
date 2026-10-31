@@ -1,0 +1,5 @@
+<div class="field-collection-item d-flex gap-2 mb-2">
+    {{ form_widget(tag.name, {attr: {'aria-label': 'Tag'}}) }}
+    {{ form_widget(tag.position) }}
+    <button type="button" class="btn btn-outline-danger btn-sm" data-remove-tag>Remove</button>
+</div>

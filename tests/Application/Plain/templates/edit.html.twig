@@ -1,0 +1,21 @@
+{% extends 'base.html.twig' %}
+{% block title %}{{ new ? 'New article' : article.title }}{% endblock %}
+{% block body %}
+    <h1>{{ new ? 'New article' : 'Edit ' ~ article.title }}</h1>
+    {{ form_start(form) }}
+        {{ form_row(form.title) }}
+        {{ form_row(form.summary) }}
+        {{ form_row(form.content) }}
+        {{ form_row(form.status) }}
+        {# The markup the bundle's collections.js reads: a container naming its prototype, `.ea-form-collection-items`, one `.field-collection-item` per entry. #}
+        <fieldset class="mb-3"{% for name, value in form.tags.vars.row_attr %} {{ name }}="{{ value }}"{% endfor %} data-prototype="{{ include('_tag.html.twig', {tag: form.tags.vars.prototype})|e('html_attr') }}" data-tags>
+            <legend>Tags</legend>
+            <div class="ea-form-collection-items">
+                {% for tag in form.tags %}{{ include('_tag.html.twig', {tag: tag}) }}{% endfor %}
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" data-add-tag>Add tag</button>
+        </fieldset>
+        {% do form.tags.setRendered %}
+        <button type="submit" class="btn btn-primary">Save</button>
+    {{ form_end(form) }}
+{% endblock %}

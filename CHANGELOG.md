@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-02
+
 ### Added
 
 - Shared drafts of Symfony forms: editors of the same record, or of the same
@@ -43,4 +45,5 @@ versions follow [Semantic Versioning](https://semver.org/).
   `FormContextInterface` (which record a page edits).
 - English and French translations.
 
-[Unreleased]: https://github.com/janalis/collaborate/commits/main
+[Unreleased]: https://github.com/janalis/collaborate/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/janalis/collaborate/releases/tag/v0.1.0

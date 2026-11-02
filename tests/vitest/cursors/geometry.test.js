@@ -230,6 +230,14 @@ test('anchors the header, sidebar and region root independently', () => {
   expect(captureAnchor(document.body, -100, 500)).toEqual({ region: 'body', selector: '', x: 0, y: 1 });
 });
 
+test('finds the sidebar of EasyAdmin 5.6 and later', () => {
+  document.querySelector('aside').className = 'ea-sidebar';
+  document.elementFromPoint.mockReturnValue(document.querySelector('aside'));
+  const sidebar = captureAnchor(document.querySelector('aside'), 110, 70);
+  expect(sidebar).toEqual({ region: 'sidebar', selector: '', x: 0.5, y: 0.5 });
+  expect(resolveAnchor(sidebar)).toEqual({ x: 110, y: 70 });
+});
+
 test('rejects missing, zero-sized, oversized or invalid anchors and its own overlay', () => {
   expect(captureAnchor(null, 0, 0)).toBeNull();
   document.body.insertAdjacentHTML('beforeend', '<div data-collaborate-layer><span></span></div>');

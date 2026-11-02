@@ -33,7 +33,8 @@ const regions = {
   modal: '.modal.show',
   header: '.content-top',
   'mobile-header': '.responsive-header',
-  sidebar: '.sidebar',
+  // `.ea-sidebar` from EasyAdmin 5.6, `.sidebar` before.
+  sidebar: '.ea-sidebar, .sidebar',
   content: '.content-wrapper',
   body: 'body',
 };

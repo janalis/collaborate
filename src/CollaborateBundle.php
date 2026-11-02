@@ -179,8 +179,7 @@ final class CollaborateBundle extends AbstractBundle
             ->end()
             ->scalarNode('places')
             ->info(
-                'Service id of a Janalis\Collaborate\Cursor\PlaceProviderInterface naming the room of a page, '
-                . 'or null for its route, parameters and query.',
+                'Service id of a Janalis\Collaborate\Cursor\PlaceProviderInterface naming the room of a page, or null for its route, parameters and query.',
             )
             ->defaultNull()
             ->end()
@@ -192,8 +191,7 @@ final class CollaborateBundle extends AbstractBundle
             ->end()
             ->arrayNode('regions')
             ->info(
-                'The regions of a page, name => selector, the first one an element is in naming it: a pointer is '
-                . 'placed from the root of its region on the peers\' pages.',
+                'The regions of a page, name => selector, the first one an element is in naming it: a pointer is placed from the root of its region on the peers\' pages.',
             )
             ->useAttributeAsKey('name')
             // `mobile-header` stays one: keys are not `-` to `_` normalized.
@@ -218,8 +216,7 @@ final class CollaborateBundle extends AbstractBundle
             ->end()
             ->scalarNode('key_attribute')
             ->info(
-                'Attribute naming a record wherever a page shows it (e.g. data-key): a pointer on it is placed '
-                . 'from the record, whatever element shows it; null for none.',
+                'Attribute naming a record wherever a page shows it (e.g. data-key): a pointer on it is placed from the record, whatever element shows it; null for none.',
             )
             ->defaultNull()
             ->validate()
@@ -259,9 +256,7 @@ final class CollaborateBundle extends AbstractBundle
             ->end()
             ->arrayNode('popups')
             ->info(
-                'Kinds of popup a peer may have open on a record (data-collaborate-popup="<kind>" beside the key '
-                . 'attribute), each with what the presence menu says of a peer in it and the line under its title, '
-                . 'both translated in the collaborate domain.',
+                'Kinds of popup a peer may have open on a record (data-collaborate-popup="<kind>" beside the key attribute), each with what the presence menu says of a peer in it and the line under its title, both translated in the collaborate domain.',
             )
             ->useAttributeAsKey('kind')
             ->normalizeKeys(false)
@@ -315,8 +310,7 @@ final class CollaborateBundle extends AbstractBundle
             ->end()
             ->booleanNode('distinct_colors')
             ->info(
-                'Draw a peer in the colour farthest from the others when an earlier one has theirs or one beside '
-                . 'it in the colours list; otherwise in the colour the server picks.',
+                'Draw a peer in the colour farthest from the others when an earlier one has theirs or one beside it in the colours list; otherwise in the colour the server picks.',
             )
             ->defaultFalse()
             ->end()
@@ -326,8 +320,7 @@ final class CollaborateBundle extends AbstractBundle
             ->end()
             ->booleanNode('share_stream')
             ->info(
-                'Over HTTP/1.1, let one tab of a browser share its cursor at a time (Web Locks): each stream holds '
-                . 'one of the six connections a browser opens to a site.',
+                'Over HTTP/1.1, let one tab of a browser share its cursor at a time (Web Locks): each stream holds one of the six connections a browser opens to a site.',
             )
             ->defaultFalse()
             ->end()

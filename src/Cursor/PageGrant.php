@@ -43,8 +43,8 @@ final readonly class PageGrant
             $place = json_encode($this->canonical($place), \JSON_THROW_ON_ERROR);
 
             return $this->sign([
-                (string) $userId,
-                (string) ($now + $this->lifetime),
+                $userId,
+                $now + $this->lifetime,
                 Grant::authorizationHash($authorization),
                 hash_hmac('sha256', $place, $this->secret),
                 self::encode($place),
@@ -61,8 +61,8 @@ final readonly class PageGrant
         );
 
         return $this->sign([
-            (string) $userId,
-            (string) ($now + $this->lifetime),
+            $userId,
+            $now + $this->lifetime,
             Grant::authorizationHash($authorization),
             hash_hmac('sha256', $identity, $this->secret),
         ]);
@@ -107,7 +107,7 @@ final readonly class PageGrant
     }
 
     /**
-     * @param list<string> $parts
+     * @param list<int|string> $parts
      */
     private function sign(array $parts): string
     {

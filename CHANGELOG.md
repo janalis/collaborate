@@ -5,6 +5,25 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `cursors.places`: a `PlaceProviderInterface` names a page's room and is
+  asked again at every hub request, so a place the user lost is refused
+  before the grant expires.
+- Host options describing pages other than EasyAdmin's: `regions`,
+  `key_attribute` and `key_scope` (a record placed in whatever element shows
+  it), `anchor_attributes`, `anchor_classes`, `caret_regions`,
+  `ignored_parameters`.
+- `cursors.popups`: the popup of a record a peer has open, and a status
+  under its title saying who else has it open.
+- `markers`, `edges`, `idle`, `top_layer`, `presence: menu` (find a peer,
+  hide pointers), `distinct_colors`, `silent_alone` and `share_stream`.
+- `enter(grant)`, `cursorsFor()` and the `collaborate:enter` event: a page
+  that replaces its content enters another place without loading.
+- `_layer.scss`, the cursor styles as a module that needs no framework;
+  `_cursors.scss` loads it.
+- A tab sends less often past three peers.
+
 ## [0.1.0] - 2026-11-02
 
 ### Added

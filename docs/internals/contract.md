@@ -12,7 +12,9 @@ How the parts of the bundle talk to each other. Every name here is fixed: PHP, T
 | `Grant::authorizationHash(list<string>)` | The one hash every grant carries (`rolesHash` field / third dot part). |
 | `Hub\Topics` | `cursors($room)`, `draft($id)`, `updates()`, under `hub.topic_prefix`. |
 | `Hub\HubPublisher` | `available()`, `defer(Update, string $failure)`, publishes on `kernel.terminate`. |
-| `Cursor\PageGrant` | `issue(Request, int $userId, int $now, list $authorization)`, `topic($grant, $userId, $now, $authorization)`. |
+| `Cursor\PageGrant` | `issue(Request, int $userId, int $now, list $authorization): ?string` (null: a page in no place), `topic($grant, $userId, $now, $authorization)`, `verify(…): array{topic, place}`. Without a place provider a grant is `user.expiry.authorization.room.signature`; with one, `user.expiry.authorization.room.place.signature` (`place`: base64url JSON). |
+| `Cursor\PlaceProviderInterface` | `place(Request): ?array`, `canEnter(UserInterface, array $place): bool`; aliased `janalis_collaborate.places` from `cursors.places`. `Hub\HubGuard` asks `canEnter()` at every request. |
+| `Cursor\CursorEvent`, `CursorPosition` | Validate an event against the configured regions, popup kinds (`popup: {kind, key}`, only when `cursors.popups` names some) and caret regions. |
 | `Draft\DraftAccess` | `issue(Scope, $userId, $now, $authorization)`, `verify($grant, UserInterface, $now): SignedScope`, `draftId($class, $identity)`, `topic($id)`, `$enabled`, `$maxRequestBytes`. A scope's `entity` is the entity's FQCN; its `permission` is `create` or `update`. |
 | `Hub\RenewSubscriber` | Puts back the flash messages a `X-Collaborate-Renew: 1` render read. |
 | `Controller\HubController` | `POST <prefix>/cursors/session`, route `collaborate_session`: the page's one subscriber JWT. |
@@ -53,21 +55,25 @@ Presence, rendered by `collaborate_presence()`:
 
 A shared form carries `data-collaborate` (JSON): `grant`, `url` (with an `__action__` placeholder), `csrf`, `messages`, `isNew`, `editUrl` (with `__record__`), `invitation` (new records), and `config`: `{"replayConnected":30000,"replayDisconnected":5000,"joinRetry":12000,"labelLength":255}`. The rows of the collections in the field schema carry `data-collaborate-collection`; a collection the schema leaves out (unmapped, disabled, sensitive, or under such a form) has none, and its rows stay as rendered.
 
-CSS classes: `.collaborate-cursor*`, `.collaborate-caret*`, `.collaborate-presence*`, `.collaborate-bar*`, `.collaborate-conflicts*`; colours by `[data-color]`, field marks by `[data-peer-focus]` / `data-peer-focus-label`.
+The layer's `data-config` also carries, only when they differ from their defaults, the host options (`regions`, `keyAttribute`, `keyScope`, `anchorAttributes`, `anchorClasses`, `caretRegions`, `popups` (`{kind: {where, line}}`, translated), `idle` (ms), `markers`, `edges`, `topLayer`, `presence`, `distinctColors`, `silentAlone`, `shareStream`) and then `messages` (`showPointers`, `idle`, `on`, `here`, `is`, `line`, `where`). With `top_layer` the layer is `popover="manual"`; it carries `data-hidden` (pointers hidden by the reader) and `data-labels="moving"` (with `idle`).
 
-Storage keys: `collaborate-notice:<draft id>`, `collaborate-update:<path><search>`. Events: `collaborate:applied` (a received value written to a control).
+Host markup the scripts read: the key attribute (`cursors.key_attribute`) on records, `data-collaborate-label` (a record's name in the presence menu), `data-collaborate-popup="<kind>"` beside the key attribute, `[data-collaborate-popup-presence]` (where the popup's status goes; the bundle marks the line it writes `data-collaborate-popup-line`).
+
+CSS classes: `.collaborate-cursor*`, `.collaborate-caret*`, `.collaborate-presence*`, `.collaborate-marker*`, `.collaborate-edge`, `.collaborate-popup-presence*`, `.collaborate-pulse`, `.collaborate-announce`, `.collaborate-bar*`, `.collaborate-conflicts*`; colours by `[data-color]`, field marks by `[data-peer-focus]` / `data-peer-focus-label`.
+
+Storage keys: `collaborate-notice:<draft id>`, `collaborate-update:<path><search>`, `collaborate.pointers` (`shown`/`hidden`). Events: `collaborate:applied` (a received value written to a control), `collaborate:enter` (`detail.grant`: enter another place). Web Lock: `collaborate-cursors` (`share_stream`).
 
 ## JS modules (`assets/`, AssetMapper namespace `@janalis/collaborate`)
 
 | Module | Role |
 | --- | --- |
 | `hub.js` | One Mercure stream per page; members by `channel` (`cursors`, `updates`, `draft`). |
-| `cursors/cursors.js`, `carets.js`, `geometry.js`, `presence.js` | Pointers, carets, field marks, header avatars. |
+| `cursors/cursors.js` (`initCursors`, `cursorsFor`), `carets.js`, `geometry.js` (`configureGeometry`), `presence.js`, `marks.js`, `turn.js` | Pointers, carets, field marks, header avatars or menu, markers, edge arrows, popup lines, the turn of a tab. |
 | `updates.js` | Saved-list and saved-detail refresh. |
 | `draft/session.js` (`sessionFor`), `bar.js`, `collections.js`, `conflicts.js`, `fields.js`, `hooks.js` (`addRowInitializer`) | Shared drafts. |
 | `ckeditor5/collaborate.js` (`Collaborate` plugin), `operation-buffer.js`, `source.js`, `text-change.js` | CKEditor integration. |
 | `easyadmin.js` | Entry point: starts cursors, updates and drafts; re-exports `sessionFor` and `addRowInitializer`. |
-| `scss/_cursors.scss`, `scss/_draft.scss` | Styles; `_cursors.scss` expects Bootstrap's `scss/functions` and `scss/variables` on the Sass load path. |
+| `scss/_layer.scss`, `scss/_cursors.scss`, `scss/_draft.scss` | Styles; `_layer.scss` is a module (`$colors`, `$contrasts`) needing no framework, which `_cursors.scss` loads with Bootstrap's colours (it expects Bootstrap's `scss/functions` and `scss/variables` on the Sass load path). |
 
 Bare imports the host's importmap provides: `ckeditor5`, `@microsoft/fetch-event-source`, `bootstrap/js/src/modal.js`.
 

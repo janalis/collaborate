@@ -128,6 +128,18 @@ final class CollaborateBundleConfigurationTest extends TestCase
         self::assertSame('menu', $cursors['presence']);
     }
 
+    public function testAPopupKindKeepsItsDashesAndAvatarsMayBeChosen(): void
+    {
+        $cursors = Arrays::at($this->process([
+            'cursors' => [
+                'popups' => ['share-link' => []],
+                'presence' => 'avatars',
+            ],
+        ]), 'cursors');
+        self::assertSame(['share-link'], array_keys(Arrays::at($cursors, 'popups')));
+        self::assertSame('avatars', $cursors['presence']);
+    }
+
     public function testRegionsReplaceTheDefaultsAcrossFiles(): void
     {
         $extension = $this->extension();

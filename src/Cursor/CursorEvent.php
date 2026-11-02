@@ -68,7 +68,7 @@ final class CursorEvent
         $anchor = CursorPosition::anchor($data['anchor'] ?? null, $regions);
         $caret = CursorPosition::caret(
             $data['caret'] ?? null,
-            [] === $caretRegions ? $regions : array_values(array_intersect($regions, $caretRegions)),
+            [] === $caretRegions ? $regions : array_intersect($regions, $caretRegions),
         );
         $field = self::field($data['field'] ?? null);
         // A host without popups sends none, and its events say nothing of them.

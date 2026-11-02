@@ -6,7 +6,7 @@ import { configureGeometry } from '../../../assets/cursors/geometry.js';
 import { createPresence } from '../../../assets/cursors/presence.js';
 import { CollaborateHub } from '../../../assets/hub.js';
 
-// A host in the media library's shape: a listing of records keyed by `data-key`, a dialog holding a popup of a
+// A host's file listing: a listing of records keyed by `data-key`, a dialog holding a popup of a
 // record, presence as a menu, and every option on.
 const CONFIG = {
   throttle: 100,

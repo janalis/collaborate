@@ -99,6 +99,14 @@ final class CursorEventTest extends TestCase
         $this->host(['caret' => ['region' => 'listing'] + $caret] + $host, ['listing', 'modal'], [], ['modal']);
     }
 
+    public function testACaretRegionIsOneOfTheRegions(): void
+    {
+        $caret = ['selector' => 'input[name="q"]', 'region' => 'gone', 'start' => 1, 'end' => 1];
+        $this->expectException(BadRequestHttpException::class);
+        $this->expectExceptionMessage('Invalid cursor caret.');
+        $this->host(['anchor' => null, 'caret' => $caret], ['listing', 'modal'], [], ['modal', 'gone']);
+    }
+
     public function testAPopupOfARecordIsOneOfTheHostsKinds(): void
     {
         $popup = ['kind' => 'share', 'key' => str_repeat('k', 255)];

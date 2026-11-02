@@ -37,7 +37,7 @@ final class CursorPosition
     }
 
     /**
-     * @param list<string> $regions the regions whose fields share their caret
+     * @param array<array-key, string> $regions the regions whose fields share their caret
      *
      * @return array{selector: string, region: string, start: int, end: int}|null
      */
@@ -85,7 +85,7 @@ final class CursorPosition
 
     /**
      * @param array<array-key, mixed> $position
-     * @param list<string> $regions
+     * @param array<array-key, string> $regions
      *
      * @return array{selector: string, region: string}|null
      */

@@ -35,6 +35,29 @@ collaborate:
         expiry: 15
         max_avatars: 5
         max_event_bytes: 4096
+        places: null            # service id of a PlaceProviderInterface
+        ignored_parameters: [_locale, _token, _switch_user]
+        regions:                # name: root selector, in the order they are tried
+            modal: '.modal.show'
+            header: '.content-top'
+            mobile-header: '.responsive-header'
+            sidebar: '.ea-sidebar, .sidebar'
+            content: '.content-wrapper'
+            body: 'body'
+        key_attribute: null
+        key_scope: body
+        anchor_attributes: [data-id, data-column, name, id]
+        anchor_classes: false
+        caret_regions: []       # every region
+        popups: {}              # kind: { where: 'in %%name%%', line: 'Also open by %%names%%.' }
+        idle: 0                 # never
+        markers: false
+        edges: null
+        top_layer: false
+        presence: avatars       # or menu
+        distinct_colors: false
+        silent_alone: false
+        share_stream: false
     drafts:
         enabled: false
         rate_limiter: null
@@ -109,6 +132,23 @@ collaborate:
 | `expiry` | `15` (min 2) | Silence after which a peer's pointer and presence leave. |
 | `max_avatars` | `5` (min 1) | Peers shown in the header before a `+N` counter. |
 | `max_event_bytes` | `4096` (min 512) | Largest cursor event body. |
+| `places` | `null` | Service id of a `PlaceProviderInterface` that names a page's room and is asked again at every hub request; `null` keeps the room of the route, its parameters and the query. See [Pages of your own](./cursors-and-presence#pages-of-your-own). |
+| `ignored_parameters` | `[_locale, _token, _switch_user]` | Route and query parameters that do not separate rooms, without a place provider. |
+| `regions` | EasyAdmin's layout | The regions of a page, `name: selector`, the first one an element is in naming it. Names are lowercase words joined by `-`; events naming another region get 400. |
+| `key_attribute` | `null` | Attribute naming a record wherever a page shows it (`data-key`): a pointer on it is placed from the record, in whatever element the peer's page shows it. |
+| `key_scope` | `body` | Selector of what holds the records the page shows its readers, for markers, popups and finding a peer. A record outside it is never named to peers. |
+| `anchor_attributes` | `[data-id, data-column, name, id]` | Attributes naming an element on the way from its region to a pointer, in order of preference. |
+| `anchor_classes` | `false` | Name an element by a class no sibling shares before its rank. |
+| `caret_regions` | `[]` | Regions whose text fields share their caret; empty for all. |
+| `popups` | `{}` | Kinds of popup a peer may have open on a record, each with `where` (what the presence menu says, `%name%` the record) and `line` (under the popup's title, `%names%` the peers), translated in the `collaborate` domain. In YAML, write `%%name%%`. |
+| `idle` | `0` (min 0) | Seconds after which a still pointer is dimmed and its peer said idle, its name showing only while it moves; `0` never. |
+| `markers` | `false` | Mark the records peers point at or have a popup of with their initials. |
+| `edges` | `null` | Selector of the scrolling panes whose edge shows an arrow for a pointer scrolled out of them. |
+| `top_layer` | `false` | Draw pointers in the top layer (a popover), above an open modal `<dialog>`. |
+| `presence` | `avatars` | `menu` makes the avatars the button of a menu listing the peers and where they are, finding one, and hiding the pointers. |
+| `distinct_colors` | `false` | Draw a peer in the colour farthest from the others' when an earlier peer has theirs or one beside it in `colors`. |
+| `silent_alone` | `false` | Send no pointer while nobody else is on the page; a peer who comes says hello and is answered. |
+| `share_stream` | `false` | Over HTTP/1.1, let one tab of a browser share its cursor at a time (Web Locks). |
 
 ## `drafts`
 

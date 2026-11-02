@@ -16,7 +16,7 @@ import {
   sharesCaret,
 } from '../../../assets/cursors/geometry.js';
 
-// A host page in the media library's shape: a toolbar, a listing of records shown as rows or tiles, an inspector
+// A host's file listing: a toolbar, a listing of records shown as rows or tiles, an inspector
 // showing the record selected, and a dialog holding a popup of a record.
 const page = (listing = 'rows') => `
   <nav id="toolbar"><button data-action="new">New</button><input id="search" name="q"></nav>

@@ -181,6 +181,7 @@ final class CollaborateExtension extends AbstractExtension
         $translated = [];
         foreach (\is_array($popups) ? $popups : [] as $kind => $messages) {
             $messages = \is_array($messages) ? $messages : [];
+            // @infection-ignore-all: a popup kind is a name starting with a letter, never an integer key.
             $translated[(string) $kind] = [
                 'where' => $this->trans(
                     \is_string($messages['where'] ?? null) ? $messages['where'] : self::MESSAGES['where'],

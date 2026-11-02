@@ -160,6 +160,8 @@ final class PageGrantTest extends TestCase
         $grant = self::issued($pages->issue($first, 1, 100));
         self::assertIsString($grant);
         self::assertCount(6, explode('.', $grant));
+        // Base64url without its padding: the place's JSON is no multiple of three bytes long.
+        self::assertMatchesRegularExpression('/^[A-Za-z0-9_-]+$/D', explode('.', $grant)[4]);
         $verified = $pages->verify($grant, 1, 101);
         // The canonical place: keys sorted at every depth, a list kept in its order.
         self::assertSame(['folder', 'a/b', ['p' => 'é', 'q' => 'x']], $verified['place']);

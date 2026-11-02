@@ -83,6 +83,7 @@ entries, each with a rich-text note:
 |---|---|---|
 | `Plain` | `PlainKernel` | A host without EasyAdmin: its own controller, form context (`PlainFormContext`), templates and collection markup. |
 | `EasyAdmin` | `EasyAdminKernel` | A dashboard and CRUD controllers, with the layout override. |
+| `Host` | `HostKernel` | A host whose pages are no forms: a library of folders whose records show as rows or tiles, a share popup per record, a folder loaded in place of the listing; drafts off, every cursor option on, the room of a page the folder `HostPlaces` names. |
 
 Both sign users in by user name without a password (`alice`, `bob`,
 `carol`, `dave`). Their
@@ -96,20 +97,21 @@ It builds the stylesheets and an ES module copy of
 `@microsoft/fetch-event-source` (`tests/Application/bin/setup-assets.mjs`),
 installs EasyAdmin's public files, and recreates both applications'
 databases with their fixtures
-(`COLLABORATE_APP=plain|easyadmin APP_ENV=e2e php tests/Application/bin/console.php app:setup`).
+(`COLLABORATE_APP=plain|easyadmin|host APP_ENV=e2e php tests/Application/bin/console.php app:setup`).
 
 ## Playwright
 
 `tests/playwright` drives the applications in Chromium, each scenario with
 two or more signed-in editors in browser contexts of their own.
 `playwright.config.js` starts FrankenPHP with `tests/Application/Caddyfile`,
-which serves three sites, each with its own Mercure hub on its own origin:
+which serves four sites, each with its own Mercure hub on its own origin:
 
 | Project | Port | What it runs |
 |---|---|---|
-| `plain` | `PLAIN_PORT` (8710) | The plain application (`e2e` environment): every spec but `easyadmin-*` and `limits`. |
-| `easyadmin` | `EASYADMIN_PORT` (8720) | The EasyAdmin application (`e2e`): every spec but `limits`. |
+| `plain` | `PLAIN_PORT` (8710) | The plain application (`e2e` environment): every spec but `easyadmin-*`, `host-*` and `limits`. |
+| `easyadmin` | `EASYADMIN_PORT` (8720) | The EasyAdmin application (`e2e`): every spec but `host-*` and `limits`. |
 | `limits` | `LIMITS_PORT` (8730) | The plain application in its `e2e_limits` environment, whose drafts take updates of 4 KiB, journals of 64 KiB and 30 field states, and compact on the next Join past 1 KiB: `limits.spec.js`. |
+| `host` | `HOST_PORT` (8740) | The host application (`e2e`), whose pointers go idle after 5 s: `host-*.spec.js`. A folder is revoked with `POST /e2e/folders/{folder}/revoke`. |
 
 The `e2e` environments show two avatars before the `+N` counter. Every
 scenario creates its own article through `POST /e2e/articles`; a script
@@ -124,7 +126,7 @@ restored from the cache.
 
 ```sh
 npx playwright install chromium
-make e2e                              # app-setup, then the three projects
+make e2e                              # app-setup, then the four projects
 make e2e ARGS="--project=plain"       # one application
 PLAIN_PORT=8810 EASYADMIN_PORT=8820 LIMITS_PORT=8830 make e2e   # other ports
 ```
@@ -137,7 +139,8 @@ is shared by everyone on a page.
 
 Each user-facing behaviour of the guides, and the scenario that shows it in
 a browser (`spec › test`). P: the plain application, E: the EasyAdmin one,
-L: the `limits` project.
+L: the `limits` project. The host options, shown by the `host` project
+alone, have a table of their own below.
 
 | Feature (guide) | Scenario | P | E | L |
 |---|---|---|---|---|
@@ -232,6 +235,19 @@ L: the `limits` project.
 | Lost stream: refresh once it is back | `easyadmin-saved-views › a list refreshes when its lost stream comes back` | | ✓ | |
 | A form refreshes its embedded lists, not itself | `easyadmin-saved-views › a form refreshes the lists embedded in it, not itself` | | ✓ | |
 
+The host options (`host` project, `host-cursors › a host library › …`):
+
+| Feature (guide) | Scenario |
+|---|---|
+| A pointer on a record found in the other layout (`key_attribute`), the record marked with the peer's initial (`markers`), the menu saying where they are | `the readers of a folder see each other, and a pointer on a record in the other view` |
+| Two addresses of a place are one room, another place another (`places`) | `two addresses of a folder are one place; another folder is another` |
+| A place entered without a page load (`collaborate:enter`) | `a reader who loads another folder in place of the listing leaves this one, and comes back` |
+| A popup of a record: its line under the title, a caret in it, pointers above the modal dialog (`popups`, `top_layer`); no caret outside `caret_regions` | `the readers of a popup of a record see each other in it and type, above the open dialog` |
+| An arrow at the edge of a pane (`edges`); Find from the presence menu, said (`presence: menu`) | `a pointer scrolled out of sight is an arrow, and its reader is found from the menu` |
+| Idle pointers dimmed and said idle, woken as they move (`idle`) | `a still pointer goes idle, and wakes as it moves` |
+| Show pointers, in every tab of the browser | `a reader hides the pointers of the others in every tab, and keeps seeing who they are` |
+| A place revoked refused at the next request (`PlaceProviderInterface::canEnter()`) | `a folder revoked stops its pages from sharing` |
+
 Not shown in a browser, and covered by the PHPUnit and Vitest suites
 instead:
 
@@ -245,3 +261,5 @@ instead:
 | EasyAdmin's slug widget, TomSelect and Tagify text widgets | Not in the test applications (TomSelect is, as the association's autocomplete). |
 | Pointer shapes per platform, reduced motion, `hub.publish_pause` | Platform, media and hub failures the browser cannot switch per scenario. |
 | Avatars from `avatarUrl()` | The test accounts have none. |
+| `share_stream` over HTTP/1.1, `distinct_colors`, `silent_alone`'s hello resent | One context per reader holds its own locks; colour picking and lost hellos are Vitest's (`tests/vitest/cursors/host.*`). The host project runs with them on. |
+| An accessibility scan (axe) of the presence menu and a popup's line | `@axe-core/playwright` is not a dependency of the bundle. |

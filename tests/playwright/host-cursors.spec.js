@@ -22,7 +22,8 @@ const layer = (page) => page.locator('[data-collaborate-layer]');
 const record = (page, key) => page.locator(`#listing [data-key="${key}"]`);
 const cursorOf = (page, userId = BOB) => layer(page).locator(`.collaborate-cursor[data-user-id="${userId}"]`);
 const toggle = (page) => page.locator('.collaborate-presence__toggle');
-const entryOf = (page, name) => page.locator('.collaborate-presence__menu .collaborate-presence__item').filter({ hasText: name });
+const entryOf = (page, name) =>
+  page.locator('.collaborate-presence__menu .collaborate-presence__item').filter({ hasText: name });
 
 /** The pages are shared once the hub answered each. */
 async function connected(...pages) {
@@ -76,7 +77,9 @@ test.describe('a host library', () => {
     await expect(cursor).toHaveAttribute('data-region', 'listing');
     await expect(cursor.locator('.collaborate-cursor__label')).toHaveText('Bob');
     // The record is marked with his initial.
-    const marker = layer(alice.page).locator('.collaborate-marker').filter({ has: alice.page.locator('.collaborate-marker__user') });
+    const marker = layer(alice.page)
+      .locator('.collaborate-marker')
+      .filter({ has: alice.page.locator('.collaborate-marker__user') });
     await expect(marker).toHaveAttribute('title', 'Bob');
     await expect(marker.locator('.collaborate-marker__user')).toHaveText('B');
     // The menu says where he is.
@@ -186,12 +189,16 @@ test.describe('a host library', () => {
 
   test('a folder revoked stops its pages from sharing', async ({ request }) => {
     await connected(alice.page, bob.page);
-    await expect(toggle(alice.page)).toHaveAttribute('aria-label', 'Bob');
+    await expect(toggle(bob.page)).toHaveAttribute('aria-label', 'Alice');
     await request.post('/e2e/folders/music/revoke', { data: { revoked: true } });
-    // Bob's next event is refused: he renews nothing, and Alice sees him leave as his presence expires.
+    // The next event of either page is refused, and the server refuses the page's session it asks again for.
+    const refused = (page) =>
+      page.waitForResponse((response) => response.url().endsWith('/cursors/session') && response.status() === 403);
+    const sessions = Promise.all([refused(alice.page), refused(bob.page)]);
     await bob.page.mouse.move(100, 200);
     await bob.page.mouse.move(150, 250);
-    await expect(alice.page.locator('[data-collaborate-presence]')).toBeHidden({ timeout: 30000 });
-    await expect(layer(bob.page)).toHaveAttribute('data-connected', 'false', { timeout: 30000 });
+    await sessions;
+    for (const { page } of [alice, bob]) await expect(layer(page)).toHaveAttribute('data-connected', 'false');
+    await expect(alice.page.locator('[data-collaborate-presence]')).toBeHidden();
   });
 });

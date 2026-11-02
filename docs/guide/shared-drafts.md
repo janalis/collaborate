@@ -47,7 +47,7 @@ synchronization every send passes through.
 | Interrupted | amber | The network or the server failed (no answer, 429 or 5xx). Edits stay on the page and are sent when the connection returns; Save can be repeated. |
 | Changed meanwhile | amber | The server refused an edit made on an older state (409); the page reads the draft again. |
 | In conflict | amber | The record was saved outside this draft; see [Conflicts](#conflicts-with-the-saved-record). |
-| Reset | amber | Another editor discarded the draft (or it was compacted or purged) while this page held unsent or unsaved changes. Local content stays; copy it before reloading. |
+| Reset | amber | Another editor discarded the draft (or it was purged) while this page held unsent or unsaved changes, or it was compacted while this page held unsent ones. Local content stays; copy it before reloading. |
 | Created | green | This new-record draft created its record (here or on a peer's page); an **Open saved record** button leads to it. |
 | Refused | red | The server refused an action for another reason; copy unsaved content and reload. |
 | Full | red | The draft reached a [limit](#limits-and-compaction); synchronization and Save pause. |
@@ -124,11 +124,17 @@ that everyone editing the record loses its unsaved changes. It is offered
 only in states it can succeed from (saved, unsaved, synchronizing,
 interrupted, changed, in conflict, full).
 
-Discard resets the fields of its form that hold edits or differ from the
-saved record. The pages showing one of those fields learn who reset it: a
-page showing exactly the saved draft reloads on its own, a page with unsent
-or unsaved changes keeps its local content in the *Reset* state. An edit
-sent before its page heard of the Discard is refused.
+Discard resets the fields of its form that hold edits, or that a **Keep
+shared draft** kept against the saved record, to the values the draft last
+saved. The pages showing one of those fields learn who reset it: a page
+showing exactly the saved draft reloads on its own, a page with unsent or
+unsaved changes keeps its local content in the *Reset* state. An edit sent
+before its page heard of the Discard is refused.
+
+Discard never reads the record: when it was saved outside the draft since,
+the fields Discard resets can still differ from it, and the
+[review](#conflicts-with-the-saved-record) stays open until **Use saved
+record** takes the saved values.
 
 ## Conflicts with the saved record
 
@@ -171,9 +177,10 @@ joins a draft that is over [`drafts.compact.bytes`](./configuration#drafts-compa
 belong to removed collection entries, and every field is saved and nobody
 has written to it for `drafts.compact.idle` seconds (60), the saved values
 become the new baseline, removed entries are dropped, the journal empties
-and the generation advances. Open pages showing exactly the saved draft
-reload on their own; one with unsent edits keeps them and asks to copy them
-before reloading.
+and the generation advances. Every edit an open page sent is then in the
+saved values, so a page with nothing unsent reloads on its own, even one
+that had not heard of the last Save yet; one with unsent edits keeps them
+and asks to copy them before reloading.
 
 ## Purge
 

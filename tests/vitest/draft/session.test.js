@@ -43,6 +43,7 @@ function fixture(
     recordId: null,
     fields: {},
     events: [],
+    rebasedFrom: [],
     ...overrides.state,
   };
   for (const [name, field] of Object.entries(fields))
@@ -626,6 +627,46 @@ test('keeps a page whose draft held unsaved changes when the generation changes'
   const rejoin = vi.spyOn(session, 'rejoin').mockImplementation(() => {});
   session.state.savedRevision = -1;
   state.generation = 2;
+  await expect(session.pull()).rejects.toThrow('discarded');
+  expect(rejoin).not.toHaveBeenCalled();
+  expect(form.dataset.collaborateState).toBe('discarded');
+});
+
+test('rejoins a page that sent every edit when a compaction replaced its generation before it heard the save', async () => {
+  const { session, form, state } = fixture();
+  await session.ready;
+  const rejoin = vi.spyOn(session, 'rejoin').mockImplementation(() => {});
+  // The page still holds the revision before a peer's save: by itself it does not look saved.
+  session.state.savedRevision = -1;
+  state.generation = 2;
+  state.rebasedFrom = [7, 1];
+  await expect(session.pull()).rejects.toThrow('rebased');
+  expect(rejoin).toHaveBeenCalledOnce();
+  expect(form.dataset.collaborateState).toBe('connecting');
+});
+
+test('keeps a page with unsent edits when a compaction replaced its generation', async () => {
+  const { session, form, state } = fixture();
+  await session.ready;
+  const rejoin = vi.spyOn(session, 'rejoin').mockImplementation(() => {});
+  const input = form.querySelector('input');
+  input.value = 'unsent';
+  input.dispatchEvent(new Event('input'));
+  state.generation = 2;
+  state.rebasedFrom = [1];
+  await expect(session.pull()).rejects.toThrow('discarded');
+  expect(rejoin).not.toHaveBeenCalled();
+  expect(input.value).toBe('unsent');
+});
+
+test('keeps a page that had not heard the save when its draft was recreated rather than compacted', async () => {
+  const { session, form, state } = fixture();
+  await session.ready;
+  const rejoin = vi.spyOn(session, 'rejoin').mockImplementation(() => {});
+  session.state.savedRevision = -1;
+  // A compaction of another generation: this page's was purged, and the draft created anew.
+  state.generation = 9;
+  state.rebasedFrom = [8];
   await expect(session.pull()).rejects.toThrow('discarded');
   expect(rejoin).not.toHaveBeenCalled();
   expect(form.dataset.collaborateState).toBe('discarded');

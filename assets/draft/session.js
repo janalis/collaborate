@@ -605,11 +605,13 @@ export class DraftSession {
 
   /** Whether this page shows exactly the saved draft: nothing unsaved, nothing unsent. */
   clean() {
-    return (
-      this.revision === this.state.savedRevision &&
-      Array.from(this.adapters.values()).every((adapter) =>
-        adapter.hasPending ? !adapter.hasPending() : !adapter.next()
-      )
+    return this.revision === this.state.savedRevision && this.sent();
+  }
+
+  /** Every edit made on this page reached the journal. */
+  sent() {
+    return Array.from(this.adapters.values()).every((adapter) =>
+      adapter.hasPending ? !adapter.hasPending() : !adapter.next()
     );
   }
 
@@ -669,12 +671,14 @@ export class DraftSession {
 
   /**
    * The draft no longer holds what this page shows: compacted, purged, or a field of it discarded.
-   * `discard` is the Discard event that reset a field, naming who discarded it.
+   * `discard` is the Discard event that reset a field, naming who discarded it; `rebased` says a compaction
+   * replaced this page's generation.
    */
-  superseded(discard = null) {
+  superseded(discard = null, rebased = false) {
     const name = this.peerName(discard);
-    // A compacted journal, or a draft that had nothing unsaved, holds what this page shows.
-    if (this.clean()) {
+    // A draft that had nothing unsaved holds what this page shows. A compaction keeps only saved content, so
+    // a page that sent every edit loses none by reloading, even one that has not heard of the save yet.
+    if (rebased ? this.sent() : this.clean()) {
       this.halt('connecting');
       this.rejoin(name ? { key: 'noticeDiscarded', name } : null);
       throw new Error('Collaborate draft was rebased; rejoining.');
@@ -706,7 +710,7 @@ export class DraftSession {
       }
       return;
     }
-    if (state.generation !== this.generation) this.superseded();
+    if (state.generation !== this.generation) this.superseded(null, state.rebasedFrom.includes(this.generation));
     if (state.revision < this.revision) return;
     for (const [name, field] of Object.entries(state.fields)) {
       const definition = this.definition(name);

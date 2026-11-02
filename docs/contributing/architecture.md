@@ -90,3 +90,11 @@ why the entry point must load before them.
    and checks, the application persists, `DraftSave::completed()` and
    `finish()` checkpoint the draft and release the lock; `ChangeCollector`
    and `UpdatesSubscriber` announce what changed.
+
+A compaction (on Join) or a purge ends a generation, and a page replaying a
+draft of another generation reloads only if it loses nothing. A compaction
+leaves one event row, batch id `rebase`, holding the list of the generations
+compactions replaced. A replay from a revision before it answers that list as
+`rebasedFrom` instead of a batch, and a page of one of those generations
+reloads when it has nothing unsent, since all it sent is saved. A draft recreated after a purge lists
+none of them, so only a page showing exactly the saved draft reloads.

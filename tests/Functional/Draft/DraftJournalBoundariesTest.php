@@ -516,6 +516,44 @@ final class DraftJournalBoundariesTest extends TestCase
         self::assertSame(2, $journal->join('record', $this->fields)['generation']);
     }
 
+    public function testACompactionNamesEveryGenerationItReplacedAndNoEventCarriesThem(): void
+    {
+        $before = $this->journal->join('record', $this->fields);
+        self::assertSame([], $before['rebasedFrom']);
+
+        $this->db->update('collaborate_draft', ['bytes' => self::COMPACT_BYTES + 1], ['id' => 'record']);
+        $this->idle('record', '2000-01-01 00:00:00');
+        $compacted = $this->journal->join('record', $this->fields);
+        self::assertSame(2, $compacted['generation']);
+        self::assertSame([1], $compacted['rebasedFrom']);
+
+        // A page still on generation 1 replays from its revision: it reads the generation replaced, and no event.
+        $stale = $this->journal->replay('record', $this->fields, $before['revision']);
+        self::assertSame([1], $stale['rebasedFrom']);
+        self::assertSame([], $stale['events']);
+        // A page of generation 2 replays from the compaction's revision on, and needs them no more.
+        self::assertSame([], $this->journal->replay('record', $this->fields, $compacted['revision'])['rebasedFrom']);
+
+        // The draft goes on from the compaction's revision; a checkpoint counts the batches of its journal alone.
+        $after = $this->value('choice', 0, 'b', 'after', ['generation' => 2, 'seen' => $compacted['revision']]);
+        $this->journal->append('record', $this->fields, $after, 1, 'Alice');
+        $this->journal->saved('record', ['choice' => 'b']);
+        self::assertSame(
+            (int) $this->db->fetchOne(
+                "SELECT LENGTH(payload) FROM collaborate_draft_event WHERE draft_id = 'record' AND batch_id <> 'rebase'",
+            ),
+            $this->bytes('record'),
+        );
+        $this->db->update('collaborate_draft', ['bytes' => self::COMPACT_BYTES + 1], ['id' => 'record']);
+        $this->idle('record', '2000-01-01 00:00:00');
+        self::assertSame([1, 2], $this->journal->join('record', $this->fields)['rebasedFrom']);
+
+        // Each compaction adds its own to the list.
+        $this->db->update('collaborate_draft', ['bytes' => self::COMPACT_BYTES + 1], ['id' => 'record']);
+        $this->idle('record', '2000-01-01 00:00:00');
+        self::assertSame([1, 2, 3], $this->journal->join('record', $this->fields)['rebasedFrom']);
+    }
+
     /** A saved, idle draft of three field rows: its collection, and the member and field of a removed entry. */
     private function removedEntry(string $id): void
     {

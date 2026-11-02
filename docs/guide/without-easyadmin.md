@@ -160,6 +160,17 @@ A Save the bundle cannot hold (a peer's edit landed meanwhile, another Save
 holds the draft) is answered with a `303` redirect back to the form and a
 `warning` flash message. Display flash messages on your form pages.
 
+## Field rows
+
+A peer's field mark outlines the element with the `form-group` class around
+the control it is in, and a control a widget fills (a rich-text editor, the
+search input beside a select) is found from the focused element's
+`form-group`. Render each row inside one, for example with
+`'row_attr' => ['class' => 'form-group']` or a form theme's `form_row`
+block. Without it, the mark outlines the control alone, which for a
+rich-text field is its hidden source textarea, and a peer focused in a
+widget names no field.
+
 ## Collection markup
 
 Collections are synchronized through the markup EasyAdmin renders. A form

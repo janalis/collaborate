@@ -281,11 +281,11 @@ final class CollaborateBundle extends AbstractBundle
             ->children()
             ->scalarNode('where')
             ->info('Where a peer is, %name% naming the record.')
-            ->defaultValue('in %name%')
+            ->defaultValue('in %%name%%')
             ->end()
             ->scalarNode('line')
             ->info('The line under the popup\'s title, %names% naming the peers.')
-            ->defaultValue('Also open by %names%.')
+            ->defaultValue('Also open by %%names%%.')
             ->end()
             ->end()
             ->end()
@@ -321,9 +321,7 @@ final class CollaborateBundle extends AbstractBundle
             ->defaultFalse()
             ->end()
             ->booleanNode('silent_alone')
-            ->info(
-                'Send no pointer while nobody else is on the page: a peer who comes says hello and is answered.',
-            )
+            ->info('Send no pointer while nobody else is on the page: a peer who comes says hello and is answered.')
             ->defaultFalse()
             ->end()
             ->booleanNode('share_stream')
@@ -525,9 +523,9 @@ final class CollaborateBundle extends AbstractBundle
         $updates['enabled'] ??= $drafts['enabled'];
         $config['updates'] = $updates;
 
-        // The configuration reaching the extension is resolved already: a `%` it holds (the `%name%` of a popup's
-        // sentence, written `%%name%%` in YAML) is escaped again, or the parameter would be resolved twice.
-        $parameters = $this->flatten('collaborate', self::escape($config));
+        // A `%` the configuration holds reaches the extension escaped still (the `%name%` of a popup's sentence is
+        // written `%%name%%`): the parameter resolves it once the container is compiled.
+        $parameters = $this->flatten('collaborate', $config);
         foreach (array_keys($parameters) as $name) {
             $configurator->parameters()->set($name, $parameters[$name]);
         }
@@ -608,24 +606,6 @@ final class CollaborateBundle extends AbstractBundle
         }
 
         return $parameters;
-    }
-
-    /**
-     * @param array<array-key, mixed> $values
-     *
-     * @return array<array-key, mixed>
-     */
-    private static function escape(array $values): array
-    {
-        foreach (array_keys($values) as $key) {
-            $values[$key] = match (true) {
-                \is_string($values[$key]) => str_replace('%', '%%', $values[$key]),
-                \is_array($values[$key]) => self::escape($values[$key]),
-                default => $values[$key],
-            };
-        }
-
-        return $values;
     }
 
     /**

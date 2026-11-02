@@ -102,7 +102,7 @@ final class CollaborateBundleConfigurationTest extends TestCase
                 'anchor_attributes' => ['data-action', 'name'],
                 'anchor_classes' => true,
                 'caret_regions' => ['modal'],
-                'popups' => ['metadata' => ['where' => 'in the properties of %name%'], 'share' => []],
+                'popups' => ['metadata' => ['where' => 'in the properties of %%name%%'], 'share' => []],
                 'idle' => 60,
                 'markers' => true,
                 'edges' => '.pane',
@@ -119,8 +119,9 @@ final class CollaborateBundleConfigurationTest extends TestCase
         self::assertSame(['data-action', 'name'], $cursors['anchor_attributes']);
         self::assertSame(
             [
-                'metadata' => ['where' => 'in the properties of %name%', 'line' => 'Also open by %names%.'],
-                'share' => ['where' => 'in %name%', 'line' => 'Also open by %names%.'],
+                // Escaped, as YAML writes them: the parameters resolve them.
+                'metadata' => ['where' => 'in the properties of %%name%%', 'line' => 'Also open by %%names%%.'],
+                'share' => ['where' => 'in %%name%%', 'line' => 'Also open by %%names%%.'],
             ],
             $cursors['popups'],
         );

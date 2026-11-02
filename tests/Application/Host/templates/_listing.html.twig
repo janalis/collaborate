@@ -1,0 +1,21 @@
+<div class="listing" data-folder="{{ folder }}" data-collaborate-grant="{{ collaborate_grant() }}">
+    <h1>{{ folder|capitalize }}</h1>
+    <div class="pane">
+        {% if view == 'tiles' %}
+            <ul class="tiles">
+                {% for record in records %}
+                    <li data-key="{{ record.key }}" data-collaborate-label="{{ record.name }}"><span class="name">{{ record.name }}</span> <button type="button" data-share="{{ record.key }}">Share</button></li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <table>
+                <thead><tr><th>Name</th><th>Size</th><th></th></tr></thead>
+                <tbody>
+                {% for record in records %}
+                    <tr data-key="{{ record.key }}" data-collaborate-label="{{ record.name }}"><td class="name">{{ record.name }}</td><td class="size">{{ record.size }} kB</td><td><button type="button" data-share="{{ record.key }}">Share</button></td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+</div>

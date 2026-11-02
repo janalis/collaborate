@@ -152,8 +152,8 @@ final class CollaborateBundleTest extends TestCase
 
     public function testASentenceKeepsItsPlaceholders(): void
     {
-        // `%%name%%` in YAML: the configuration reaches the extension resolved.
-        $container = $this->load(['cursors' => ['popups' => ['share' => ['where' => 'in the sharing of %name%']]]]);
+        // `%%name%%`, as YAML or a kernel writes it: the configuration reaches the extension escaped still.
+        $container = $this->load(['cursors' => ['popups' => ['share' => ['where' => 'in the sharing of %%name%%']]]]);
         // As a compiled container holds them: resolved, then unescaped.
         $bag = $container->getParameterBag();
         self::assertSame(

@@ -19,7 +19,7 @@ for (const file of readdirSync(library).filter((name) => name.endsWith('.js'))) 
   writeFileSync(join(output, 'fetch-event-source', file), source);
 }
 
-for (const sheet of ['plain', 'collaborate']) {
+for (const sheet of ['plain', 'collaborate', 'host']) {
   const { css } = sass.compile(join(root, `tests/Application/Shared/assets/styles/${sheet}.scss`), {
     loadPaths: [join(root, 'node_modules'), join(root, 'assets/scss')],
     quietDeps: true,

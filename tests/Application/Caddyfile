@@ -1,7 +1,7 @@
 # The test applications under FrankenPHP, each with its own Mercure hub on its own origin:
 #   frankenphp run --config tests/Application/Caddyfile   (from the repository root)
-# Ports: PLAIN_PORT (8710), EASYADMIN_PORT (8720) and LIMITS_PORT (8730: the plain application in its
-# `e2e_limits` environment). Database: COLLABORATE_DATABASE_URL.
+# Ports: PLAIN_PORT (8710), EASYADMIN_PORT (8720), LIMITS_PORT (8730: the plain application in its
+# `e2e_limits` environment) and HOST_PORT (8740). Database: COLLABORATE_DATABASE_URL.
 {
 	auto_https off
 	admin off
@@ -46,4 +46,8 @@
 
 :{$LIMITS_PORT:8730} {
 	import app Plain {$LIMITS_PORT:8730} plain e2e_limits
+}
+
+:{$HOST_PORT:8740} {
+	import app Host {$HOST_PORT:8740} host e2e
 }

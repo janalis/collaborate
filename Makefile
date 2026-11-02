@@ -80,13 +80,14 @@ infection: ## Mutation-test src/ against every PHPUnit suite (reports in var/inf
 
 app-setup: ## Prepare the test applications for the browser: assets, EasyAdmin's public files, e2e databases
 	node tests/Application/bin/setup-assets.mjs
-	rm -rf tests/Application/var/plain/cache tests/Application/var/easyadmin/cache
+	rm -rf tests/Application/var/plain/cache tests/Application/var/easyadmin/cache tests/Application/var/host/cache tests/Application/var/host/log/revoked-folders.json
 	COLLABORATE_APP=easyadmin APP_ENV=e2e $(CONSOLE) assets:install tests/Application/EasyAdmin/public --no-interaction
 	COLLABORATE_APP=plain APP_ENV=e2e $(CONSOLE) app:setup
 	COLLABORATE_APP=easyadmin APP_ENV=e2e $(CONSOLE) app:setup
 	COLLABORATE_APP=plain APP_ENV=e2e_limits $(CONSOLE) app:setup
+	COLLABORATE_APP=host APP_ENV=e2e $(CONSOLE) app:setup
 
-e2e: app-setup ## Run the Playwright scenarios against both applications under FrankenPHP (ARGS="--project=plain …")
+e2e: app-setup ## Run the Playwright scenarios against the three applications under FrankenPHP (ARGS="--project=plain …")
 	npx playwright test $(ARGS)
 
 verify: validate fmt-check lint analyze test lint-js test-js ## Everything CI checks, but the browser and mutation runs

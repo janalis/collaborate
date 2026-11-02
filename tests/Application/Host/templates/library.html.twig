@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Library</title>
+    <link rel="stylesheet" href="{{ asset('build/host.css') }}">
+    {{ importmap('app') }}
+</head>
+<body>
+<header id="toolbar">
+    <strong>Library</strong>
+    <button type="button" data-action="new">New folder</button>
+    <input type="search" name="q" aria-label="Search">
+    <nav aria-label="Folders">
+        {% for name in folders %}
+            <a href="{{ path('library', {folder: name}) }}" data-folder-link="{{ path('library_listing', {folder: name, view: view == 'tiles' ? 'tiles' : null}) }}">{{ name }}</a>
+        {% endfor %}
+    </nav>
+    {{ collaborate_presence() }}
+    <span data-signed-in>{{ app.user }}</span>
+</header>
+<div class="workspace">
+    <main id="listing">{% include '_listing.html.twig' %}</main>
+    <aside id="inspector" aria-label="Inspector">
+        <div data-key="{{ records[0].key }}"><h2>{{ records[0].name }}</h2></div>
+        <div data-key="own-{{ app.user.userIdentifier }}"><h2>My notes</h2></div>
+    </aside>
+</div>
+<dialog id="share" aria-labelledby="share-title">
+    <h2 id="share-title">Share</h2>
+    <p data-collaborate-popup-presence></p>
+    <div data-collaborate-popup="share" data-key="{{ records[0].key }}">
+        <label>Message <input name="message"></label>
+    </div>
+    <button type="button" data-close>Close</button>
+</dialog>
+{{ collaborate_layer() }}
+</body>
+</html>

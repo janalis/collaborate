@@ -566,3 +566,25 @@ test('over HTTP/1.1 with a shared stream, the page streams in its turn, kept fro
   window.dispatchEvent(new Event('online'));
   await flush();
 });
+
+test('a page without a secure context shares nothing, and leaves the layer to start later', async () => {
+  vi.stubGlobal('crypto', {});
+  expect(begin()).toBeNull();
+  expect(layer().dataset.initialized).toBeUndefined();
+  vi.stubGlobal('crypto', undefined);
+  expect(begin()).toBeNull();
+  vi.unstubAllGlobals();
+  vi.stubGlobal('CSS', { escape: (value) => value });
+  vi.stubGlobal('matchMedia', () => ({ matches: false }));
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    }
+  );
+  vi.stubGlobal('requestAnimationFrame', (callback) => setTimeout(() => callback(now), 20));
+  vi.stubGlobal('cancelAnimationFrame', clearTimeout);
+  await start();
+  expect(instance).not.toBeNull();
+});

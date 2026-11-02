@@ -87,6 +87,9 @@ export function initCursors(
 ) {
   // A layer without an event URL serves the other modules only: cursors are disabled.
   if (!layer?.dataset.eventUrl || layer.dataset.initialized) return null;
+  // A page served over plain HTTP outside localhost has no secure context, and no client ids to tell its tabs
+  // apart: it shares nothing, and never stands in the way of the page.
+  if (typeof crypto?.randomUUID !== 'function') return null;
   layer.dataset.initialized = 'true';
   const { eventUrl } = layer.dataset;
   const config = layerConfig(layer);

@@ -129,7 +129,11 @@ final readonly class PageGrant
      */
     private static function decode(string $value): array
     {
-        $place = json_decode((string) base64_decode(strtr($value, '-_', '+/')), true, flags: \JSON_THROW_ON_ERROR);
+        $place = json_decode(
+            (string) base64_decode(strtr($value, '-_', '+/'), true),
+            true,
+            flags: \JSON_THROW_ON_ERROR,
+        );
         \assert(\is_array($place), 'issue() encodes the array a place provider answered.');
 
         return $place;

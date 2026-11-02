@@ -320,6 +320,12 @@ final class CollaborateBundle extends AbstractBundle
             )
             ->defaultFalse()
             ->end()
+            ->booleanNode('silent_alone')
+            ->info(
+                'Send no pointer while nobody else is on the page: a peer who comes says hello and is answered.',
+            )
+            ->defaultFalse()
+            ->end()
             ->booleanNode('share_stream')
             ->info(
                 'Over HTTP/1.1, let one tab of a browser share its cursor at a time (Web Locks): each stream holds '

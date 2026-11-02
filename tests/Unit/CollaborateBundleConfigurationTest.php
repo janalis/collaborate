@@ -69,6 +69,7 @@ final class CollaborateBundleConfigurationTest extends TestCase
                 'top_layer' => false,
                 'presence' => 'avatars',
                 'distinct_colors' => false,
+                'silent_alone' => false,
                 'share_stream' => false,
             ],
             $config['cursors'],

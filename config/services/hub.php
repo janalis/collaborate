@@ -89,6 +89,7 @@ return static function (ContainerConfigurator $container): void {
                 'presence' => param('collaborate.cursors.presence'),
                 'distinctColors' => param('collaborate.cursors.distinct_colors'),
                 'shareStream' => param('collaborate.cursors.share_stream'),
+                'silentAlone' => param('collaborate.cursors.silent_alone'),
             ],
             service('translator')->nullOnInvalid(),
         ])

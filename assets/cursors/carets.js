@@ -1,4 +1,4 @@
-import { anchorPath, isTextControl, resolvePath } from './geometry.js';
+import { anchorPath, isTextControl, resolvePath, sharesCaret } from './geometry.js';
 
 export const MAX_CARET_OFFSET = 10485760;
 const MAX_RECTS = 64;
@@ -78,7 +78,8 @@ export function captureCaret(element = document.activeElement) {
     end = textOffset(element, selection.focusNode, selection.focusOffset);
   } else return null;
   const path = anchorPath(element);
-  if (!path || Math.max(start, end) > MAX_CARET_OFFSET) return null;
+  // A field of a region the host keeps to its reader (a search box, say) shares no caret.
+  if (!path || !sharesCaret(path.region) || Math.max(start, end) > MAX_CARET_OFFSET) return null;
   return { ...path, start, end };
 }
 

@@ -51,6 +51,7 @@ final class CollaborateExtension extends AbstractExtension
         'presence' => 'avatars',
         'distinctColors' => false,
         'shareStream' => false,
+        'silentAlone' => false,
     ];
 
     /** The sentences the cursor scripts say, translated in the collaborate domain. */

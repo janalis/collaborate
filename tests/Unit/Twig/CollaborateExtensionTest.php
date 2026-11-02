@@ -163,6 +163,7 @@ final class CollaborateExtensionTest extends ExtensionTestCase
                 'presence' => 'menu',
                 'distinctColors' => true,
                 'shareStream' => true,
+                'silentAlone' => true,
                 'unknown' => true,
             ],
             translator: $translator,
@@ -201,6 +202,7 @@ final class CollaborateExtensionTest extends ExtensionTestCase
                 'presence' => 'menu',
                 'distinctColors' => true,
                 'shareStream' => true,
+                'silentAlone' => true,
                 'messages' => [
                     'showPointers' => 'collaborate:Show pointers',
                     'idle' => 'collaborate:idle',

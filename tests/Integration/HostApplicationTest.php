@@ -12,7 +12,11 @@ use Janalis\Collaborate\Cursor\CursorEvent;
 use Janalis\Collaborate\Cursor\CursorPosition;
 use Janalis\Collaborate\Cursor\PageGrant;
 use Janalis\Collaborate\Doctrine\ChangeCollector;
+use Janalis\Collaborate\Doctrine\RecordIdentifier;
 use Janalis\Collaborate\Draft\DraftAccess;
+use Janalis\Collaborate\Draft\DraftJournal;
+use Janalis\Collaborate\Draft\DraftSave;
+use Janalis\Collaborate\EasyAdmin\UpdatesSubscriber;
 use Janalis\Collaborate\Form\CollaborateFormExtension;
 use Janalis\Collaborate\Grant;
 use Janalis\Collaborate\Hub\Admission;
@@ -25,6 +29,7 @@ use Janalis\Collaborate\Tests\Application\Host\HostKernel;
 use Janalis\Collaborate\Tests\Application\Host\HostPlaces;
 use Janalis\Collaborate\Twig\CollaborateExtension;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\DomCrawler\Crawler;
 
 /**
@@ -49,6 +54,11 @@ use Symfony\Component\DomCrawler\Crawler;
 #[CoversClass(Topics::class)]
 #[CoversClass(SecurityCollaboratorProvider::class)]
 #[CoversClass(CollaborateExtension::class)]
+// Built by the container whatever the options, and idle with drafts and saved views off.
+#[UsesClass(RecordIdentifier::class)]
+#[UsesClass(DraftJournal::class)]
+#[UsesClass(DraftSave::class)]
+#[UsesClass(UpdatesSubscriber::class)]
 final class HostApplicationTest extends ApplicationTestCase
 {
     private const array EVENT = [

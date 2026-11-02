@@ -15,6 +15,7 @@ use Janalis\Collaborate\Twig\CollaborateExtension;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Security\Core\User\InMemoryUser;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 #[CoversClass(CollaborateExtension::class)]
 #[UsesClass(PageGrant::class)]
@@ -131,6 +132,100 @@ final class CollaborateExtensionTest extends ExtensionTestCase
         /** @var array{colors: list<string>} $config */
         $config = json_decode($layer->getAttribute('data-config'), true, flags: \JSON_THROW_ON_ERROR);
         self::assertSame(CollaborateBundle::COLORS, $config['colors']);
+    }
+
+    public function testTheLayerNamesTheHostOptionsThatDifferFromTheDefaultsWithTheSentencesTranslated(): void
+    {
+        $translator = $this->createStub(TranslatorInterface::class);
+        $translator
+            ->method('trans')
+            ->willReturnCallback(
+                static fn(string $id, array $parameters, ?string $domain): string => $domain . ':' . $id,
+            );
+        $extension = $this->extension(
+            new TestUser(7),
+            host: [
+                'regions' => ['listing' => '#list', 'body' => 'body'],
+                'keyAttribute' => 'data-key',
+                'keyScope' => '#list',
+                'anchorAttributes' => CollaborateBundle::ANCHOR_ATTRIBUTES,
+                'anchorClasses' => true,
+                'caretRegions' => ['modal'],
+                'popups' => [
+                    'share' => ['where' => 'in the sharing of %name%', 'line' => 'Shared with %names%.'],
+                    'metadata' => [],
+                    'broken' => 'x',
+                ],
+                'idle' => 60,
+                'markers' => true,
+                'edges' => '.pane',
+                'topLayer' => true,
+                'presence' => 'menu',
+                'distinctColors' => true,
+                'shareStream' => true,
+                'unknown' => true,
+            ],
+            translator: $translator,
+        );
+        /** @var array<string, mixed> $config */
+        $config = json_decode(
+            $this->element($extension->layer($this->twig()))->getAttribute('data-config'),
+            true,
+            flags: \JSON_THROW_ON_ERROR,
+        );
+        self::assertSame(
+            [
+                'throttle' => 100,
+                'heartbeat' => 5000,
+                'expiry' => 15_000,
+                'maxAvatars' => 5,
+                'renew' => 240_000,
+                'colors' => ['blue'],
+                'regions' => ['listing' => '#list', 'body' => 'body'],
+                'keyAttribute' => 'data-key',
+                'keyScope' => '#list',
+                'anchorClasses' => true,
+                'caretRegions' => ['modal'],
+                'popups' => [
+                    'share' => [
+                        'where' => 'collaborate:in the sharing of %name%',
+                        'line' => 'collaborate:Shared with %names%.',
+                    ],
+                    'metadata' => ['where' => 'collaborate:in %name%', 'line' => 'collaborate:Also open by %names%.'],
+                    'broken' => ['where' => 'collaborate:in %name%', 'line' => 'collaborate:Also open by %names%.'],
+                ],
+                'idle' => 60_000,
+                'markers' => true,
+                'edges' => '.pane',
+                'topLayer' => true,
+                'presence' => 'menu',
+                'distinctColors' => true,
+                'shareStream' => true,
+                'messages' => [
+                    'showPointers' => 'collaborate:Show pointers',
+                    'idle' => 'collaborate:idle',
+                    'on' => 'collaborate:on %name%',
+                    'here' => 'collaborate:on this page',
+                    'is' => 'collaborate:%name% is %place%',
+                    'line' => 'collaborate:Also open by %names%.',
+                    'where' => 'collaborate:in %name%',
+                ],
+            ],
+            $config,
+        );
+    }
+
+    public function testWithoutATranslatorTheSentencesAreTheKeys(): void
+    {
+        $layer = $this->element($this->extension(new TestUser(7), host: [
+            'idle' => 'x',
+            'popups' => 'x',
+        ])->layer($this->twig()));
+        /** @var array{idle: int, popups: array<array-key, mixed>, messages: array<string, string>} $config */
+        $config = json_decode($layer->getAttribute('data-config'), true, flags: \JSON_THROW_ON_ERROR);
+        self::assertSame(0, $config['idle']);
+        self::assertSame([], $config['popups']);
+        self::assertSame('%name% is %place%', $config['messages']['is']);
     }
 
     public function testRendersThePresenceGroup(): void

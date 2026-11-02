@@ -18,6 +18,15 @@ abstract class CursorTestCase extends HubTestCase
     protected LoggerInterface $logger;
     protected bool $enabled = true;
 
+    /** @var array<string, string> */
+    protected array $regions = [];
+
+    /** @var array<string, array<array-key, mixed>> */
+    protected array $popups = [];
+
+    /** @var list<string> */
+    protected array $caretRegions = [];
+
     #[\Override]
     protected function setUp(): void
     {
@@ -67,6 +76,9 @@ abstract class CursorTestCase extends HubTestCase
             $this->enabled,
             $colors,
             $maxEventBytes,
+            $this->regions,
+            $this->popups,
+            $this->caretRegions,
         );
         $response = $controller($this->request('/cursors/events', $overrides));
         self::assertTrue(

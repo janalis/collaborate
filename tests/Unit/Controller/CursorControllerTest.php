@@ -204,6 +204,29 @@ final class CursorControllerTest extends CursorTestCase
         self::assertSame(204, $this->handle(terminate: false)->getStatusCode());
     }
 
+    public function testValidatesTheHostsRegionsCaretRegionsAndPopups(): void
+    {
+        $this->regions = ['listing' => '#list', 'modal' => 'dialog[open]'];
+        $this->popups = ['share' => ['where' => 'in %name%', 'line' => 'Also open by %names%.']];
+        $this->caretRegions = ['modal'];
+        $anchor = ['selector' => 'tr[data-key="a"]', 'region' => 'listing', 'x' => 0.5, 'y' => 0.5];
+        $caret = ['selector' => 'input[name="q"]', 'region' => 'modal', 'start' => 0, 'end' => 0];
+        $popup = ['kind' => 'share', 'key' => 'a'];
+        [$event] = $this->publish(['anchor' => $anchor, 'caret' => $caret, 'popup' => $popup]);
+        self::assertSame([$anchor, $caret, $popup], [$event['anchor'], $event['caret'], $event['popup']]);
+        foreach ([
+            ['anchor' => ['region' => 'content'] + $anchor],
+            ['caret' => ['region' => 'listing'] + $caret],
+            ['popup' => ['kind' => 'metadata', 'key' => 'a']],
+        ] as $invalid) {
+            try {
+                $this->handle($invalid);
+                self::fail('Published an event outside the host\'s regions or popups.');
+            } catch (BadRequestHttpException) {
+            }
+        }
+    }
+
     public function testAnswersNotFoundWhenCursorsAreDisabled(): void
     {
         $this->enabled = false;

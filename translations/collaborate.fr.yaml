@@ -47,3 +47,11 @@
 'Synchronize the shared draft before saving.': 'Synchronisez le brouillon partagé avant d’enregistrer.'
 'This draft has already created its record. Open the saved record instead.': 'Ce brouillon a déjà créé sa fiche. Ouvrez plutôt la fiche enregistrée.'
 'Also on this page': 'Aussi sur cette page'
+# Cursors and presence.
+'Show pointers': 'Afficher les pointeurs'
+'idle': 'sans activité'
+'on %name%': 'sur %name%'
+'on this page': 'sur cette page'
+'%name% is %place%': '%name% est %place%'
+'Also open by %names%.': 'Aussi ouvert par %names%.'
+'in %name%': 'dans %name%'

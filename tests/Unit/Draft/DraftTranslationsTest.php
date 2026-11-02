@@ -7,6 +7,7 @@ namespace Janalis\Collaborate\Tests\Unit\Draft;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftSave;
 use Janalis\Collaborate\Form\CollaborateFormExtension;
+use Janalis\Collaborate\Twig\CollaborateExtension;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -34,8 +35,9 @@ final class DraftTranslationsTest extends TestCase
             DraftSave::BUSY,
             DraftSave::SYNC,
             DraftJournal::ALREADY_CREATED,
-            // The presence component's label.
+            // The presence component's label, and what the cursor scripts say.
             'Also on this page',
+            ...array_values(CollaborateExtension::MESSAGES),
         ];
 
         foreach ($keys as $key) {

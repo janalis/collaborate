@@ -54,6 +54,22 @@ final class CollaborateBundleConfigurationTest extends TestCase
                 'expiry' => 15,
                 'max_avatars' => 5,
                 'max_event_bytes' => 4096,
+                'places' => null,
+                'ignored_parameters' => CollaborateBundle::IGNORED_PARAMETERS,
+                'regions' => CollaborateBundle::REGIONS,
+                'key_attribute' => null,
+                'key_scope' => 'body',
+                'anchor_attributes' => CollaborateBundle::ANCHOR_ATTRIBUTES,
+                'anchor_classes' => false,
+                'caret_regions' => [],
+                'popups' => [],
+                'idle' => 0,
+                'markers' => false,
+                'edges' => null,
+                'top_layer' => false,
+                'presence' => 'avatars',
+                'distinct_colors' => false,
+                'share_stream' => false,
             ],
             $config['cursors'],
         );
@@ -72,6 +88,87 @@ final class CollaborateBundleConfigurationTest extends TestCase
         self::assertNull($updates['enabled']);
         self::assertSame('#^/admin(?:/|$)#', $updates['path_pattern']);
         self::assertSame(['updatedAt'], $updates['ignored_fields']);
+    }
+
+    public function testAHostDescribesItsPages(): void
+    {
+        $cursors = Arrays::at($this->process([
+            'cursors' => [
+                'places' => 'app.places',
+                'regions' => ['modal' => 'dialog[open]', 'list-view' => '#list', 'body' => 'body'],
+                'key_attribute' => 'data-key',
+                'key_scope' => '#list',
+                'anchor_attributes' => ['data-action', 'name'],
+                'anchor_classes' => true,
+                'caret_regions' => ['modal'],
+                'popups' => ['metadata' => ['where' => 'in the properties of %name%'], 'share' => []],
+                'idle' => 60,
+                'markers' => true,
+                'edges' => '.pane',
+                'top_layer' => true,
+                'presence' => 'menu',
+                'distinct_colors' => true,
+                'share_stream' => true,
+            ],
+        ]), 'cursors');
+        self::assertSame('app.places', $cursors['places']);
+        // The order of the regions is the one their roots are tried in.
+        self::assertSame(['modal' => 'dialog[open]', 'list-view' => '#list', 'body' => 'body'], $cursors['regions']);
+        self::assertSame('data-key', $cursors['key_attribute']);
+        self::assertSame(['data-action', 'name'], $cursors['anchor_attributes']);
+        self::assertSame(
+            [
+                'metadata' => ['where' => 'in the properties of %name%', 'line' => 'Also open by %names%.'],
+                'share' => ['where' => 'in %name%', 'line' => 'Also open by %names%.'],
+            ],
+            $cursors['popups'],
+        );
+        self::assertSame('menu', $cursors['presence']);
+    }
+
+    public function testRegionsReplaceTheDefaultsAcrossFiles(): void
+    {
+        $extension = $this->extension();
+        self::assertInstanceOf(ConfigurationExtensionInterface::class, $extension);
+        $configuration = $extension->getConfiguration([], new ContainerBuilder());
+        self::assertNotNull($configuration);
+        $config = new Processor()->processConfiguration($configuration, [
+            ['cursors' => ['regions' => ['first' => '#a'], 'popups' => ['one' => []]]],
+            ['cursors' => ['regions' => ['second' => '#b'], 'popups' => ['two' => []]]],
+        ]);
+        self::assertSame(['second' => '#b'], Arrays::at($config, 'cursors', 'regions'));
+        self::assertSame(['two'], array_keys(Arrays::at($config, 'cursors', 'popups')));
+    }
+
+    /** @return iterable<string, array{array<string, mixed>}> */
+    public static function invalidHosts(): iterable
+    {
+        yield 'no region' => [['regions' => []]];
+        yield 'a region name with a capital' => [['regions' => ['Modal' => 'dialog']]];
+        yield 'a region name ending with a dash' => [['regions' => ['modal-' => 'dialog']]];
+        yield 'an empty region selector' => [['regions' => ['modal' => '']]];
+        yield 'a key attribute with a space' => [['key_attribute' => 'data key']];
+        yield 'a key attribute that is no string' => [['key_attribute' => ['data-key']]];
+        yield 'an anchor attribute with a quote' => [['anchor_attributes' => ['data-"x']]];
+        yield 'an anchor attribute that is no string' => [['anchor_attributes' => [true]]];
+        yield 'a popup kind with an underscore' => [['popups' => ['meta_data' => []]]];
+        yield 'an empty key scope' => [['key_scope' => '']];
+        yield 'an unknown presence' => [['presence' => 'list']];
+    }
+
+    /** @param array<string, mixed> $cursors */
+    #[DataProvider('invalidHosts')]
+    public function testRefusesAnInvalidHost(array $cursors): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->process(['cursors' => $cursors]);
+    }
+
+    public function testAKeyAttributeMayBeUnset(): void
+    {
+        self::assertNull(
+            Arrays::at($this->process(['cursors' => ['key_attribute' => null]]), 'cursors')['key_attribute'],
+        );
     }
 
     public function testPrependsTheAssetTemplateAndMappingPaths(): void
@@ -144,6 +241,7 @@ final class CollaborateBundleConfigurationTest extends TestCase
             'cursors.expiry' => [15, 2],
             'cursors.max_avatars' => [5, 1],
             'cursors.max_event_bytes' => [4096, 512],
+            'cursors.idle' => [0, 0],
             'drafts.grant_ttl' => [36_000, 60],
             'drafts.signature_ttl' => [900, 10],
             'drafts.max_request_bytes' => [2_097_152, 65_536],

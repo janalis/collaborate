@@ -38,11 +38,18 @@ final class CursorEvent
 
     /**
      * @param array<array-key, mixed> $data
+     * @param list<string> $regions the region names of the configuration
+     * @param list<string> $popups the popup kinds of the configuration
+     * @param list<string> $caretRegions the regions whose fields share their caret, all when empty
      *
-     * @return array{clientId: string, sequence: int, kind: string, style: string, shape: string, anchor: array{selector: string, region: string, x: int|float, y: int|float}|null, caret: array{selector: string, region: string, start: int, end: int}|null, field: string|null}
+     * @return array{clientId: string, sequence: int, kind: string, style: string, shape: string, anchor: array{selector: string, region: string, x: int|float, y: int|float}|null, caret: array{selector: string, region: string, start: int, end: int}|null, field: string|null, popup?: array{kind: string, key: string}|null}
      */
-    public static function fromArray(array $data): array
-    {
+    public static function fromArray(
+        array $data,
+        array $regions = CursorPosition::REGIONS,
+        array $popups = [],
+        array $caretRegions = [],
+    ): array {
         if (
             !\is_string($data['clientId'] ?? null)
             || !\is_int($data['sequence'] ?? null)
@@ -58,14 +65,18 @@ final class CursorEvent
         }
         // Tabs loaded before shapes existed send none.
         $shape = \is_string($data['shape'] ?? null) ? $data['shape'] : 'default';
-        $anchor = CursorPosition::anchor($data['anchor'] ?? null);
-        $caret = CursorPosition::caret($data['caret'] ?? null);
+        $anchor = CursorPosition::anchor($data['anchor'] ?? null, $regions);
+        $caret = CursorPosition::caret(
+            $data['caret'] ?? null,
+            [] === $caretRegions ? $regions : array_values(array_intersect($regions, $caretRegions)),
+        );
         $field = self::field($data['field'] ?? null);
-        if ('move' === $data['kind'] && null === $anchor && null === $caret && null === $field) {
-            throw new BadRequestHttpException('A cursor move requires an anchor, a caret or a field.');
+        // A host without popups sends none, and its events say nothing of them.
+        $popup = [] === $popups ? null : CursorPosition::popup($data['popup'] ?? null, $popups);
+        if ('move' === $data['kind'] && null === $anchor && null === $caret && null === $field && null === $popup) {
+            throw new BadRequestHttpException('A cursor move requires an anchor, a caret, a field or a popup.');
         }
-
-        return [
+        $event = [
             'clientId' => $data['clientId'],
             'sequence' => $data['sequence'],
             'kind' => $data['kind'],
@@ -75,6 +86,11 @@ final class CursorEvent
             'caret' => $caret,
             'field' => $field,
         ];
+        if ([] !== $popups) {
+            $event['popup'] = $popup;
+        }
+
+        return $event;
     }
 
     /** The name of the shared form control the sender is in, for a control that shows no caret too. */

@@ -40,6 +40,24 @@ final class CollaborateBundle extends AbstractBundle
         'gray-dark',
     ];
 
+    /** Region name => root selector, EasyAdmin's layout. */
+    public const array REGIONS = [
+        'modal' => '.modal.show',
+        'header' => '.content-top',
+        'mobile-header' => '.responsive-header',
+        // `.ea-sidebar` from EasyAdmin 5.6, `.sidebar` before.
+        'sidebar' => '.ea-sidebar, .sidebar',
+        'content' => '.content-wrapper',
+        'body' => 'body',
+    ];
+
+    public const array ANCHOR_ATTRIBUTES = ['data-id', 'data-column', 'name', 'id'];
+
+    public const array IGNORED_PARAMETERS = ['_locale', '_token', '_switch_user'];
+
+    /** A region or popup kind, or an attribute name. */
+    private const string NAME = '/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/D';
+
     /** Field names whose values never enter a draft, compared lowercased without `_` and `-`. */
     public const array SENSITIVE_FIELDS = [
         'password',
@@ -158,6 +176,156 @@ final class CollaborateBundle extends AbstractBundle
             ->info('Largest cursor event body, bytes.')
             ->defaultValue(4096)
             ->min(512)
+            ->end()
+            ->scalarNode('places')
+            ->info(
+                'Service id of a Janalis\Collaborate\Cursor\PlaceProviderInterface naming the room of a page, '
+                . 'or null for its route, parameters and query.',
+            )
+            ->defaultNull()
+            ->end()
+            ->arrayNode('ignored_parameters')
+            ->info('Route and query parameters that do not separate rooms (without a place provider).')
+            ->scalarPrototype()
+            ->end()
+            ->defaultValue(self::IGNORED_PARAMETERS)
+            ->end()
+            ->arrayNode('regions')
+            ->info(
+                'The regions of a page, name => selector, the first one an element is in naming it: a pointer is '
+                . 'placed from the root of its region on the peers\' pages.',
+            )
+            ->useAttributeAsKey('name')
+            // `mobile-header` stays one: keys are not `-` to `_` normalized.
+            ->normalizeKeys(false)
+            ->performNoDeepMerging()
+            ->requiresAtLeastOneElement()
+            ->validate()
+            ->ifTrue(
+                static fn(array $regions): bool => (
+                    [] !== array_filter(
+                        array_keys($regions),
+                        static fn(int|string $name): bool => !preg_match(self::NAME, (string) $name),
+                    )
+                ),
+            )
+            ->thenInvalid('Region names are lowercase words joined by "-": %s')
+            ->end()
+            ->scalarPrototype()
+            ->cannotBeEmpty()
+            ->end()
+            ->defaultValue(self::REGIONS)
+            ->end()
+            ->scalarNode('key_attribute')
+            ->info(
+                'Attribute naming a record wherever a page shows it (e.g. data-key): a pointer on it is placed '
+                . 'from the record, whatever element shows it; null for none.',
+            )
+            ->defaultNull()
+            ->validate()
+            ->ifTrue(
+                static fn(mixed $name): bool => (
+                    null !== $name
+                    && (!\is_string($name) || !preg_match(self::NAME, $name))
+                ),
+            )
+            ->thenInvalid('The key attribute is a lowercase attribute name: %s')
+            ->end()
+            ->end()
+            ->scalarNode('key_scope')
+            ->info('Where the records a page shows are found, for markers, popups and finding a peer.')
+            ->defaultValue('body')
+            ->cannotBeEmpty()
+            ->end()
+            ->arrayNode('anchor_attributes')
+            ->info('Attributes that name an element on the way from its region to a pointer, in order of preference.')
+            ->scalarPrototype()
+            ->validate()
+            ->ifTrue(static fn(mixed $name): bool => !\is_string($name) || !preg_match(self::NAME, $name))
+            ->thenInvalid('Anchor attributes are lowercase attribute names: %s')
+            ->end()
+            ->end()
+            ->defaultValue(self::ANCHOR_ATTRIBUTES)
+            ->end()
+            ->booleanNode('anchor_classes')
+            ->info('Name an element by a class no sibling shares before its rank among its siblings.')
+            ->defaultFalse()
+            ->end()
+            ->arrayNode('caret_regions')
+            ->info('Regions whose text fields share their caret; empty for every region.')
+            ->scalarPrototype()
+            ->end()
+            ->defaultValue([])
+            ->end()
+            ->arrayNode('popups')
+            ->info(
+                'Kinds of popup a peer may have open on a record (data-collaborate-popup="<kind>" beside the key '
+                . 'attribute), each with what the presence menu says of a peer in it and the line under its title, '
+                . 'both translated in the collaborate domain.',
+            )
+            ->useAttributeAsKey('kind')
+            ->normalizeKeys(false)
+            ->performNoDeepMerging()
+            ->validate()
+            ->ifTrue(
+                static fn(array $popups): bool => (
+                    [] !== array_filter(
+                        array_keys($popups),
+                        static fn(int|string $kind): bool => !preg_match(self::NAME, (string) $kind),
+                    )
+                ),
+            )
+            ->thenInvalid('Popup kinds are lowercase words joined by "-": %s')
+            ->end()
+            ->arrayPrototype()
+            ->children()
+            ->scalarNode('where')
+            ->info('Where a peer is, %name% naming the record.')
+            ->defaultValue('in %name%')
+            ->end()
+            ->scalarNode('line')
+            ->info('The line under the popup\'s title, %names% naming the peers.')
+            ->defaultValue('Also open by %names%.')
+            ->end()
+            ->end()
+            ->end()
+            ->defaultValue([])
+            ->end()
+            ->integerNode('idle')
+            ->info('Seconds after which a pointer that did not move is dimmed and its peer said idle; 0 never.')
+            ->defaultValue(0)
+            ->min(0)
+            ->end()
+            ->booleanNode('markers')
+            ->info('Mark the records peers point at or have a popup of (requires key_attribute).')
+            ->defaultFalse()
+            ->end()
+            ->scalarNode('edges')
+            ->info('Selector of the panes whose edge shows an arrow for a pointer scrolled out of them, or null.')
+            ->defaultNull()
+            ->end()
+            ->booleanNode('top_layer')
+            ->info('Draw pointers in the top layer (a popover), above an open modal dialog.')
+            ->defaultFalse()
+            ->end()
+            ->enumNode('presence')
+            ->info('Peers in the header as avatars, or as the button of a menu that finds them.')
+            ->values(['avatars', 'menu'])
+            ->defaultValue('avatars')
+            ->end()
+            ->booleanNode('distinct_colors')
+            ->info(
+                'Draw a peer in the colour farthest from the others when an earlier one has theirs or one beside '
+                . 'it in the colours list; otherwise in the colour the server picks.',
+            )
+            ->defaultFalse()
+            ->end()
+            ->booleanNode('share_stream')
+            ->info(
+                'Over HTTP/1.1, let one tab of a browser share its cursor at a time (Web Locks): each stream holds '
+                . 'one of the six connections a browser opens to a site.',
+            )
+            ->defaultFalse()
             ->end()
             ->end()
             ->end()
@@ -351,7 +519,9 @@ final class CollaborateBundle extends AbstractBundle
         $updates['enabled'] ??= $drafts['enabled'];
         $config['updates'] = $updates;
 
-        $parameters = $this->flatten('collaborate', $config);
+        // The configuration reaching the extension is resolved already: a `%` it holds (the `%name%` of a popup's
+        // sentence, written `%%name%%` in YAML) is escaped again, or the parameter would be resolved twice.
+        $parameters = $this->flatten('collaborate', self::escape($config));
         foreach (array_keys($parameters) as $name) {
             $configurator->parameters()->set($name, $parameters[$name]);
         }
@@ -364,6 +534,10 @@ final class CollaborateBundle extends AbstractBundle
             'janalis_collaborate.hub',
             'mercure.hub.' . self::string(self::branch($config, 'hub'), 'name'),
         );
+        $places = self::branch($config, 'cursors')['places'] ?? null;
+        if (\is_string($places) && '' !== $places) {
+            $container->setAlias('janalis_collaborate.places', $places);
+        }
         // Without a configured limiter, its consumers receive null and do not limit.
         foreach (['cursors' => self::branch($config, 'cursors'), 'drafts' => $drafts] as $name => $branch) {
             if (!\is_string($branch['rate_limiter'] ?? null) || '' === $branch['rate_limiter']) {
@@ -428,6 +602,24 @@ final class CollaborateBundle extends AbstractBundle
         }
 
         return $parameters;
+    }
+
+    /**
+     * @param array<array-key, mixed> $values
+     *
+     * @return array<array-key, mixed>
+     */
+    private static function escape(array $values): array
+    {
+        foreach (array_keys($values) as $key) {
+            $values[$key] = match (true) {
+                \is_string($values[$key]) => str_replace('%', '%%', $values[$key]),
+                \is_array($values[$key]) => self::escape($values[$key]),
+                default => $values[$key],
+            };
+        }
+
+        return $values;
     }
 
     /**

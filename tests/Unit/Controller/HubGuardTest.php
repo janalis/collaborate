@@ -12,6 +12,7 @@ use Janalis\Collaborate\Hub\Admission;
 use Janalis\Collaborate\Hub\HubGuard;
 use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Tests\Fixtures\TestPlaces;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -62,6 +63,30 @@ final class HubGuardTest extends HubTestCase
         $this->signedIn = $signedIn ? $this->user : null;
         $this->csrf = $csrf;
         $this->expectException(AccessDeniedException::class);
+        $this->guard()->admit($this->request('/cursors/events'), 4096);
+    }
+
+    public function testAPlaceIsAskedForAtEveryRequestAndALostOneIsRefused(): void
+    {
+        $this->places = new TestPlaces();
+        $this->pages = new PageGrant('secret', new Topics(), places: $this->places);
+        $admission = $this->guard()->admit($this->request('/cursors/events'), 4096);
+        self::assertInstanceOf(Admission::class, $admission);
+        self::assertSame([[$this->user, ['articles']]], $this->places->asked);
+        $this->places->revoked = [['articles']];
+        try {
+            $this->guard()->admit($this->request('/cursors/events'), 4096);
+            self::fail('Admitted a page whose place was revoked.');
+        } catch (AccessDeniedHttpException $error) {
+            self::assertSame('The page grant names a place the user may no longer enter.', $error->getMessage());
+        }
+    }
+
+    public function testAPlaceGrantIsRefusedWithoutItsProvider(): void
+    {
+        $this->pages = new PageGrant('secret', new Topics(), places: new TestPlaces());
+        $this->expectException(AccessDeniedHttpException::class);
+        $this->expectExceptionMessage('The page grant names a place the user may no longer enter.');
         $this->guard()->admit($this->request('/cursors/events'), 4096);
     }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Janalis\Collaborate\Twig;
 
+use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Cursor\PageGrant;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
@@ -11,6 +12,7 @@ use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Security\Core\User\UserInterface;
+use Symfony\Contracts\Translation\TranslatorInterface;
 use Twig\Environment;
 use Twig\Extension\AbstractExtension;
 use Twig\TwigFunction;
@@ -33,12 +35,46 @@ final class CollaborateExtension extends AbstractExtension
         'colors' => ['blue'],
     ];
 
+    /** Host options at their defaults, which the layer leaves out: a page of a 0.1 host renders as it did. */
+    private const array DEFAULT_HOST = [
+        'regions' => CollaborateBundle::REGIONS,
+        'keyAttribute' => null,
+        'keyScope' => 'body',
+        'anchorAttributes' => CollaborateBundle::ANCHOR_ATTRIBUTES,
+        'anchorClasses' => false,
+        'caretRegions' => [],
+        'popups' => [],
+        'idle' => 0,
+        'markers' => false,
+        'edges' => null,
+        'topLayer' => false,
+        'presence' => 'avatars',
+        'distinctColors' => false,
+        'shareStream' => false,
+    ];
+
+    /** The sentences the cursor scripts say, translated in the collaborate domain. */
+    public const array MESSAGES = [
+        'showPointers' => 'Show pointers',
+        'idle' => 'idle',
+        'on' => 'on %name%',
+        'here' => 'on this page',
+        'is' => '%name% is %place%',
+        'line' => 'Also open by %names%.',
+        'where' => 'in %name%',
+    ];
+
     /** @var Layer */
     private readonly array $layer;
+
+    /** @var array<string, mixed> */
+    private readonly array $host;
 
     /**
      * @param array{cursors?: bool, updates?: bool, throttle?: int, heartbeat?: int, expiry?: int, maxAvatars?: int, renew?: int, colors?: list<string>} $layer
      *   `throttle` in milliseconds; `heartbeat`, `expiry` and `renew` in seconds
+     * @param array<string, mixed> $host the `cursors` options describing the host's pages, by their camel-cased
+     *   names (`idle` in seconds, `popups` kind => {where, line})
      */
     public function __construct(
         private readonly RequestStack $requests,
@@ -48,8 +84,11 @@ final class CollaborateExtension extends AbstractExtension
         private readonly DraftAccess $drafts,
         private readonly string $role = 'ROLE_ADMIN',
         array $layer = [],
+        array $host = [],
+        private readonly ?TranslatorInterface $translator = null,
     ) {
         $this->layer = $layer + self::DEFAULT_LAYER;
+        $this->host = array_intersect_key($host, self::DEFAULT_HOST) + self::DEFAULT_HOST;
     }
 
     public function getFunctions(): array
@@ -97,15 +136,67 @@ final class CollaborateExtension extends AbstractExtension
             'grant' => $grant,
             'cursors' => $this->layer['cursors'],
             'updates' => $this->layer['updates'],
-            'config' => [
-                'throttle' => $this->layer['throttle'],
-                'heartbeat' => $this->layer['heartbeat'] * 1000,
-                'expiry' => $this->layer['expiry'] * 1000,
-                'maxAvatars' => $this->layer['maxAvatars'],
-                'renew' => $this->layer['renew'] * 1000,
-                'colors' => $this->layer['colors'],
-            ],
+            'config' =>
+                [
+                    'throttle' => $this->layer['throttle'],
+                    'heartbeat' => $this->layer['heartbeat'] * 1000,
+                    'expiry' => $this->layer['expiry'] * 1000,
+                    'maxAvatars' => $this->layer['maxAvatars'],
+                    'renew' => $this->layer['renew'] * 1000,
+                    'colors' => $this->layer['colors'],
+                ] + $this->hostConfig(),
         ]);
+    }
+
+    /**
+     * The host options that differ from their defaults, with the sentences the scripts say once any does.
+     *
+     * @return array<string, mixed>
+     */
+    private function hostConfig(): array
+    {
+        $config = [];
+        foreach ($this->host as $name => $value) {
+            if ($value === self::DEFAULT_HOST[$name]) {
+                continue;
+            }
+            $config[$name] = match ($name) {
+                'idle' => (\is_int($value) ? $value : 0) * 1000,
+                'popups' => $this->popups($value),
+                default => $value,
+            };
+        }
+        if ([] === $config) {
+            return [];
+        }
+        $config['messages'] = array_map($this->trans(...), self::MESSAGES);
+
+        return $config;
+    }
+
+    /** @return array<string, array{where: string, line: string}> */
+    private function popups(mixed $popups): array
+    {
+        $translated = [];
+        foreach (\is_array($popups) ? $popups : [] as $kind => $messages) {
+            $messages = \is_array($messages) ? $messages : [];
+            $translated[(string) $kind] = [
+                'where' => $this->trans(
+                    \is_string($messages['where'] ?? null) ? $messages['where'] : self::MESSAGES['where'],
+                ),
+                'line' => $this->trans(
+                    \is_string($messages['line'] ?? null) ? $messages['line'] : self::MESSAGES['line'],
+                ),
+            ];
+        }
+
+        return $translated;
+    }
+
+    /** A sentence in the user's language, its placeholders left for the scripts to fill. */
+    private function trans(string $message): string
+    {
+        return $this->translator?->trans($message, [], 'collaborate') ?? $message;
     }
 
     /** Other collaborators on this page, filled in by `cursors/presence.js` from the cursor events. */

@@ -37,6 +37,7 @@ return static function (ContainerConfigurator $container): void {
         service('security.csrf.token_manager'),
         param('collaborate.role'),
         service('janalis_collaborate.limiter.cursors')->nullOnInvalid(),
+        service('janalis_collaborate.places')->nullOnInvalid(),
     ]);
 
     $services
@@ -73,6 +74,23 @@ return static function (ContainerConfigurator $container): void {
                 'renew' => param('collaborate.hub.renew_interval'),
                 'colors' => param('collaborate.colors'),
             ],
+            [
+                'regions' => param('collaborate.cursors.regions'),
+                'keyAttribute' => param('collaborate.cursors.key_attribute'),
+                'keyScope' => param('collaborate.cursors.key_scope'),
+                'anchorAttributes' => param('collaborate.cursors.anchor_attributes'),
+                'anchorClasses' => param('collaborate.cursors.anchor_classes'),
+                'caretRegions' => param('collaborate.cursors.caret_regions'),
+                'popups' => param('collaborate.cursors.popups'),
+                'idle' => param('collaborate.cursors.idle'),
+                'markers' => param('collaborate.cursors.markers'),
+                'edges' => param('collaborate.cursors.edges'),
+                'topLayer' => param('collaborate.cursors.top_layer'),
+                'presence' => param('collaborate.cursors.presence'),
+                'distinctColors' => param('collaborate.cursors.distinct_colors'),
+                'shareStream' => param('collaborate.cursors.share_stream'),
+            ],
+            service('translator')->nullOnInvalid(),
         ])
         ->tag('twig.extension');
 };

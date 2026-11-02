@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Janalis\Collaborate\Controller;
 
 use Janalis\Collaborate\Cursor\CursorEvent;
+use Janalis\Collaborate\Cursor\CursorPosition;
 use Janalis\Collaborate\Hub\Admission;
 use Janalis\Collaborate\Hub\HubGuard;
 use Janalis\Collaborate\Hub\HubPublisher;
@@ -21,7 +22,12 @@ use Symfony\Component\Mercure\Update;
  */
 final readonly class CursorController
 {
-    /** @param non-empty-list<string> $colors */
+    /**
+     * @param non-empty-list<string> $colors
+     * @param array<string, string> $regions region name => root selector
+     * @param array<string, array<array-key, mixed>> $popups popup kind => its messages
+     * @param list<string> $caretRegions
+     */
     public function __construct(
         private HubGuard $guard,
         private CollaboratorProviderInterface $collaborators,
@@ -29,6 +35,9 @@ final readonly class CursorController
         private bool $enabled = true,
         private array $colors = ['blue'],
         private int $maxEventBytes = 4096,
+        private array $regions = [],
+        private array $popups = [],
+        private array $caretRegions = [],
     ) {}
 
     public function __invoke(Request $request): Response
@@ -40,7 +49,12 @@ final readonly class CursorController
         if (!$admission instanceof Admission) {
             return $admission;
         }
-        $event = CursorEvent::fromArray($admission->data);
+        $event = CursorEvent::fromArray(
+            $admission->data,
+            [] === $this->regions ? CursorPosition::REGIONS : array_keys($this->regions),
+            array_keys($this->popups),
+            $this->caretRegions,
+        );
         $event['userId'] = $admission->userId;
         $event['label'] = $this->collaborators->label($admission->user);
         $event['color'] = $this->colors[$admission->userId % \count($this->colors)];

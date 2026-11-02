@@ -21,6 +21,7 @@ use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Security\Csrf\CsrfToken;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
+use Symfony\Contracts\Translation\TranslatorInterface;
 use Twig\Environment;
 use Twig\Loader\FilesystemLoader;
 use Twig\RuntimeLoader\FactoryRuntimeLoader;
@@ -77,6 +78,7 @@ abstract class ExtensionTestCase extends TestCase
     /**
      * @param list<string> $granted
      * @param array{cursors?: bool, updates?: bool, throttle?: int, heartbeat?: int, expiry?: int, maxAvatars?: int, renew?: int, colors?: list<string>} $layer
+     * @param array<string, mixed> $host
      */
     protected function extension(
         mixed $user = null,
@@ -86,6 +88,8 @@ abstract class ExtensionTestCase extends TestCase
         string $role = 'ROLE_ADMIN',
         array &$granted = [],
         array $layer = [],
+        array $host = [],
+        ?TranslatorInterface $translator = null,
     ): CollaborateExtension {
         $requests = new RequestStack();
         if ($hasRequest) {
@@ -110,6 +114,8 @@ abstract class ExtensionTestCase extends TestCase
             new DraftAccess('secret', $drafts, new Topics(), $collaborators, new RoleDraftAccessChecker()),
             $role,
             $layer,
+            $host,
+            $translator,
         );
     }
 }

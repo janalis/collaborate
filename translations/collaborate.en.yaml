@@ -48,3 +48,11 @@
 'Synchronize the shared draft before saving.': 'Synchronize the shared draft before saving.'
 'This draft has already created its record. Open the saved record instead.': 'This draft has already created its record. Open the saved record instead.'
 'Also on this page': 'Also on this page'
+# Cursors and presence.
+'Show pointers': 'Show pointers'
+'idle': 'idle'
+'on %name%': 'on %name%'
+'on this page': 'on this page'
+'%name% is %place%': '%name% is %place%'
+'Also open by %names%.': 'Also open by %names%.'
+'in %name%': 'in %name%'

@@ -12,6 +12,7 @@ use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
 use Janalis\Collaborate\Tests\Fixtures\Arrays;
+use Janalis\Collaborate\Tests\Fixtures\TestPlaces;
 use Janalis\Collaborate\Tests\Fixtures\TestUser;
 use PHPUnit\Framework\MockObject\Stub;
 use PHPUnit\Framework\TestCase;
@@ -39,6 +40,7 @@ abstract class HubTestCase extends TestCase
     protected bool $csrf = true;
     protected ?Session $session = null;
     protected HubInterface&Stub $hub;
+    protected ?TestPlaces $places = null;
 
     /** @var array<string, bool> */
     protected array $granted = ['ROLE_ADMIN' => true, 'IS_AUTHENTICATED_REMEMBERED' => true];
@@ -81,19 +83,27 @@ abstract class HubTestCase extends TestCase
             ),
         );
 
-        return new HubGuard($security, $this->collaborators, $this->pages, $csrf, 'ROLE_ADMIN', $this->limiter);
+        return new HubGuard(
+            $security,
+            $this->collaborators,
+            $this->pages,
+            $csrf,
+            'ROLE_ADMIN',
+            $this->limiter,
+            $this->places,
+        );
     }
 
     /** @param array<string, mixed> $overrides */
     protected function request(string $path, array $overrides = []): Request
     {
         $data = array_replace([
-            'grant' => $this->pages->issue(
-                new Request(attributes: ['_route' => 'article_index']),
+            'grant' => self::issued($this->pages->issue(
+                new Request(attributes: ['_route' => 'article_index', '_place' => ['articles']]),
                 15,
                 time(),
                 $this->user->getRoles(),
-            ),
+            )),
             'clientId' => '12345678-1234-1234',
             'sequence' => 1,
             'kind' => 'move',
@@ -134,5 +144,13 @@ abstract class HubTestCase extends TestCase
     protected function decode(Response $response): array
     {
         return Arrays::json((string) $response->getContent());
+    }
+
+    /** A grant the page grant issued: every page of these tests is in a place, or none is asked. */
+    protected static function issued(?string $grant): string
+    {
+        self::assertNotNull($grant);
+
+        return $grant;
     }
 }

@@ -27,6 +27,9 @@ return static function (ContainerConfigurator $container): void {
         param('kernel.secret'),
         service(Topics::class),
         param('collaborate.cursors.grant_ttl'),
+        param('collaborate.cursors.ignored_parameters'),
+        // Aliased by CollaborateBundle::loadExtension() when `cursors.places` names a service.
+        service('janalis_collaborate.places')->nullOnInvalid(),
     ]);
 
     $services->set(DraftAccess::class)->args([

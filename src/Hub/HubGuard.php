@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Janalis\Collaborate\Hub;
 
 use Janalis\Collaborate\Cursor\PageGrant;
+use Janalis\Collaborate\Cursor\PlaceProviderInterface;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
@@ -18,7 +20,7 @@ use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 
 /**
  * The checks every hub request passes: the role, a bounded JSON body, a remembered session, the CSRF
- * token, the page grant of the signed-in user and the rate limit.
+ * token, the page grant of the signed-in user, the place it names, and the rate limit.
  *
  * @internal
  */
@@ -33,6 +35,7 @@ final readonly class HubGuard
         private CsrfTokenManagerInterface $csrf,
         private string $role = 'ROLE_ADMIN',
         private ?RateLimiterFactoryInterface $limiter = null,
+        private ?PlaceProviderInterface $places = null,
     ) {}
 
     /** @return Admission|JsonResponse the admitted request, or the 429 answer of a user over the rate limit */
@@ -53,12 +56,16 @@ final readonly class HubGuard
         if (!$this->csrf->isTokenValid(new CsrfToken(self::CSRF_TOKEN_ID, $request->headers->get('X-CSRF-Token')))) {
             throw new AccessDeniedException('Invalid cursor CSRF token.');
         }
-        $topic = $this->pages->topic(
+        $page = $this->pages->verify(
             \is_string($data['grant'] ?? null) ? $data['grant'] : '',
             $userId,
             time(),
             $this->collaborators->authorization($user),
         );
+        // A place the user lost while the grant lasts (a folder revoked) is refused at once.
+        if (null !== $page['place'] && !$this->places?->canEnter($user, $page['place'])) {
+            throw new AccessDeniedHttpException('The page grant names a place the user may no longer enter.');
+        }
         if (null !== $this->limiter && !$this->limiter->create((string) $userId)->consume()->isAccepted()) {
             return new JsonResponse(['error' => 'Cursor rate limit exceeded.'], 429, [
                 'Retry-After' => '1',
@@ -66,6 +73,6 @@ final readonly class HubGuard
             ]);
         }
 
-        return new Admission($user, $userId, $topic, $data);
+        return new Admission($user, $userId, $page['topic'], $data);
     }
 }

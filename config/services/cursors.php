@@ -22,6 +22,9 @@ return static function (ContainerConfigurator $container): void {
             param('collaborate.cursors.enabled'),
             param('collaborate.colors'),
             param('collaborate.cursors.max_event_bytes'),
+            param('collaborate.cursors.regions'),
+            param('collaborate.cursors.popups'),
+            param('collaborate.cursors.caret_regions'),
         ])
         ->tag('controller.service_arguments');
 };

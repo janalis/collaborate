@@ -9,6 +9,7 @@ use Janalis\Collaborate\Access\DraftAccessCheckerInterface;
 use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Controller\CursorController;
 use Janalis\Collaborate\Controller\HubController;
+use Janalis\Collaborate\Cursor\PageGrant;
 use Janalis\Collaborate\Doctrine\ChangeCollector;
 use Janalis\Collaborate\EasyAdmin\EasyAdminFormContext;
 use Janalis\Collaborate\EasyAdmin\UpdatesSubscriber;
@@ -131,6 +132,37 @@ final class CollaborateBundleTest extends TestCase
         self::assertEquals(
             new Reference('janalis_collaborate.limiter.cursors', ContainerInterface::NULL_ON_INVALID_REFERENCE),
             $container->getDefinition(HubGuard::class)->getArgument(5),
+        );
+    }
+
+    public function testAliasesThePlaceProviderOnlyWhenConfigured(): void
+    {
+        $container = $this->load(['cursors' => ['places' => 'app.places']]);
+        self::assertSame('app.places', (string) $container->getAlias('janalis_collaborate.places'));
+        self::assertFalse($this->load(['cursors' => ['places' => '']])->hasAlias('janalis_collaborate.places'));
+        self::assertFalse($this->load([])->hasAlias('janalis_collaborate.places'));
+        $places = new Reference('janalis_collaborate.places', ContainerInterface::NULL_ON_INVALID_REFERENCE);
+        self::assertEquals($places, $container->getDefinition(HubGuard::class)->getArgument(6));
+        self::assertEquals($places, $container->getDefinition(PageGrant::class)->getArgument(4));
+        self::assertSame(
+            CollaborateBundle::IGNORED_PARAMETERS,
+            $container->getParameter('collaborate.cursors.ignored_parameters'),
+        );
+    }
+
+    public function testASentenceKeepsItsPlaceholders(): void
+    {
+        // `%%name%%` in YAML: the configuration reaches the extension resolved.
+        $container = $this->load(['cursors' => ['popups' => ['share' => ['where' => 'in the sharing of %name%']]]]);
+        // As a compiled container holds them: resolved, then unescaped.
+        $bag = $container->getParameterBag();
+        self::assertSame(
+            ['share' => ['where' => 'in the sharing of %name%', 'line' => 'Also open by %names%.']],
+            $bag->unescapeValue($bag->resolveValue('%collaborate.cursors.popups%')),
+        );
+        self::assertSame(
+            'in the sharing of %name%',
+            $bag->unescapeValue($bag->resolveValue('%collaborate.cursors.popups.share.where%')),
         );
     }
 

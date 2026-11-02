@@ -79,6 +79,57 @@ final class CursorEventTest extends TestCase
         self::assertSame(str_repeat('a', 512), $this->event(['field' => str_repeat('a', 512)])['field']);
     }
 
+    public function testAHostNamesItsOwnRegions(): void
+    {
+        $regions = ['listing', 'modal'];
+        $anchor = ['selector' => 'tr[data-key="a"]', 'region' => 'listing', 'x' => 0, 'y' => 0];
+        self::assertSame($anchor, $this->host(['anchor' => $anchor], $regions)['anchor']);
+        $this->expectException(BadRequestHttpException::class);
+        $this->expectExceptionMessage('Invalid cursor anchor.');
+        $this->host(['anchor' => self::ANCHOR], $regions);
+    }
+
+    public function testOnlyTheCaretRegionsShareACaret(): void
+    {
+        $caret = ['selector' => 'input[name="q"]', 'region' => 'modal', 'start' => 1, 'end' => 1];
+        $host = ['anchor' => null, 'caret' => $caret];
+        self::assertSame($caret, $this->host($host, ['listing', 'modal'], [], ['modal', 'gone'])['caret']);
+        $this->expectException(BadRequestHttpException::class);
+        $this->expectExceptionMessage('Invalid cursor caret.');
+        $this->host(['caret' => ['region' => 'listing'] + $caret] + $host, ['listing', 'modal'], [], ['modal']);
+    }
+
+    public function testAPopupOfARecordIsOneOfTheHostsKinds(): void
+    {
+        $popup = ['kind' => 'share', 'key' => str_repeat('k', 255)];
+        // A popup alone keeps a peer known while their pointer is elsewhere.
+        $event = $this->host(['anchor' => null, 'popup' => $popup + ['extra' => 1]], popups: ['metadata', 'share']);
+        self::assertSame($popup, $event['popup']);
+        self::assertNull($this->host(['popup' => null], popups: ['share'])['popup']);
+        self::assertNull($this->host([], popups: ['share'])['popup']);
+        // A host without popups never hears of one.
+        self::assertArrayNotHasKey('popup', $this->event(['popup' => ['kind' => 'share', 'key' => 'k']]));
+    }
+
+    /** @return iterable<string, array{mixed}> */
+    public static function invalidPopups(): iterable
+    {
+        yield 'type' => ['share'];
+        yield 'kind' => [['kind' => 'evil', 'key' => 'k']];
+        yield 'missing kind' => [['key' => 'k']];
+        yield 'key type' => [['kind' => 'share', 'key' => 1]];
+        yield 'empty key' => [['kind' => 'share', 'key' => '']];
+        yield 'long key' => [['kind' => 'share', 'key' => str_repeat('k', 256)]];
+    }
+
+    #[DataProvider('invalidPopups')]
+    public function testRejectsAnInvalidPopup(mixed $popup): void
+    {
+        $this->expectException(BadRequestHttpException::class);
+        $this->expectExceptionMessage('Invalid cursor popup.');
+        $this->host(['popup' => $popup], popups: ['share']);
+    }
+
     /** @return iterable<string, array{array<string, mixed>, string}> */
     public static function invalidEvents(): iterable
     {
@@ -86,7 +137,7 @@ final class CursorEventTest extends TestCase
         $anchor = 'Invalid cursor anchor.';
         $caret = 'Invalid cursor caret.';
         $field = 'Invalid cursor field.';
-        $move = 'A cursor move requires an anchor, a caret or a field.';
+        $move = 'A cursor move requires an anchor, a caret, a field or a popup.';
         $box = static fn(array $anchor): array => ['anchor' => $anchor + ['selector' => 'x', 'region' => 'body']];
         $text = static fn(array $caret): array => ['caret' => $caret + ['selector' => 'x', 'region' => 'body']];
 
@@ -147,6 +198,34 @@ final class CursorEventTest extends TestCase
         $this->expectException(BadRequestHttpException::class);
         $this->expectExceptionMessage($message);
         $this->event($invalid);
+    }
+
+    /**
+     * @param array<string, mixed> $overrides
+     * @param list<string> $regions
+     * @param list<string> $popups
+     * @param list<string> $carets
+     *
+     * @return array<string, mixed>
+     */
+    private function host(
+        array $overrides = [],
+        array $regions = CursorPosition::REGIONS,
+        array $popups = [],
+        array $carets = [],
+    ): array {
+        return CursorEvent::fromArray(
+            array_replace([
+                'clientId' => '12345678-1234-1234',
+                'sequence' => 1,
+                'kind' => 'move',
+                'style' => 'mac',
+                'anchor' => self::ANCHOR,
+            ], $overrides),
+            $regions,
+            $popups,
+            $carets,
+        );
     }
 
     /**

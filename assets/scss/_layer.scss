@@ -1,0 +1,660 @@
+// Pointers, carets, field marks, presence and what a host's options add to them (markers, edge arrows, the
+// presence menu, a popup's presence line), as a module that needs no framework:
+//
+//     @use 'collaborate/assets/scss/layer' with ($colors: ('blue': #0d6efd, 'red': #dc3545));
+//
+// `$colors` names the colours of the `colors` option, each drawn with the black or white that reads best on it
+// unless `$contrasts` gives its own. The page's own colours come from custom properties a host may set: the
+// presence's ring and counters, its menu, the font and the focus ring, each defaulting to the system's colours,
+// which follow the colour scheme. `_cursors.scss` is the Bootstrap 5 entry, which loads this one.
+@use 'sass:color';
+@use 'sass:map';
+@use 'sass:math';
+
+$colors: () !default;
+$contrasts: () !default;
+
+// The relative luminance of a colour (WCAG 2.2).
+@function -luminance($value) {
+  $rgb: color.to-space($value, srgb);
+  $sum: 0;
+  @each $channel, $weight in ('red': 0.2126, 'green': 0.7152, 'blue': 0.0722) {
+    $c: math.clamp(0, color.channel($rgb, $channel, $space: srgb), 1);
+    @if $c <= 0.04045 {
+      $sum: $sum + $weight * math.div($c, 12.92);
+    } @else {
+      $sum: $sum + $weight * math.pow(math.div($c + 0.055, 1.055), 2.4);
+    }
+  }
+  @return $sum;
+}
+
+// Black or white, whichever reads best on a colour: a literal, a peer's colour being the same in both schemes.
+@function -contrast($value) {
+  $l: -luminance($value);
+  @if math.div($l + 0.05, 0.05) >= math.div(1.05, $l + 0.05) {
+    @return #000;
+  }
+  @return #fff;
+}
+
+@each $name, $value in $colors {
+  $contrast: map.get($contrasts, $name);
+  @if not $contrast {
+    $contrast: -contrast($value);
+  }
+  [data-collaborate-layer] [data-color='#{$name}'],
+  .collaborate-presence [data-color='#{$name}'],
+  [data-collaborate-popup-line] [data-color='#{$name}'],
+  [data-peer-focus='#{$name}'] {
+    --cursor-color: #{$value};
+    --cursor-contrast: #{$contrast};
+  }
+}
+
+[data-collaborate-layer] {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  pointer-events: none;
+  overflow: hidden;
+
+  // A popover of the top layer (`cursors.top_layer`): its own box, not a dialog's.
+  &[popover] {
+    width: auto;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+
+  // What the reader chose not to see: the pointers, carets and marks of the others.
+  &[data-hidden='true'] > * {
+    display: none;
+  }
+}
+
+.collaborate-cursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  will-change: transform;
+  transition: opacity 200ms ease;
+
+  &--fading {
+    opacity: 0;
+  }
+
+  // A pointer left where it is (`cursors.idle`): its peer is away from it.
+  &--idle {
+    opacity: 0.5;
+  }
+
+  &[data-edge='right'] .collaborate-cursor__label {
+    left: auto;
+    right: 4px;
+  }
+
+  &[data-bottom='true'] .collaborate-cursor__label {
+    top: auto;
+    bottom: 0;
+  }
+
+  color: var(--cursor-color);
+
+  &[hidden] {
+    display: none;
+  }
+
+  // A peer found from the presence menu: a ring around their pointer.
+  &.collaborate-pulse::before {
+    position: absolute;
+    top: -14px;
+    left: -14px;
+    width: 28px;
+    height: 28px;
+    content: '';
+    border: 3px solid var(--cursor-color);
+    border-radius: 50%;
+    animation: collaborate-ring 600ms ease-out 2;
+  }
+
+  svg {
+    display: block;
+    width: 24px;
+    height: 27px;
+    overflow: visible;
+    fill: currentColor;
+    fill-rule: evenodd;
+    stroke: var(--cursor-contrast);
+    // Paths trace the fill; the outline sits outside it, about 1 px wide, as in the platforms' own cursors.
+    stroke-width: 2.7;
+    stroke-linejoin: round;
+    paint-order: stroke;
+    filter: drop-shadow(0 1px 1px rgb(0 0 0 / 35%));
+  }
+
+  &[data-style='touch'] svg {
+    transform: translate(-50%, -50%);
+    fill-opacity: 0.45;
+  }
+
+  &__label {
+    position: absolute;
+    top: 24px;
+    left: 14px;
+    max-width: min(220px, 40vw);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 2px 6px;
+    border: 1px solid var(--cursor-contrast);
+    border-radius: 4px;
+    background: var(--cursor-color);
+    color: var(--cursor-contrast);
+    font: 600 12px/1.4 var(--collaborate-font, system-ui, sans-serif);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 20%);
+  }
+}
+
+// With idle pointers, a name shows while its pointer moves, and fades once it rests.
+[data-collaborate-layer][data-labels='moving'] .collaborate-cursor {
+  .collaborate-cursor__label {
+    opacity: 0;
+    transition: opacity 300ms ease;
+  }
+
+  &--labelled .collaborate-cursor__label {
+    opacity: 1;
+    transition: none;
+  }
+}
+
+// A peer's caret: a bar at the selection focus, the selection tinted, a name flag while it changes.
+.collaborate-caret {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+
+  &[hidden] {
+    display: none;
+  }
+
+  &__selection > div {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: var(--cursor-color);
+    opacity: 0.25;
+  }
+
+  &__bar {
+    position: absolute;
+    top: 0;
+    left: -1px;
+    width: 2px;
+    background: var(--cursor-color);
+    box-shadow: 0 0 0 0.5px var(--cursor-contrast);
+  }
+
+  &__label {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    max-width: min(220px, 40vw);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 4px;
+    border-radius: 3px 3px 3px 0;
+    background: var(--cursor-color);
+    color: var(--cursor-contrast);
+    font: 600 11px/1.5 var(--collaborate-font, system-ui, sans-serif);
+    opacity: 0;
+    transition: opacity 300ms ease;
+  }
+
+  &--labelled &__label {
+    opacity: 1;
+    transition: none;
+  }
+
+  &[data-edge='right'] &__label {
+    left: auto;
+    right: 0;
+    border-radius: 3px 3px 0;
+  }
+
+  &[data-top='true'] &__label {
+    bottom: auto;
+    top: 100%;
+    border-radius: 0 3px 3px;
+  }
+}
+
+// The field a peer is in, outlined in its colour and named above its top right corner. The name is
+// decoration: the alternative text after the slash keeps it out of the accessibility tree.
+[data-peer-focus] {
+  position: relative;
+  outline: 2px solid var(--cursor-color);
+  outline-offset: 3px;
+  border-radius: 2px;
+
+  &::after {
+    content: attr(data-peer-focus-label) / '';
+    position: absolute;
+    right: -3px;
+    bottom: calc(100% + 3px);
+    z-index: 1;
+    max-width: min(220px, 60%);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 4px;
+    border-radius: 3px 3px 0 0;
+    background: var(--cursor-color);
+    color: var(--cursor-contrast);
+    font: 600 11px/1.5 var(--collaborate-font, system-ui, sans-serif);
+    pointer-events: none;
+  }
+}
+
+// A pointer on a record its pane scrolled out of sight (`cursors.edges`): an arrow on the edge, toward it.
+.collaborate-edge {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+  height: 20px;
+  padding: 0 6px;
+  font: 600 11px/1 var(--collaborate-font, system-ui, sans-serif);
+  color: var(--cursor-contrast);
+  white-space: nowrap;
+  background: var(--cursor-color);
+  border: 1px solid var(--cursor-contrast);
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 20%);
+  translate: -50% 4px;
+
+  &[hidden] {
+    display: none;
+  }
+
+  &::before {
+    content: '\2191';
+  }
+
+  &[data-side='below'] {
+    translate: -50% calc(-100% - 4px);
+
+    &::before {
+      content: '\2193';
+    }
+  }
+}
+
+// A record a peer points at or has a popup of (`cursors.markers`): a bar in their colour along its start,
+// and their initials.
+.collaborate-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cursor-color) 45%, transparent);
+
+  &[hidden] {
+    display: none;
+  }
+
+  &.collaborate-pulse {
+    animation: collaborate-marker 600ms ease-out 2;
+  }
+
+  &__bar {
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    left: 0;
+    width: 3px;
+    background: var(--cursor-color);
+    border-radius: 2px;
+  }
+
+  &__users {
+    position: absolute;
+    top: 50%;
+    left: calc(var(--marker-end) - 6px);
+    display: flex;
+    translate: -100% -50%;
+  }
+
+  &[data-shape='tile'] &__users {
+    top: 6px;
+    translate: -100% 0;
+  }
+
+  &__user,
+  &__more {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 3px;
+    font: 600 10px/1 var(--collaborate-font, system-ui, sans-serif);
+    border-radius: 9px;
+    box-shadow: 0 0 0 1.5px var(--collaborate-ring, Canvas);
+
+    & + & {
+      margin-inline-start: -4px;
+    }
+  }
+
+  &__user {
+    color: var(--cursor-contrast);
+    background: var(--cursor-color);
+  }
+
+  &__more {
+    color: var(--collaborate-muted-fg, CanvasText);
+    background: var(--collaborate-muted-bg, color-mix(in srgb, CanvasText 12%, Canvas));
+  }
+}
+
+@keyframes collaborate-ring {
+  from {
+    opacity: 1;
+    transform: scale(0.6);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+
+@keyframes collaborate-marker {
+  from {
+    box-shadow:
+      inset 0 0 0 1px var(--cursor-color),
+      0 0 0 0 var(--cursor-color);
+  }
+
+  to {
+    box-shadow:
+      inset 0 0 0 1px var(--cursor-color),
+      0 0 0 8px transparent;
+  }
+}
+
+// In a popup of a record, the peers who have it open too.
+.collaborate-popup-presence,
+[data-collaborate-popup-line] {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  margin: 0 0 0.75rem;
+  font-size: 0.875em;
+
+  // Empty while nobody else has it open: still there, for screen readers to hear it speak.
+  &:empty {
+    margin: 0;
+  }
+}
+
+// A peer's initial in a list: the presence menu, a popup's line.
+.collaborate-popup-presence__swatch,
+.collaborate-presence__swatch {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  overflow: hidden;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--cursor-contrast);
+  background: var(--cursor-color);
+  border-radius: 50%;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  & + span {
+    margin-inline-start: 0.25rem;
+  }
+}
+
+// Peers on the page, each ringed in its cursor colour, overlapping the next.
+.collaborate-presence {
+  --presence-ring: var(--collaborate-ring, Canvas);
+  align-items: center;
+  display: flex;
+
+  &[hidden] {
+    display: none;
+  }
+
+  &__user,
+  &__more {
+    align-items: center;
+    border-radius: 50%;
+    box-sizing: border-box;
+    display: inline-flex;
+    flex: none;
+    font-size: 0.75rem;
+    font-weight: 600;
+    height: 28px;
+    justify-content: center;
+    overflow: hidden;
+    width: 28px;
+
+    & + & {
+      margin-left: -6px;
+    }
+  }
+
+  &__user {
+    background: var(--cursor-color);
+    border: 2px solid var(--cursor-color);
+    // Separates overlapping avatars against the header, light or dark.
+    box-shadow: 0 0 0 2px var(--presence-ring);
+    color: var(--cursor-contrast);
+
+    img {
+      height: 100%;
+      object-fit: cover;
+      width: 100%;
+    }
+  }
+
+  &__more {
+    background: var(--collaborate-muted-bg, color-mix(in srgb, CanvasText 12%, Canvas));
+    box-shadow: 0 0 0 2px var(--presence-ring);
+    color: var(--collaborate-muted-fg, CanvasText);
+  }
+
+  // `presence: menu`: the avatars are the button of a menu, nothing around them.
+  &__toggle {
+    display: flex;
+    align-items: center;
+    padding: 2px;
+    color: inherit;
+    font: inherit;
+    background: none;
+    border: 0;
+    border-radius: 16px;
+    cursor: pointer;
+
+    &:focus-visible {
+      outline: var(--collaborate-focus, 2px solid Highlight);
+      outline-offset: 2px;
+    }
+  }
+
+  &__menu {
+    position: fixed;
+    inset: auto;
+    min-width: 14rem;
+    max-width: min(22rem, calc(100vw - 2rem));
+    margin: 0;
+    padding: 0.5rem 0;
+    color: var(--collaborate-menu-fg, CanvasText);
+    font: inherit;
+    background: var(--collaborate-menu-bg, Canvas);
+    border: 1px solid var(--collaborate-menu-border, color-mix(in srgb, CanvasText 20%, Canvas));
+    border-radius: 0.5rem;
+    box-shadow: 0 0.5rem 1rem rgb(0 0 0 / 15%);
+  }
+
+  &__header {
+    display: block;
+    padding: 0.25rem 1rem;
+    font-size: 0.875em;
+    color: var(--collaborate-muted-fg, GrayText);
+  }
+
+  &__divider {
+    margin: 0.5rem 0;
+    border: 0;
+    border-top: 1px solid var(--collaborate-menu-border, color-mix(in srgb, CanvasText 20%, Canvas));
+  }
+
+  // A peer of the menu: their initial, their name, and where they are under it.
+  &__item {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    width: 100%;
+    padding: 0.375rem 1rem;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    background: none;
+    border: 0;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      background: var(--collaborate-menu-hover, color-mix(in srgb, CanvasText 8%, Canvas));
+      outline: 0;
+    }
+
+    &[data-idle='true'] .collaborate-presence__swatch {
+      opacity: 0.6;
+    }
+  }
+
+  &__pointers::before {
+    width: 1rem;
+    content: '';
+  }
+
+  &__pointers[aria-checked='true']::before {
+    content: '\2713';
+  }
+
+  &__text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  &__name,
+  &__where {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__where {
+    font-size: 0.75em;
+    color: var(--collaborate-muted-fg, GrayText);
+
+    &:empty {
+      display: none;
+    }
+  }
+
+  // A narrow header has room for one peer and the count of the others.
+  @media (max-width: 575.98px) {
+    .collaborate-presence--wide {
+      display: none;
+    }
+  }
+
+  @media (min-width: 576px) {
+    .collaborate-presence--narrow {
+      display: none;
+    }
+  }
+}
+
+// What the presence menu says of a peer found: heard, not seen.
+.collaborate-announce {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .collaborate-cursor,
+  .collaborate-cursor__label,
+  .collaborate-caret__label,
+  [data-collaborate-layer][data-labels='moving'] .collaborate-cursor .collaborate-cursor__label {
+    transition: none;
+  }
+
+  // A ring that stays, rather than one that grows.
+  .collaborate-cursor.collaborate-pulse::before,
+  .collaborate-marker.collaborate-pulse {
+    animation: none;
+  }
+
+  .collaborate-marker.collaborate-pulse {
+    box-shadow: inset 0 0 0 2px var(--cursor-color);
+  }
+}
+
+// The system's colours, where they replace the page's: a caret and its selection are drawn by their background
+// alone, which would be the page's, and a peer by their circle.
+@media (forced-colors: active) {
+  .collaborate-caret__bar,
+  .collaborate-caret__selection > div,
+  .collaborate-marker__bar,
+  .collaborate-edge {
+    forced-color-adjust: none;
+    background: Highlight;
+  }
+
+  .collaborate-edge {
+    color: HighlightText;
+  }
+
+  .collaborate-presence__user,
+  .collaborate-presence__more,
+  .collaborate-presence__swatch,
+  .collaborate-popup-presence__swatch {
+    border: 1px solid CanvasText;
+  }
+
+  .collaborate-marker {
+    box-shadow: inset 0 0 0 2px Highlight;
+  }
+}

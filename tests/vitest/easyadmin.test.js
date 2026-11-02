@@ -6,13 +6,15 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
+// The first import of the entry point loads every module it starts, CKEditor's included: about 3 s alone, more
+// beside the other suites, past Vitest's 5 s default.
 test('re-exports the draft session lookup and the row initializer registry', async () => {
   const entry = await import('../../assets/easyadmin.js');
   const { sessionFor } = await import('../../assets/draft/session.js');
   const { addRowInitializer } = await import('../../assets/draft/hooks.js');
   expect(entry.sessionFor).toBe(sessionFor);
   expect(entry.addRowInitializer).toBe(addRowInitializer);
-});
+}, 30_000);
 
 test('starts cursors and updates on the layer, through the fetch captured before any host wrapper', async () => {
   vi.stubGlobal('matchMedia', () => ({ matches: false }));

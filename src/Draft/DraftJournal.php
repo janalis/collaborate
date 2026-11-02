@@ -21,12 +21,15 @@ use Symfony\Contracts\Service\ResetInterface;
  * @phpstan-type Batch array{id: string, field: string, kind: string, version: int, revision: int, userId: int, label: string, operations?: list<array<string, mixed>>, value?: mixed, labels?: array<array-key, string>, fields?: list<string>}
  * @phpstan-type Actor array{userId: int, label: string}
  * @phpstan-type Draft array{id: string, generation: int, revision: int, savedRevision: int, bytes: int, recordId: string|null, updatedAt: string, fields: array<string, Field>, savedBy?: Actor|null}
- * @phpstan-type View array{generation: int, revision: int, savedRevision: int, recordId: string|null, savedBy: Actor|null, fields: array<string, Field>, digest: string, stamp: string, events: list<Batch>, conflicts: array<string, mixed>}
+ * @phpstan-type View array{generation: int, revision: int, savedRevision: int, recordId: string|null, savedBy: Actor|null, fields: array<string, Field>, digest: string, stamp: string, events: list<Batch>, conflicts: array<string, mixed>, rebasedFrom: list<int>}
  */
 class DraftJournal implements ResetInterface
 {
     /** The conflict a second creation answers, also the key of the warning its form shows. */
     public const string ALREADY_CREATED = 'This draft has already created its record. Open the saved record instead.';
+
+    /** The batch id of the event row naming the generations a compaction replaced; no batch reads it. */
+    private const string REBASE = 'rebase';
 
     /** The largest update, in stored UTF-8 bytes. */
     private int $maxUpdateBytes;
@@ -133,10 +136,19 @@ class DraftJournal implements ResetInterface
                     \ARRAY_FILTER_USE_BOTH,
                 );
                 if ($large || \count($kept) < \count($draft['fields'])) {
+                    // A page still on a replaced generation finds it here: with nothing unsent, it lost nothing.
+                    $rebasedFrom = [...$this->rebasedFrom($id), $draft['generation']];
                     ++$draft['generation'];
                     ++$draft['revision'];
                     $draft['savedRevision'] = $draft['revision'];
                     $this->db()->delete('collaborate_draft_event', ['draft_id' => $id]);
+                    $this->db()->insert('collaborate_draft_event', [
+                        'draft_id' => $id,
+                        'revision' => $draft['revision'],
+                        'batch_id' => self::REBASE,
+                        'field' => '',
+                        'payload' => json_encode($rebasedFrom, \JSON_THROW_ON_ERROR),
+                    ]);
                     $draft['bytes'] = 0;
                     $draft['fields'] = $kept;
                     $compacted = true;
@@ -1072,42 +1084,70 @@ class DraftJournal implements ResetInterface
     /** @return Batch|null */
     private function batch(string $id, string $batchId): ?array
     {
-        return (
-            $this->decode($this->db()->fetchFirstColumn('SELECT payload FROM collaborate_draft_event WHERE draft_id = ? AND batch_id = ?', [
-                $id,
-                $batchId,
-            ]))[0] ?? null
-        );
+        $payload = $this->db()->fetchOne('SELECT payload FROM collaborate_draft_event WHERE draft_id = ? AND batch_id = ?', [
+            $id,
+            $batchId,
+        ]);
+        if (false === $payload) {
+            return null;
+        }
+        /** @var Batch $batch */
+        $batch = json_decode((string) $payload, true, flags: \JSON_THROW_ON_ERROR);
+
+        return $batch;
     }
 
-    /** @return list<Batch> */
+    /** The batches after `since`, and the generations compactions replaced when the last one falls after `since`
+     * too: a page still on one of those generations replays from a revision before it.
+     *
+     * @return array{list<Batch>, list<int>}
+     */
     private function events(string $id, int $since): array
     {
-        return $this->decode($this->db()->fetchFirstColumn('SELECT payload FROM collaborate_draft_event WHERE draft_id = ? AND revision > ? ORDER BY revision', [
+        $events = [];
+        $rebasedFrom = [];
+        /** @var list<string> $payloads a JSON column */
+        $payloads = $this->db()->fetchFirstColumn('SELECT payload FROM collaborate_draft_event WHERE draft_id = ? AND revision > ? ORDER BY revision', [
             $id,
             $since,
-        ]));
-    }
-
-    /** @param list<mixed> $payloads
-     * @return list<Batch>
-     */
-    private function decode(array $payloads): array
-    {
-        $events = [];
+        ]);
         foreach ($payloads as $payload) {
-            /** @var Batch $event */
-            $event = json_decode((string) $payload, true, flags: \JSON_THROW_ON_ERROR);
-            $events[] = $event;
+            /** @var array<mixed> $row */
+            $row = json_decode($payload, true, flags: \JSON_THROW_ON_ERROR);
+            // A batch is an object; the row a compaction leaves, the list of the generations it replaced.
+            if (array_is_list($row)) {
+                /** @var list<int> $row */
+                $rebasedFrom = $row;
+            } else {
+                /** @var Batch $row */
+                $events[] = $row;
+            }
         }
 
-        return $events;
+        return [$events, $rebasedFrom];
+    }
+
+    /** @return list<int> the generations compactions replaced, oldest first, since the draft was created */
+    private function rebasedFrom(string $id): array
+    {
+        $payload = $this->db()->fetchOne('SELECT payload FROM collaborate_draft_event WHERE draft_id = ? AND batch_id = ?', [
+            $id,
+            self::REBASE,
+        ]);
+        if (false === $payload) {
+            return [];
+        }
+        /** @var list<int> $generations */
+        $generations = json_decode((string) $payload, true, flags: \JSON_THROW_ON_ERROR);
+
+        return $generations;
     }
 
     private function size(string $id): int
     {
-        return (int) $this->db()->fetchOne('SELECT COALESCE(SUM(LENGTH(payload)), 0) FROM collaborate_draft_event WHERE draft_id = ?', [
+        return (int) $this->db()->fetchOne('SELECT COALESCE(SUM(LENGTH(payload)), 0) FROM collaborate_draft_event WHERE draft_id = ? AND batch_id <> ?', [
             $id,
+            self::REBASE,
         ]);
     }
 
@@ -1120,6 +1160,7 @@ class DraftJournal implements ResetInterface
     {
         $fields = $this->allowedFields($draft, $allowed);
         $clean = [] === array_filter($fields, $this->unsaved(...));
+        [$events, $rebasedFrom] = $this->events($draft['id'], $since);
 
         return [
             'generation' => $draft['generation'],
@@ -1131,7 +1172,8 @@ class DraftJournal implements ResetInterface
             'fields' => $fields,
             'digest' => hash('xxh128', json_encode($fields, \JSON_THROW_ON_ERROR)),
             'stamp' => $draft['updatedAt'],
-            'events' => $this->readable($this->events($draft['id'], $since), $allowed),
+            'events' => $this->readable($events, $allowed),
+            'rebasedFrom' => $rebasedFrom,
         ];
     }
 

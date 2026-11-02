@@ -103,6 +103,42 @@ test.describe('the limits of a shared draft', () => {
     await expect(alice.control('title')).toHaveValue('After compaction');
   });
 
+  test('reload a page that sent every edit when its draft is compacted before it hears of the save', async ({
+    article,
+    editor,
+  }) => {
+    test.setTimeout(90_000);
+    const id = await article();
+    const alice = await editor('alice');
+    const bob = await editor('bob');
+    await alice.edit(id);
+    await bob.edit(id);
+    await alice.control('summary').fill(words(300, 'r'));
+    await expect(bob.control('summary')).toHaveValue(words(300, 'r'));
+    await alice.synchronized();
+    await bob.exposeSession();
+    const generation = await bob.page.evaluate(() => window.collaborateSession().generation);
+
+    // Bob's page reads nothing until Alice's reloaded page has compacted the draft: it never hears of the save,
+    // and by itself does not look saved. Its first replay finds the generation replaced, and it reloads.
+    const replays = await bob.hold('**/admin/collaborate/replay');
+    const rejoined = bob.page.waitForRequest((request) => request.url().endsWith('/collaborate/join'), {
+      timeout: 60_000,
+    });
+    await alice.saveButton.click();
+    await alice.joined();
+    await replays.held;
+    await expect(bob.bar).not.toHaveText('Shared draft saved by Alice.');
+    await replays.release();
+    await rejoined;
+    await bob.joined();
+    await bob.exposeSession();
+    expect(await bob.page.evaluate(() => window.collaborateSession().generation)).not.toBe(generation);
+    await expect(bob.control('summary')).toHaveValue(words(300, 'r'));
+    await bob.control('title').fill('After compaction');
+    await expect(alice.control('title')).toHaveValue('After compaction');
+  });
+
   test('keep the unsent edits of a page when its draft is compacted', async ({ article, editor }) => {
     const id = await article();
     const alice = await editor('alice');

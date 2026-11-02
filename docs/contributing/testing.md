@@ -199,6 +199,7 @@ alone, have a table of their own below.
 | Journal of one draft full | `limits › stop a journal grown past its size` | | | ✓ |
 | Field states: new collection entries refused | `limits › refuse new collection entries past the field states it may hold` | | | ✓ |
 | Compaction on Join; a page showing the saved draft reloads on its own | `limits › compact a saved draft on the next Join, reloading the pages that showed it` | | | ✓ |
+| Compaction before a page heard of the save; with nothing unsent it reloads on its own | `limits › reload a page that sent every edit when its draft is compacted before it hears of the save` | | | ✓ |
 | Compaction; a page with unsent edits keeps them (Reset) | `limits › keep the unsent edits of a page when its draft is compacted` | | | ✓ |
 | **Grants** | | | | |
 | Short grant refused (412): full grant sent again | `grants › resend the full field grant when the server no longer knows its signature` | ✓ | ✓ | |

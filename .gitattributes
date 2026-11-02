@@ -1,0 +1,21 @@
+# Left out of the Composer package: a host needs src/, config/, templates/, translations/ and assets/.
+/.editorconfig export-ignore
+/.editorconfig-checker.json export-ignore
+/.gitattributes export-ignore
+/.github/ export-ignore
+/.gitignore export-ignore
+/.markdownlint-cli2.jsonc export-ignore
+/biome.json export-ignore
+/composer.lock export-ignore
+/CONTRIBUTING.md export-ignore
+/docs/ export-ignore
+/infection.json5.dist export-ignore
+/mago.toml export-ignore
+/Makefile export-ignore
+/package-lock.json export-ignore
+/package.json export-ignore
+/phpunit.xml.dist export-ignore
+/playwright.config.js export-ignore
+/tests/ export-ignore
+/tools/ export-ignore
+/vitest.config.mjs export-ignore

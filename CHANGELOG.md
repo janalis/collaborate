@@ -24,6 +24,22 @@ versions follow [Semantic Versioning](https://semver.org/).
   `_cursors.scss` loads it.
 - A tab sends less often past three peers.
 
+### Fixed
+
+- A page that sent every edit reloads on its own when a compaction replaces
+  its generation before it heard of the last Save, instead of stopping in
+  *Reset*: compactions record the generations they replaced, and views answer
+  them as `rebasedFrom`.
+- Packages leave out the tests, documentation sources and tooling.
+
+### Documentation
+
+- Discard resets fields to the values the draft last saved and never reads
+  the record; the review of a record saved elsewhere stays open until **Use
+  saved record**.
+- Pages without EasyAdmin render each form row inside a `form-group`
+  element, which field marks outline.
+
 ## [0.1.0] - 2026-11-02
 
 ### Added

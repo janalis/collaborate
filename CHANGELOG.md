@@ -5,6 +5,16 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Shared drafts and field marks work with every stock Symfony form theme
+  (`form_div_layout`, `form_table_layout`, Bootstrap 3/4/5, Foundation 5/6,
+  Tailwind 2, daisyUI 5), not only with `.form-group` rows and EasyAdmin's
+  collection markup. A shared form marks its rows (`data-collaborate-row`),
+  its collections' widgets (`data-collaborate-entries`,
+  `data-collaborate-placeholder`) and their entries
+  (`data-collaborate-entry`); EasyAdmin's markup is still read.
+
 ## [0.1.2] - 2026-11-03
 
 ### Fixed

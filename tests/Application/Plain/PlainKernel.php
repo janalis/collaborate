@@ -16,6 +16,16 @@ use Symfony\Component\Routing\Loader\Configurator\RoutingConfigurator;
  */
 final class PlainKernel extends AppKernel
 {
+    /**
+     * The browser environments that render the pages with another stock form theme than Bootstrap 5's: the
+     * bundle reads the markup of every one.
+     */
+    public const array FORM_THEMES = [
+        'e2e_div' => 'form_div_layout.html.twig',
+        'e2e_table' => 'form_table_layout.html.twig',
+        'e2e_tailwind' => 'tailwind_2_layout.html.twig',
+    ];
+
     public static function app(): string
     {
         return 'plain';
@@ -28,7 +38,9 @@ final class PlainKernel extends AppKernel
 
     protected function configureApp(ContainerConfigurator $container, ServicesConfigurator $services): void
     {
-        $container->extension('twig', ['form_themes' => ['bootstrap_5_layout.html.twig']]);
+        $container->extension('twig', [
+            'form_themes' => [self::FORM_THEMES[$this->environment] ?? 'bootstrap_5_layout.html.twig'],
+        ]);
         $services->set(PlainFormContext::class);
         $services->alias(FormContextInterface::class, PlainFormContext::class);
         $services->set(ArticleController::class)->tag('controller.service_arguments');

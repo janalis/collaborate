@@ -1,4 +1,5 @@
 import { backgroundFetch, hubFor, layerConfig } from '../hub.js';
+import { rowOf } from '../markup.js';
 import { captureCaret, focusedField, MAX_CARET_OFFSET, resolveCaret, sameCaret } from './carets.js';
 import {
   CURSOR_COLORS,
@@ -363,7 +364,7 @@ export function initCursors(
       for (const form of document.querySelectorAll('form[data-collaborate]')) {
         const found = form.elements.namedItem(peer.field);
         const control = found instanceof RadioNodeList ? found[0] : found;
-        const group = control?.closest('.form-group') || control;
+        const group = rowOf(control) || control;
         if (!group) continue;
         if (!marked.has(group)) marked.set(group, []);
         marked.get(group).push(peer);

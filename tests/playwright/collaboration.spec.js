@@ -36,12 +36,16 @@ test.describe('an edit page shared by two editors', () => {
 
     await title.click();
     await title.press('End');
-    // The field's group carries the mark: the control itself, or its EasyAdmin `.form-group`.
+    // The field's row carries the mark, its label included: the row the form theme renders, or EasyAdmin's
+    // `.form-group`.
     const marked = alice.form.locator('[data-peer-focus-label="Bob"]');
     await expect(marked).toHaveCount(1);
     expect(
       await marked.evaluate(
-        (mark) => mark.matches('[name$="[title]"]') || mark.querySelector('[name$="[title]"]') !== null
+        (mark) =>
+          mark.matches('[data-collaborate-row], .form-group') &&
+          mark.querySelector('[name$="[title]"]') !== null &&
+          mark.querySelector('label') !== null
       )
     ).toBe(true);
     await expect(alice.page.locator('[data-collaborate-layer] .collaborate-caret').first()).toBeAttached();

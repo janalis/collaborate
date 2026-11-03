@@ -576,3 +576,77 @@ test('leaves in place a row the page loaded without a named control', () => {
   expect(row.dataset.collaborateItem).toBe('a');
   restart();
 });
+
+// Symfony's own themes: the prototype and its placeholder on the widget, each entry a row the form extension
+// marks, a table layout's entries table rows.
+function stockSession(form) {
+  return {
+    form,
+    state: { fields: {} },
+    adapters: new Map(),
+    editorWaiters: new Map(),
+    initializeControls: vi.fn(),
+    schedule: vi.fn(),
+    setStatus: vi.fn(),
+    ensureField(name) {
+      this.state.fields[name] ||= { type: 'member', initial: { alive: false, order: 0, recordId: null } };
+      return this.state.fields[name];
+    },
+    register(name, adapter) {
+      this.adapters.set(name, adapter);
+    },
+    formName(name) {
+      return name;
+    },
+  };
+}
+
+test.each([
+  ['div', 'div', 'div'],
+  ['table', 'table', 'tr'],
+])('adds and removes peer entries in a %s layout collection', (_, widgetTag, entryTag) => {
+  const cell = (inner) => (entryTag === 'tr' ? `<td>${inner}</td>` : inner);
+  const entry = (key) =>
+    `<${entryTag} data-collaborate-row data-collaborate-entry>${cell(`<input name="Record[items][${key}][title]">`)}</${entryTag}>`;
+  document.body.innerHTML = `<form><div data-collaborate-row data-collaborate-collection="Record[items]">
+    <label>Items</label><${widgetTag} data-collaborate-entries="Record[items]" data-collaborate-placeholder="__item__"></${widgetTag}>
+  </div></form>`;
+  const form = document.querySelector('form');
+  const widget = form.querySelector('[data-collaborate-entries]');
+  widget.dataset.prototype = entry('__item__');
+  // A table's rows are its body's: the parser puts them there.
+  const parent = () => (entryTag === 'tr' ? widget.querySelector('tbody') : widget);
+  if (entryTag === 'tr') widget.innerHTML = `<tbody>${entry('i1')}</tbody>`;
+  else widget.innerHTML = entry('i1');
+  const session = stockSession(form);
+  session.state.fields['Record[items][@i1]'] = {
+    type: 'member',
+    initial: { alive: true, order: 1, recordId: '1' },
+    value: { alive: true, order: 1, recordId: '1' },
+  };
+  const stop = initializeCollections(session);
+  session.state.fields['Record[items][@remote]'] = { type: 'member', value: { alive: true, order: 2 } };
+  session.scanCollections();
+  const added = form.querySelector('[data-collaborate-item="remote"]');
+  expect(added.tagName).toBe(entryTag.toUpperCase());
+  expect(added.parentElement).toBe(parent());
+  expect(added.querySelector('input').name).toBe('Record[items][remote][title]');
+  session.adapters.get('Record[items][@i1]').receive({ id: 'gone', version: 0, value: { alive: false, order: 1 } });
+  expect(form.querySelectorAll('[data-collaborate-entry]')).toHaveLength(1);
+  expect(session.setStatus).not.toHaveBeenCalled();
+  stop();
+});
+
+test('adds the first peer entry to an empty stock collection widget', () => {
+  document.body.innerHTML = `<form><div data-collaborate-collection="Record[items]">
+    <div data-collaborate-entries="Record[items]"></div></div></form>`;
+  const form = document.querySelector('form');
+  const widget = form.querySelector('[data-collaborate-entries]');
+  widget.dataset.prototype = '<div data-collaborate-entry><input name="Record[items][__name__][title]"></div>';
+  const session = stockSession(form);
+  const stop = initializeCollections(session);
+  session.state.fields['Record[items][@first]'] = { type: 'member', value: { alive: true, order: 1 } };
+  session.scanCollections();
+  expect(widget.querySelector('[data-collaborate-item="first"] input').name).toBe('Record[items][first][title]');
+  stop();
+});

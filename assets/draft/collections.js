@@ -1,3 +1,4 @@
+import { ENTRY, entriesOf, parseEntry, placeholderOf, prototypeOf } from '../markup.js';
 import { valueAdapter } from './fields.js';
 import { initializeRow } from './hooks.js';
 
@@ -27,10 +28,10 @@ export function initializeCollections(session) {
     let bootstrapping = true;
     let renderedOrder = [];
     const ownNodes = () =>
-      Array.from(container.querySelectorAll('.field-collection-item')).filter(
+      Array.from(container.querySelectorAll(ENTRY)).filter(
         (node) =>
           node.closest('[data-collaborate-collection]') === container &&
-          node.parentElement.closest('.field-collection-item')?.closest('[data-collaborate-collection]') !== container
+          node.parentElement.closest(ENTRY)?.closest('[data-collaborate-collection]') !== container
       );
 
     function keyOf(node) {
@@ -61,6 +62,7 @@ export function initializeCollections(session) {
       }
       const parent =
         ownNodes()[0]?.parentElement ||
+        entriesOf(container) ||
         container.querySelector(
           '.ea-form-collection-items .accordion > .form-widget-compound [data-empty-collection]'
         ) ||
@@ -71,15 +73,12 @@ export function initializeCollections(session) {
       for (const [key] of ordered) {
         let node = nodes.get(key);
         if (!node) {
-          const prototype = container.dataset.prototype;
+          const prototype = prototypeOf(container);
           if (!prototype) {
             session.setStatus('incompatible');
             continue;
           }
-          const placeholder = container.dataset.formTypeNamePlaceholder || '__name__';
-          const template = document.createElement('template');
-          template.innerHTML = prototype.replaceAll(placeholder, key);
-          node = template.content.firstElementChild;
+          node = parseEntry(prototype.replaceAll(placeholderOf(container), key));
           if (!node) continue;
           node.dataset.collaborateItem = key;
           parent.append(node);
@@ -223,7 +222,7 @@ export function initializeCollections(session) {
   // A childList record's target is the element whose children changed.
   const ignored = (target) => target.closest('.ck, [data-collaborate-bar], [data-collaborate-conflicts]');
   // Widgets redraw their options and messages as the user types: only an entry, a collection or a control is scanned for.
-  const relevant = '.field-collection-item, [data-collaborate-collection], [name]';
+  const relevant = `${ENTRY}, [data-collaborate-collection], [name]`;
   const structural = (node) =>
     node.nodeType === Node.ELEMENT_NODE && (node.matches(relevant) || node.querySelector(relevant) !== null);
   const observer = new MutationObserver((records) => {

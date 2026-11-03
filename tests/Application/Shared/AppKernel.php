@@ -36,7 +36,8 @@ use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
  *
  * Environments: `test` (PHPUnit: mock sessions, a {@see RecordingHub}), `e2e` (FrankenPHP: file sessions,
  * the hub the web server runs at `MERCURE_URL`, two avatars before the `+N` counter) and `e2e_limits` (`e2e`
- * with the smallest draft limits, {@see LIMITS}).
+ * with the smallest draft limits, {@see LIMITS}); the plain application also runs `e2e_div`, `e2e_table` and
+ * `e2e_tailwind`, `e2e` rendered by another stock form theme ({@see \Janalis\Collaborate\Tests\Application\Plain\PlainKernel::FORM_THEMES}).
  */
 abstract class AppKernel extends Kernel
 {

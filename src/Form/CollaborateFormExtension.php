@@ -299,6 +299,22 @@ final class CollaborateFormExtension extends AbstractTypeExtension
             $rowAttributes = $view->vars['row_attr'];
             $rowAttributes['data-collaborate-collection'] = $this->path($form);
             $view->vars['row_attr'] = $rowAttributes;
+            // Every stock form theme renders the widget's `attr` and each entry's `row_attr`: the scripts find the
+            // entries, and the element a peer's entry is added to, by these attributes whatever the theme.
+            /** @var array<string, mixed> $attributes */
+            $attributes = $view->vars['attr'];
+            $attributes['data-collaborate-entries'] = $this->path($form);
+            /** @var string $placeholder CollectionType's option, `__name__` unless set. */
+            $placeholder = $form->getConfig()->getOption('prototype_name', '__name__');
+            $attributes['data-collaborate-placeholder'] = $placeholder;
+            $view->vars['attr'] = $attributes;
+            $entries = $view->children;
+            if (($view->vars['prototype'] ?? null) instanceof FormView) {
+                $entries[] = $view->vars['prototype'];
+            }
+            foreach ($entries as $entry) {
+                self::addRowAttribute($entry, 'data-collaborate-entry');
+            }
         }
         $sharing = $this->sharing($form);
         if (null === $sharing) {
@@ -346,6 +362,7 @@ final class CollaborateFormExtension extends AbstractTypeExtension
             \JSON_THROW_ON_ERROR,
         );
         $view->vars['attr'] = $attributes;
+        self::markRows($view);
         if ($scope['new']) {
             /** @var string $action */
             $action = $view->vars['action'];
@@ -359,6 +376,31 @@ final class CollaborateFormExtension extends AbstractTypeExtension
                 $view->vars['action'] = $parts[0] . '?' . http_build_query($query);
             }
         }
+    }
+
+    /**
+     * Marks the row of every field below `$view`, collection prototypes included, with `data-collaborate-row`: a
+     * peer's field mark outlines that row, and a focused widget names the field of its row, whatever the theme.
+     */
+    private static function markRows(FormView $view): void
+    {
+        $children = $view->children;
+        if (($view->vars['prototype'] ?? null) instanceof FormView) {
+            $children[] = $view->vars['prototype'];
+        }
+        foreach ($children as $child) {
+            self::addRowAttribute($child, 'data-collaborate-row');
+            self::markRows($child);
+        }
+    }
+
+    /** Adds an empty attribute to the row of `$view`, keeping the attributes already there. */
+    private static function addRowAttribute(FormView $view, string $name): void
+    {
+        /** @var array<string, mixed> $rowAttributes */
+        $rowAttributes = $view->vars['row_attr'] ?? [];
+        $rowAttributes[$name] ??= '';
+        $view->vars['row_attr'] = $rowAttributes;
     }
 
     /** The signed-in user when they hold the collaboration role and can collaborate. */

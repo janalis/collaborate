@@ -53,7 +53,7 @@ Presence, rendered by `collaborate_presence()`:
 <div class="collaborate-presence" data-collaborate-presence role="group" aria-label="Also on this page" hidden></div>
 ```
 
-A shared form carries `data-collaborate` (JSON): `grant`, `url` (with an `__action__` placeholder), `csrf`, `messages`, `isNew`, `editUrl` (with `__record__`), `invitation` (new records), and `config`: `{"replayConnected":30000,"replayDisconnected":5000,"joinRetry":12000,"labelLength":255}`. The rows of the collections in the field schema carry `data-collaborate-collection`; a collection the schema leaves out (unmapped, disabled, sensitive, or under such a form) has none, and its rows stay as rendered.
+A shared form carries `data-collaborate` (JSON): `grant`, `url` (with an `__action__` placeholder), `csrf`, `messages`, `isNew`, `editUrl` (with `__record__`), `invitation` (new records), and `config`: `{"replayConnected":30000,"replayDisconnected":5000,"joinRetry":12000,"labelLength":255}`. The rows of the collections in the field schema carry `data-collaborate-collection`; a collection the schema leaves out (unmapped, disabled, sensitive, or under such a form) has none, and its rows stay as rendered. Through the attributes every stock form theme renders, a shared form also marks the row of each field below it, prototypes included, with `data-collaborate-row` (`row_attr`); the widget of each such collection with `data-collaborate-entries` (its path) and `data-collaborate-placeholder` (its `prototype_name`) (`attr`); and each of its entries, the prototype included, with `data-collaborate-entry` (`row_attr`). The scripts read these first, then EasyAdmin's `.form-group`, `.field-collection-item`, `.ea-form-collection-items` and a `data-prototype` / `data-form-type-name-placeholder` on the collection's row.
 
 The layer's `data-config` also carries, only when they differ from their defaults, the host options (`regions`, `keyAttribute`, `keyScope`, `anchorAttributes`, `anchorClasses`, `caretRegions`, `popups` (`{kind: {where, line}}`, translated), `idle` (ms), `markers`, `edges`, `topLayer`, `presence`, `distinctColors`, `silentAlone`, `shareStream`) and then `messages` (`showPointers`, `idle`, `on`, `here`, `is`, `line`, `where`). With `top_layer` the layer is `popover="manual"`; it carries `data-hidden` (pointers hidden by the reader) and `data-labels="moving"` (with `idle`).
 
@@ -68,6 +68,7 @@ Storage keys: `collaborate-notice:<draft id>`, `collaborate-update:<path><search
 | Module | Role |
 | --- | --- |
 | `hub.js` | One Mercure stream per page; members by `channel` (`cursors`, `updates`, `draft`). |
+| `markup.js` | The form markup the scripts read, whatever the form theme: a field's row, a collection's entries, its prototype and placeholder. |
 | `cursors/cursors.js` (`initCursors`, `cursorsFor`), `carets.js`, `geometry.js` (`configureGeometry`), `presence.js`, `marks.js`, `turn.js`, `shapes.js` | Pointers, carets, field marks, header avatars or menu, markers, edge arrows, popup lines, the turn of a tab. |
 | `updates.js` | Saved-list and saved-detail refresh. |
 | `draft/session.js` (`sessionFor`), `bar.js`, `collections.js`, `conflicts.js`, `fields.js`, `hooks.js` (`addRowInitializer`) | Shared drafts. |

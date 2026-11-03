@@ -389,11 +389,11 @@ final class CollaborateFormExtension extends AbstractTypeExtension
     /**
      * The children of `$view`, its collection prototype included.
      *
-     * @return list<FormView>
+     * @return array<array-key, FormView>
      */
     private static function childrenOf(FormView $view): array
     {
-        $children = array_values($view->children);
+        $children = $view->children;
         if (($view->vars['prototype'] ?? null) instanceof FormView) {
             $children[] = $view->vars['prototype'];
         }

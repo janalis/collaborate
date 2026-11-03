@@ -261,7 +261,7 @@ class DraftJournal implements ResetInterface
     public function append(string $id, array $allowed, array $event, int $userId, string $label): array
     {
         // Limits count stored UTF-8 bytes, not \uXXXX escapes.
-        $size = \strlen(json_encode($event, \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES));
+        $size = \strlen($this->encode($event));
         if ($size > $this->maxUpdateBytes) {
             throw new HttpException(413, 'Collaborate update is too large.');
         }
@@ -300,9 +300,6 @@ class DraftJournal implements ResetInterface
             }
             if ($this->removed($this->removedEntries($draft), $definition['formName'] ?? $field)) {
                 throw new ConflictHttpException('The collection entry was removed.');
-            }
-            if (($draft['bytes'] + $size) > $this->maxDraftBytes) {
-                throw new HttpException(413, 'Collaborate draft is full. Save or discard before continuing.');
             }
             if (!isset($draft['fields'][$field])) {
                 // Only an entry added to a collection brings a new field here: Join stored every other one.
@@ -414,6 +411,11 @@ class DraftJournal implements ResetInterface
                 'userId' => $userId,
                 'label' => $label,
             ];
+            // The journal grows by the batch it stores, with its revision and author: not by what the page sent.
+            $stored = $this->encode($accepted);
+            if (($draft['bytes'] + \strlen($stored)) > $this->maxDraftBytes) {
+                throw new HttpException(413, 'Collaborate draft is full. Save or discard before continuing.');
+            }
             // Source mode is shared UI state, not a persisted form value: switching it leaves the draft saved.
             if ($this->mode($field)) {
                 $state['savedVersion'] = $state['version'];
@@ -421,8 +423,8 @@ class DraftJournal implements ResetInterface
                     $draft['savedRevision'] = $draft['revision'];
                 }
             }
-            $draft['bytes'] += $size;
-            $this->record($id, $accepted);
+            $this->insert($id, $accepted, $stored);
+            $draft['bytes'] += \strlen($stored);
             $this->write($id, $draft, [$field]);
 
             return $accepted;
@@ -491,7 +493,7 @@ class DraftJournal implements ResetInterface
                     'label' => $this->systemLabel,
                     'operations' => $operations,
                 ]);
-            } elseif ('value' === $field['type'] && $field['value'] !== $value && !$this->mode($name)) {
+            } elseif ('value' === $field['type'] && !$this->same($field['value'], $value) && !$this->mode($name)) {
                 $version = $field['version'] ?? 0;
                 $field['value'] = $value;
                 $field['version'] = $version + 1;
@@ -810,7 +812,7 @@ class DraftJournal implements ResetInterface
         }
     }
 
-    /** The SQL is MariaDB's and MySQL's: named locks, INSERT IGNORE, ON DUPLICATE KEY UPDATE and FOR UPDATE. */
+    /** The SQL is MariaDB's and MySQL's: named locks, INSERT IGNORE, REPLACE and FOR UPDATE. */
     private function db(): Connection
     {
         // The connection keeps its platform: asking again costs nothing.
@@ -841,10 +843,34 @@ class DraftJournal implements ResetInterface
     private function differs(array $field, mixed $value): bool
     {
         if (($field['unordered'] ?? false) && \is_array($field['saved']) && \is_array($value)) {
-            return $this->withoutOrder($field['type'], $field['saved']) !== $this->withoutOrder($field['type'], $value);
+            return !$this->same(
+                $this->withoutOrder($field['type'], $field['saved']),
+                $this->withoutOrder($field['type'], $value),
+            );
         }
 
-        return $field['saved'] !== $value;
+        return !$this->same($field['saved'], $value);
+    }
+
+    /** Whether two values are equal as JSON: the keys of an object are unordered, since MySQL stores them
+     * sorted and MariaDB as written.
+     */
+    private function same(mixed $a, mixed $b): bool
+    {
+        return self::canonical($a) === self::canonical($b);
+    }
+
+    /** A value with the keys of each object sorted, the order of a list kept. */
+    private static function canonical(mixed $value): mixed
+    {
+        if (!\is_array($value)) {
+            return $value;
+        }
+        if (!array_is_list($value)) {
+            ksort($value, \SORT_STRING);
+        }
+
+        return array_map(self::canonical(...), $value);
     }
 
     /** @param array<array-key, mixed> $value
@@ -1042,9 +1068,9 @@ class DraftJournal implements ResetInterface
                 array_push($parameters, $id, (string) $name, $field['type'], json_encode($field, \JSON_THROW_ON_ERROR));
             }
             $this->db()->executeStatement(
-                'INSERT INTO collaborate_draft_field (draft_id, name, type, state) VALUES '
-                . implode(', ', array_map(static fn(): string => '(?, ?, ?, ?)', $chunk))
-                . ' ON DUPLICATE KEY UPDATE type = VALUES(type), state = VALUES(state)',
+                // Every column is written: REPLACE needs neither MySQL's row alias nor its deprecated VALUES().
+                'REPLACE INTO collaborate_draft_field (draft_id, name, type, state) VALUES '
+                    . implode(', ', array_map(static fn(): string => '(?, ?, ?, ?)', $chunk)),
                 $parameters,
             );
         }
@@ -1072,13 +1098,25 @@ class DraftJournal implements ResetInterface
     /** @param Batch $batch */
     private function record(string $id, array $batch): void
     {
+        $this->insert($id, $batch, $this->encode($batch));
+    }
+
+    /** @param Batch $batch */
+    private function insert(string $id, array $batch, string $payload): void
+    {
         $this->db()->insert('collaborate_draft_event', [
             'draft_id' => $id,
             'revision' => $batch['revision'],
             'batch_id' => $batch['id'],
             'field' => $batch['field'],
-            'payload' => json_encode($batch, \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES),
+            'payload' => $payload,
         ]);
+    }
+
+    /** A batch as the journal stores it, and counts it: UTF-8 bytes, not \uXXXX escapes. */
+    private function encode(mixed $batch): string
+    {
+        return json_encode($batch, \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
     }
 
     /** @return Batch|null */
@@ -1145,10 +1183,19 @@ class DraftJournal implements ResetInterface
 
     private function size(string $id): int
     {
-        return (int) $this->db()->fetchOne('SELECT COALESCE(SUM(LENGTH(payload)), 0) FROM collaborate_draft_event WHERE draft_id = ? AND batch_id <> ?', [
+        // Counted as {@see record()} wrote each batch: MySQL returns a JSON column reformatted, with its
+        // own spacing and key order, so LENGTH() would count another text on each server.
+        $bytes = 0;
+        /** @var \Traversable<int, string> $payloads the payload column, strings on every driver */
+        $payloads = $this->db()->iterateColumn('SELECT payload FROM collaborate_draft_event WHERE draft_id = ? AND batch_id <> ?', [
             $id,
             self::REBASE,
         ]);
+        foreach ($payloads as $payload) {
+            $bytes += \strlen($this->encode(json_decode($payload, flags: \JSON_THROW_ON_ERROR)));
+        }
+
+        return $bytes;
     }
 
     /** @param Draft $draft
@@ -1170,7 +1217,7 @@ class DraftJournal implements ResetInterface
             'savedBy' => $draft['savedBy'] ?? null,
             'conflicts' => $this->conflicts($draft, $fields, $allowed, $requestedAt),
             'fields' => $fields,
-            'digest' => hash('xxh128', json_encode($fields, \JSON_THROW_ON_ERROR)),
+            'digest' => hash('xxh128', json_encode(self::canonical($fields), \JSON_THROW_ON_ERROR)),
             'stamp' => $draft['updatedAt'],
             'events' => $this->readable($events, $allowed),
             'rebasedFrom' => $rebasedFrom,

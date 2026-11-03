@@ -31,6 +31,15 @@ versions follow [Semantic Versioning](https://semver.org/).
   *Reset*: compactions record the generations they replaced, and views answer
   them as `rebasedFrom`.
 - Packages leave out the tests, documentation sources and tooling.
+- On MySQL, which returns JSON objects with their keys sorted, a saved value
+  holding an object no longer reads as changed: Save no longer refuses it as
+  changed outside the draft, Join reports no conflict for it, a Save records
+  no needless batch and Replay recognises the page's digest. MySQL also runs
+  in CI.
+- The journal's size counts the batches as stored, with their revision and
+  author, on MariaDB and MySQL alike, so a draft can no longer pass
+  `max_draft_bytes` and a checkpoint finds the size the updates added up to.
+- Field states are written with `REPLACE`, not MySQL's deprecated `VALUES()`.
 
 ### Documentation
 

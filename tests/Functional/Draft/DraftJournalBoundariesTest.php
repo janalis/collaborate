@@ -10,6 +10,7 @@ use Doctrine\DBAL\Exception\LockWaitTimeoutException;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftText;
 use Janalis\Collaborate\Tests\Fixtures\Draft\InterleavingConnection;
+use Janalis\Collaborate\Tests\Fixtures\Draft\JsonAssertions;
 use Janalis\Collaborate\Tests\Fixtures\Draft\StatementRecordingConnection;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -27,6 +28,8 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 #[UsesClass(DraftText::class)]
 final class DraftJournalBoundariesTest extends TestCase
 {
+    use JsonAssertions;
+
     private const int MAX_UPDATE_BYTES = 262_144;
     private const int MAX_DRAFT_BYTES = 10_485_760;
     private const int COMPACT_BYTES = 1_048_576;
@@ -153,6 +156,20 @@ final class DraftJournalBoundariesTest extends TestCase
         return (int) $this->db->fetchOne('SELECT bytes FROM collaborate_draft WHERE id = ?', [$id]);
     }
 
+    /** The batches of a draft's journal, as PHP encoded them: MySQL returns its own reformatted JSON. */
+    private function storedBytes(string $id): int
+    {
+        return array_sum(array_map(
+            static fn(mixed $payload): int => \strlen(json_encode(
+                json_decode((string) $payload, flags: \JSON_THROW_ON_ERROR),
+                \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES,
+            )),
+            $this->db->fetchFirstColumn("SELECT payload FROM collaborate_draft_event WHERE draft_id = ? AND batch_id <> 'rebase'", [
+                $id,
+            ]),
+        ));
+    }
+
     private function idle(string $id, string $since): void
     {
         $this->db->update('collaborate_draft', ['updated_at' => $since], ['id' => $id]);
@@ -188,28 +205,19 @@ final class DraftJournalBoundariesTest extends TestCase
     public function testADraftMayFillTheWholeDefaultJournalAndNoByteMore(): void
     {
         $event = $this->event();
-        $this->db->update(
-            'collaborate_draft',
-            ['bytes' => self::MAX_DRAFT_BYTES - $this->encodedSize($event)],
-            ['id' => 'record'],
-        );
+        // What the update stores, as another draft records it at the same revision.
+        $this->journal->join('probe', $this->fields);
+        $size = $this->encodedSize($this->journal->append('probe', $this->fields, $event, 1, 'Alice'));
+        $this->db->update('collaborate_draft', ['bytes' => self::MAX_DRAFT_BYTES - $size], ['id' => 'record']);
 
         $this->journal->append('record', $this->fields, $event, 1, 'Alice');
 
-        // The journal counts what each update adds.
+        // The journal counts what each update stores.
         self::assertSame(self::MAX_DRAFT_BYTES, $this->bytes('record'));
-        $next = $this->event([
-            'id' => 'next-batch-1234567890',
-            'version' => 3,
-            'operations' => [['__className' => 'InsertOperation', 'baseVersion' => 3]],
-        ]);
-        $this->db->update(
-            'collaborate_draft',
-            ['bytes' => self::MAX_DRAFT_BYTES - $this->encodedSize($next) + 1],
-            ['id' => 'record'],
-        );
+        $this->journal->join('full', $this->fields);
+        $this->db->update('collaborate_draft', ['bytes' => self::MAX_DRAFT_BYTES - $size + 1], ['id' => 'full']);
         $this->expectException(HttpException::class);
-        $this->journal->append('record', $this->fields, $next, 1, 'Alice');
+        $this->journal->append('full', $this->fields, $event, 1, 'Alice');
     }
 
     public function testTheBytesOfSuccessiveUpdatesAddUp(): void
@@ -221,10 +229,18 @@ final class DraftJournalBoundariesTest extends TestCase
             'operations' => [['__className' => 'InsertOperation', 'baseVersion' => 3]],
         ]);
 
-        $this->journal->append('record', $this->fields, $first, 1, 'Alice');
-        $this->journal->append('record', $this->fields, $second, 1, 'Alice');
+        $stored = [
+            $this->journal->append('record', $this->fields, $first, 1, 'Alice'),
+            $this->journal->append('record', $this->fields, $second, 1, 'Alice'),
+        ];
 
-        self::assertSame($this->encodedSize($first) + $this->encodedSize($second), $this->bytes('record'));
+        // The batches as stored, with their revision and author, not as the page sent them.
+        $bytes = $this->encodedSize($stored[0]) + $this->encodedSize($stored[1]);
+        self::assertSame($bytes, $this->bytes('record'));
+        self::assertNotSame($this->encodedSize($first) + $this->encodedSize($second), $bytes);
+        // A Save counts the journal again, and finds what the updates added: its own batch, here none.
+        $this->journal->saved('record', []);
+        self::assertSame($bytes, $this->bytes('record'));
     }
 
     public function testTheConfiguredJournalFieldAndNestingLimitsApply(): void
@@ -538,12 +554,7 @@ final class DraftJournalBoundariesTest extends TestCase
         $after = $this->value('choice', 0, 'b', 'after', ['generation' => 2, 'seen' => $compacted['revision']]);
         $this->journal->append('record', $this->fields, $after, 1, 'Alice');
         $this->journal->saved('record', ['choice' => 'b']);
-        self::assertSame(
-            (int) $this->db->fetchOne(
-                "SELECT LENGTH(payload) FROM collaborate_draft_event WHERE draft_id = 'record' AND batch_id <> 'rebase'",
-            ),
-            $this->bytes('record'),
-        );
+        self::assertSame($this->storedBytes('record'), $this->bytes('record'));
         $this->db->update('collaborate_draft', ['bytes' => self::COMPACT_BYTES + 1], ['id' => 'record']);
         $this->idle('record', '2000-01-01 00:00:00');
         self::assertSame([1, 2], $this->journal->join('record', $this->fields)['rebasedFrom']);
@@ -901,7 +912,7 @@ final class DraftJournalBoundariesTest extends TestCase
         self::assertCount(1, $view['events']);
         $discard = $view['events'][0];
         unset($discard['id']);
-        self::assertSame(
+        self::assertSameJson(
             [
                 'field' => '',
                 'kind' => 'discard',
@@ -914,12 +925,14 @@ final class DraftJournalBoundariesTest extends TestCase
             $discard,
         );
         // The journal stores the reset fields as a list.
-        self::assertStringContainsString(
-            '"fields":["choice"]',
+        /** @var \stdClass $stored */
+        $stored = json_decode(
             (string) $this->db->fetchOne('SELECT payload FROM collaborate_draft_event WHERE draft_id = ? AND revision = 3', [
                 'record',
             ]),
+            flags: \JSON_THROW_ON_ERROR,
         );
+        self::assertSame(['choice'], $stored->fields ?? null);
     }
 
     public function testAFormReadsTheDiscardsOfItsOwnFieldsAndTheEventsAfterOthers(): void

@@ -5,34 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [0.1.1] - 2026-11-02
-
-### Added
-
-- `cursors.places`: a `PlaceProviderInterface` names a page's room and is
-  asked again at every hub request, so a place the user lost is refused
-  before the grant expires.
-- Host options describing pages other than EasyAdmin's: `regions`,
-  `key_attribute` and `key_scope` (a record placed in whatever element shows
-  it), `anchor_attributes`, `anchor_classes`, `caret_regions`,
-  `ignored_parameters`.
-- `cursors.popups`: the popup of a record a peer has open, and a status
-  under its title saying who else has it open.
-- `markers`, `edges`, `idle`, `top_layer`, `presence: menu` (find a peer,
-  hide pointers), `distinct_colors`, `silent_alone` and `share_stream`.
-- `enter(grant)`, `cursorsFor()` and the `collaborate:enter` event: a page
-  that replaces its content enters another place without loading.
-- `_layer.scss`, the cursor styles as a module that needs no framework;
-  `_cursors.scss` loads it.
-- A tab sends less often past three peers.
-
 ### Fixed
 
-- A page that sent every edit reloads on its own when a compaction replaces
-  its generation before it heard of the last Save, instead of stopping in
-  *Reset*: compactions record the generations they replaced, and views answer
-  them as `rebasedFrom`.
-- Packages leave out the tests, documentation sources and tooling.
 - On MySQL, which returns JSON objects with their keys sorted, a saved value
   holding an object no longer reads as changed: Save no longer refuses it as
   changed outside the draft, Join reports no conflict for it, a Save records
@@ -65,6 +39,35 @@ versions follow [Semantic Versioning](https://semver.org/).
 - `collaborate_draft` has an index on `updated_at`, which the purge reads:
   generate a migration (`doctrine:migrations:diff`) or add
   `CREATE INDEX collaborate_draft_updated_at ON collaborate_draft (updated_at)`.
+
+## [0.1.1] - 2026-11-02
+
+### Added
+
+- `cursors.places`: a `PlaceProviderInterface` names a page's room and is
+  asked again at every hub request, so a place the user lost is refused
+  before the grant expires.
+- Host options describing pages other than EasyAdmin's: `regions`,
+  `key_attribute` and `key_scope` (a record placed in whatever element shows
+  it), `anchor_attributes`, `anchor_classes`, `caret_regions`,
+  `ignored_parameters`.
+- `cursors.popups`: the popup of a record a peer has open, and a status
+  under its title saying who else has it open.
+- `markers`, `edges`, `idle`, `top_layer`, `presence: menu` (find a peer,
+  hide pointers), `distinct_colors`, `silent_alone` and `share_stream`.
+- `enter(grant)`, `cursorsFor()` and the `collaborate:enter` event: a page
+  that replaces its content enters another place without loading.
+- `_layer.scss`, the cursor styles as a module that needs no framework;
+  `_cursors.scss` loads it.
+- A tab sends less often past three peers.
+
+### Fixed
+
+- A page that sent every edit reloads on its own when a compaction replaces
+  its generation before it heard of the last Save, instead of stopping in
+  *Reset*: compactions record the generations they replaced, and views answer
+  them as `rebasedFrom`.
+- Packages leave out the tests, documentation sources and tooling.
 
 ### Documentation
 

@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-03
+
 ### Added
 
 - Shared drafts and field marks work with every stock Symfony form theme
@@ -129,7 +131,8 @@ versions follow [Semantic Versioning](https://semver.org/).
   `FormContextInterface` (which record a page edits).
 - English and French translations.
 
-[Unreleased]: https://github.com/janalis/collaborate/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/janalis/collaborate/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/janalis/collaborate/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/janalis/collaborate/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/janalis/collaborate/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/janalis/collaborate/releases/tag/v0.1.0

@@ -328,6 +328,31 @@ test('peers on records are marked, drawn in distinct colours, dimmed when still 
   expect(first.classList.contains('collaborate-cursor--idle')).toBe(false);
 });
 
+test('records are marked again once a peer changes record or popup, or the page moves, and not as it says who', async () => {
+  await start();
+  receive();
+  await vi.advanceTimersByTimeAsync(20);
+  expect(document.querySelector('.collaborate-marker')).not.toBeNull();
+  // Only a marker measures the cells of its row.
+  const measured = vi.spyOn(document.querySelector('tr[data-key="a"]'), 'querySelector');
+  receive({ sequence: 2, anchor: { ...anchor, x: 0.9 } });
+  await vi.advanceTimersByTimeAsync(220);
+  expect(measured).not.toHaveBeenCalled();
+  receive({ sequence: 3, anchor: { ...anchor, x: 0.9 }, popup: { kind: 'share', key: 'a' } });
+  await vi.advanceTimersByTimeAsync(20);
+  expect(measured).toHaveBeenCalledOnce();
+  window.dispatchEvent(new Event('resize'));
+  await vi.advanceTimersByTimeAsync(20);
+  expect(measured).toHaveBeenCalledTimes(2);
+  // The menu scrolls to a peer, then says where they are: the announcement moves nothing on the page.
+  instance.findReader(2);
+  await vi.advanceTimersByTimeAsync(20);
+  measured.mockClear();
+  await vi.advanceTimersByTimeAsync(100);
+  expect(document.querySelector('.collaborate-announce').textContent).toBe('Alice is sharing a.mp3');
+  expect(measured).not.toHaveBeenCalled();
+});
+
 test('a peer in a popup of a record is said in it, and the popup open here is told to the others', async () => {
   await start();
   receive({ kind: 'hello', anchor: null });

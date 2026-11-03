@@ -51,6 +51,12 @@ versions follow [Semantic Versioning](https://semver.org/).
 - A draft session whose form a host removed stops: its replays, listeners and
   hub membership no longer outlive the form, which starts a new session if
   it comes back.
+- A peer's event redraws that peer alone: its pointer is measured in the next
+  frame rather than as the event comes, the markers and the popup line are
+  drawn again only once a peer changes record, popup, name or colour, and a
+  caret that did not move is not measured. A frame measures every pointer
+  and record before it draws any, looks each region, path and record up once,
+  and the layer's announcements and popup lines no longer draw the page again.
 
 ### Upgrading
 

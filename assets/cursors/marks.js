@@ -17,9 +17,17 @@ export function createMarks(layer, presence, { markers = false, edges = null, po
   const views = new Map();
   const kinds = Object.keys(popups);
 
-  /** The arrow of a pointer scrolled out of its pane, or none: a pointer seen needs none. */
+  /** Where the arrow of a pointer scrolled out of its pane goes, or null: a pointer seen needs none. */
+  function edgeOf(peer, visible) {
+    return !visible && edges ? offscreenAnchor(peer.anchor, edges) : null;
+  }
+
   function drawEdge(peer, visible) {
-    const edge = !visible && edges ? offscreenAnchor(peer.anchor, edges) : null;
+    placeEdge(peer, edgeOf(peer, visible));
+  }
+
+  /** Draws the arrow `edgeOf()` measured, or hides it. */
+  function placeEdge(peer, edge) {
     if (!edge) {
       if (peer.edge) peer.edge.hidden = true;
       return;
@@ -44,8 +52,18 @@ export function createMarks(layer, presence, { markers = false, edges = null, po
     peer.edge = null;
   }
 
+  /** Where a record is, read before any marker is drawn: a write between two reads lays the page out again. */
+  function measureMarker(key) {
+    const record = findRecord(key);
+    const box = record && seen(record) && record.getBoundingClientRect();
+    if (!box) return null;
+    // The peers at the end of a row's first cell, where it leaves room, or in the corner of a tile.
+    const cell = record.localName === 'tr' && record.querySelector(':scope > td');
+    return { box, row: !!cell, end: (cell ? cell.getBoundingClientRect().right : box.right) - box.left };
+  }
+
   /** A record marked with the peers on it, where the page shows it. */
-  function drawMarker(key, ids) {
+  function drawMarker(key, ids, place) {
     let view = views.get(key);
     if (!view) {
       const element = document.createElement('div');
@@ -59,20 +77,14 @@ export function createMarks(layer, presence, { markers = false, edges = null, po
       view = { element, bar, readers, drawn: '' };
       views.set(key, view);
     }
-    const record = findRecord(key);
-    const box = record && seen(record) && record.getBoundingClientRect();
-    view.element.hidden = !box;
-    if (!box) return;
+    view.element.hidden = !place;
+    if (!place) return;
+    const { box } = place;
     view.element.style.transform = `translate3d(${box.left}px, ${box.top}px, 0)`;
     view.element.style.width = `${box.width}px`;
     view.element.style.height = `${box.height}px`;
-    // The peers at the end of a row's first cell, where it leaves room, or in the corner of a tile.
-    const cell = record.localName === 'tr' && record.querySelector(':scope > td');
-    view.element.dataset.shape = cell ? 'row' : 'tile';
-    view.element.style.setProperty(
-      '--marker-end',
-      `${(cell ? cell.getBoundingClientRect().right : box.right) - box.left}px`
-    );
+    view.element.dataset.shape = place.row ? 'row' : 'tile';
+    view.element.style.setProperty('--marker-end', `${place.end}px`);
     const colors = ids.map((id) => presence.colorOf(id));
     const drawn = JSON.stringify(ids.map((id, index) => [colors[index], presence.users.get(id).label]));
     if (drawn === view.drawn) return;
@@ -108,7 +120,8 @@ export function createMarks(layer, presence, { markers = false, edges = null, po
       view.element.remove();
       views.delete(key);
     }
-    for (const [key, ids] of records) drawMarker(key, ids);
+    const places = new Map([...records.keys()].map((key) => [key, measureMarker(key)]));
+    for (const [key, ids] of records) drawMarker(key, ids, places.get(key));
   }
 
   function clear() {
@@ -175,5 +188,5 @@ export function createMarks(layer, presence, { markers = false, edges = null, po
     setTimeout(() => element.classList.remove('collaborate-pulse'), duration);
   }
 
-  return { drawEdge, dropEdge, drawMarkers, drawPopupLine, clear, pulse, views };
+  return { edgeOf, placeEdge, drawEdge, dropEdge, drawMarkers, drawPopupLine, clear, pulse, views };
 }

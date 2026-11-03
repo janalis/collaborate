@@ -12,6 +12,7 @@ import {
   interpolate,
   isPopup,
   keyOf,
+  measure,
   pointerShape,
   regionNames,
   resolveAnchor,
@@ -130,7 +131,10 @@ export function initCursors(
   // Where the pointer last was; its shape and anchor are measured when an event is sent, not on every move.
   let lastPointer = null;
   let pointerDirty = false;
+  // What the next frame draws again: everything after the page moved, else the peers that moved and, once a
+  // peer changed record or popup, the marks those make.
   let layoutDirty = true;
+  let marksDirty = false;
   let pending = null;
   let pendingHello = null;
   let sending = false;
@@ -451,6 +455,7 @@ export function initCursors(
       event.kind === 'move' &&
       (!sameAnchor(previous?.anchor ?? null, event.anchor ?? null) ||
         !sameCaret(previous?.caret ?? null, event.caret ?? null));
+    const marked = markedAs(event.userId);
     // Presence outlives the pointer: only a departure, or expiry, takes a tab off the page.
     if (event.kind === 'leave') presence.leave(event.userId, event.clientId);
     else
@@ -460,6 +465,10 @@ export function initCursors(
         popup: event.popup ?? null,
         moving,
       });
+    if (markedAs(event.userId) !== marked) {
+      marksDirty = true;
+      redraw(false);
+    }
     if (event.kind === 'hello') {
       publish('reply');
       return;
@@ -476,6 +485,7 @@ export function initCursors(
       return;
     }
     const peer = previous || { cursor: null, caretView: null, caret: null, point: null, edge: null, moved: Date.now() };
+    const focus = focusOf(previous);
     Object.assign(peer, {
       userId: event.userId,
       clientId: event.clientId,
@@ -511,12 +521,7 @@ export function initCursors(
         element.classList.remove('collaborate-cursor--idle');
         flagPointer(peer.cursor);
       }
-      const target = resolveAnchor(pointer);
-      if (target) {
-        peer.from = peer.point || target;
-        peer.to = target;
-        peer.started = performance.now();
-      }
+      // Where it goes is read in the next frame, with the other peers': not here, between two of their writes.
     } else dropPointer(peer);
     if (remoteCaret) {
       const created = !peer.caretView;
@@ -530,30 +535,56 @@ export function initCursors(
       peer.caret = remoteCaret;
     } else dropCaret(peer);
     peers.set(event.userId, peer);
-    markFields();
-    redraw();
+    peer.dirty = true;
+    // An outline is set without measuring anything: at once.
+    if (focusOf(peer) !== focus) markFields();
+    redraw(false);
   }
+
+  // What the marks of a peer show: the record and popup the markers and the popup line name, and how.
+  function markedAs(id) {
+    const user = presence.users.get(id);
+    return user ? JSON.stringify([user.file, user.popup?.kind, user.popup?.key, user.label, presence.colorOf(id)]) : '';
+  }
+
+  // What the outline of the field a peer is in shows.
+  const focusOf = (peer) => (peer?.field ? JSON.stringify([peer.field, peer.color, peer.label]) : '');
 
   // A frame that only animates a pointer measures nothing: carets and anchors move with layout and events.
   function draw(now) {
     animation = null;
+    measure(() => paint(now));
+  }
+
+  function paint(now) {
     const layout = layoutDirty;
+    const marked = layout || marksDirty;
     layoutDirty = false;
+    marksDirty = false;
     let moving = false;
-    if (layout) {
-      markFields();
+    if (layout) markFields();
+    if (marked) {
       if (kinds.length && marks.drawPopupLine(!denied)) redraw();
       if (shown) marks.drawMarkers();
     }
     if (!shown) return;
-    for (const peer of peers.values()) {
-      if (peer.caretView && (layout || peer.caretDirty)) drawCaret(peer.caretView, resolveCaret(peer.caret, layer));
+    // Every peer is measured before any is drawn: a write between two reads lays the page out again. A peer that
+    // only glides on to where it was going measures nothing.
+    const measured = [...peers.values()].map((peer) => {
+      const fresh = layout || peer.dirty;
+      const caret = peer.caretView && (layout || peer.caretDirty) ? resolveCaret(peer.caret, layer) : undefined;
+      const target = peer.cursor && (fresh || !peer.to ? resolveAnchor(peer.anchor) : peer.to);
+      const edge = peer.cursor && fresh ? marks.edgeOf(peer, !!target) : undefined;
+      peer.dirty = false;
       peer.caretDirty = false;
+      return { peer, caret, target, edge };
+    });
+    for (const { peer, caret, target, edge } of measured) {
+      if (caret !== undefined) drawCaret(peer.caretView, caret);
       if (!peer.cursor) continue;
       const { element } = peer.cursor;
-      const target = layout || !peer.to ? resolveAnchor(peer.anchor) : peer.to;
       element.hidden = !target;
-      if (layout) marks.drawEdge(peer, !!target);
+      if (edge !== undefined) marks.placeEdge(peer, edge);
       if (!target) continue;
       if (!peer.to || target.x !== peer.to.x || target.y !== peer.to.y) {
         peer.from = peer.point || target;
@@ -755,10 +786,15 @@ export function initCursors(
     field = focusedField();
     connect();
   });
+  const own = (node) =>
+    (!!announcer && announcer.contains(node)) ||
+    !!node.parentElement?.closest('[data-collaborate-popup-line]') ||
+    (node instanceof Element && node.hasAttribute('data-collaborate-popup-line'));
   const observer = new MutationObserver((records) => {
     // A modal dialog that opens is drawn in the top layer, above the pointers, which are raised above it.
     if (records.some((record) => record.target.localName === 'dialog' && record.attributeName === 'open')) raise();
-    if (records.some((record) => !layer.contains(record.target))) {
+    // The layer's own writes outside it, the announcement and the line of a popup, move nothing.
+    if (records.some((record) => !layer.contains(record.target) && !own(record.target))) {
       updatePopup();
       redraw();
     }

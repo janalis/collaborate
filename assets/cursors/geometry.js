@@ -76,10 +76,33 @@ function visible(element) {
   return box.width > 0 && box.height > 0;
 }
 
+// The lookups a frame repeats for every peer and record, kept while it measures the page (`measure()`): what
+// it writes, the layer's own elements and marks, changes none of them.
+let frame = null;
+
+/** Runs `work` with the page's regions, paths and records looked up once each. */
+export function measure(work) {
+  if (frame) return work();
+  frame = new Map();
+  try {
+    return work();
+  } finally {
+    frame = null;
+  }
+}
+
+function cached(key, lookup) {
+  if (!frame) return lookup();
+  if (!frame.has(key)) frame.set(key, lookup());
+  return frame.get(key);
+}
+
 function regionRoot(region) {
-  return [
-    ...document.querySelectorAll(Object.hasOwn(settings.regions, region) ? settings.regions[region] : ':not(*)'),
-  ].find(visible);
+  return cached(`region ${region}`, () =>
+    [...document.querySelectorAll(Object.hasOwn(settings.regions, region) ? settings.regions[region] : ':not(*)')].find(
+      visible
+    )
+  );
 }
 
 // An id drawn anew on every render names nothing another page can find: EasyAdmin's form fieldsets carry a
@@ -106,12 +129,27 @@ function segment(element) {
 
 /** The element showing a record among the ones the page shows (`cursors.key_scope`), or null: a key is compared, never queried. */
 export function findRecord(key) {
-  const { keyAttribute, keyScope } = settings;
+  const { keyAttribute } = settings;
   if (!keyAttribute || typeof key !== 'string') return null;
-  for (const scope of document.querySelectorAll(keyScope))
-    for (const element of scope.querySelectorAll(`[${keyAttribute}]`))
-      if (element.getAttribute(keyAttribute) === key && !element.closest('[data-collaborate-popup]')) return element;
+  if (frame) return cached('records', records).get(key) ?? null;
+  for (const element of keyed())
+    if (element.getAttribute(keyAttribute) === key && !element.closest('[data-collaborate-popup]')) return element;
   return null;
+}
+
+function* keyed() {
+  const { keyAttribute, keyScope } = settings;
+  for (const scope of document.querySelectorAll(keyScope)) yield* scope.querySelectorAll(`[${keyAttribute}]`);
+}
+
+/** Every record the page shows, by key: the first element of each, as `findRecord()` finds it. */
+function records() {
+  const found = new Map();
+  for (const element of keyed()) {
+    const key = element.getAttribute(settings.keyAttribute);
+    if (!found.has(key) && !element.closest('[data-collaborate-popup]')) found.set(key, element);
+  }
+  return found;
 }
 
 const inScope = (element) => [...document.querySelectorAll(settings.keyScope)].some((scope) => scope.contains(element));
@@ -160,6 +198,10 @@ function query(root, selector) {
  * another, and a path that names no record names nothing of the popup open here.
  */
 export function resolvePath({ region, selector }) {
+  return cached(`path ${region} ${selector}`, () => lookUpPath(region, selector));
+}
+
+function lookUpPath(region, selector) {
   const root = regionRoot(region);
   if (!root) return null;
   const { keyAttribute } = settings;

@@ -180,6 +180,20 @@ test('the layer is a popover of the top layer, raised above a dialog that opens'
   document.querySelector('dialog').removeAttribute('open');
   await flush();
   expect(HTMLElement.prototype.showPopover).toHaveBeenCalledTimes(2);
+  // A stopped layer is as it was before it started, and starts again.
+  expect(layer().hasAttribute('popover')).toBe(false);
+  expect(layer().dataset.popoverOpen).toBeUndefined();
+  for (const name of ['initialized', 'labels', 'hidden']) expect(layer().dataset[name]).toBeUndefined();
+  await start();
+  expect(instance).not.toBeNull();
+  expect(cursorsFor(layer())).toBe(instance);
+  expect(layer().getAttribute('popover')).toBe('manual');
+  // A popover already hidden is not hidden again.
+  layer().hidePopover();
+  HTMLElement.prototype.hidePopover.mockClear();
+  instance.stop();
+  instance = null;
+  expect(HTMLElement.prototype.hidePopover).not.toHaveBeenCalled();
 });
 
 test('without popovers, or unless the host asks, the layer stays where it is', async () => {
@@ -189,7 +203,6 @@ test('without popovers, or unless the host asks, the layer stays where it is', a
   instance.stop();
   instance = null;
   HTMLElement.prototype.showPopover = vi.fn();
-  layer().removeAttribute('data-initialized');
   await start({ ...CONFIG, topLayer: false, idle: 0, presence: 'avatars' });
   expect(layer().hasAttribute('popover')).toBe(false);
   expect(layer().dataset.labels).toBeUndefined();

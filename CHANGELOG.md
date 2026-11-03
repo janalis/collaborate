@@ -40,6 +40,23 @@ versions follow [Semantic Versioning](https://semver.org/).
   author, on MariaDB and MySQL alike, so a draft can no longer pass
   `max_draft_bytes` and a checkpoint finds the size the updates added up to.
 - Field states are written with `REPLACE`, not MySQL's deprecated `VALUES()`.
+- Join builds the page's view once it has released the draft: decoding a
+  long journal no longer holds off the draft's appends past their wait (503).
+- `DraftJournal::saved()` and `created()` take the draft's lock unless their
+  caller holds it.
+- Saved-view refresh follows saves again once a refused page enters another
+  place (`collaborate:enter`), and keeps the view of the address the page has
+  when it refreshes, after a `history.pushState`.
+- Cursors stopped on a layer start again on it, and leave it as they found it.
+- A draft session whose form a host removed stops: its replays, listeners and
+  hub membership no longer outlive the form, which starts a new session if
+  it comes back.
+
+### Upgrading
+
+- `collaborate_draft` has an index on `updated_at`, which the purge reads:
+  generate a migration (`doctrine:migrations:diff`) or add
+  `CREATE INDEX collaborate_draft_updated_at ON collaborate_draft (updated_at)`.
 
 ### Documentation
 

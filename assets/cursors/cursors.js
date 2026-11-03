@@ -902,6 +902,14 @@ export function initCursors(
     announcer?.remove();
     layer.replaceChildren();
     layer.dataset.connected = 'false';
+    // A stopped layer can be started again (`initCursors()`), as it was before this start.
+    if (topLayer) {
+      if (layer.matches(':popover-open')) layer.hidePopover();
+      layer.removeAttribute('popover');
+    }
+    delete layer.dataset.initialized;
+    delete layer.dataset.labels;
+    delete layer.dataset.hidden;
     instances.delete(layer);
   }
 

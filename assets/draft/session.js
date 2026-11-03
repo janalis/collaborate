@@ -912,6 +912,15 @@ export class DraftSession {
     if (this.stopped || this.suspended) return;
     this.poll = setInterval(
       () => {
+        // A host that replaced its content took the form away: the session goes with it, its timers,
+        // listeners and hub membership included.
+        if (!this.form.isConnected) {
+          this.stop();
+          // Put back, the form starts a session of its own. A session stopped for any other reason (a Join
+          // refused, say) keeps its form: each field asking for it must not try again.
+          if (sessions.get(this.form) === this) sessions.delete(this.form);
+          return;
+        }
         // The hub announces every change. While it is connected, a pull every 30 s only covers a lost publication.
         if (!this.live || !(Date.now() - this.pulled < this.setting('replayConnected', 30_000))) this.schedule();
       },

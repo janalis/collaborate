@@ -100,7 +100,7 @@ class DraftJournal implements ResetInterface
      */
     public function join(string $id, array $fields, float $requestedAt = 0.0): array
     {
-        return $this->exclusive($id, function () use ($id, $fields, $requestedAt): array {
+        $this->exclusive($id, function () use ($id, $fields): void {
             // A draft recreated after purge() must not reuse a generation a page left open still holds:
             // that page would take the new revisions for ones it has seen. Half the INT range leaves room for ++.
             $this->db()->executeStatement(
@@ -204,10 +204,12 @@ class DraftJournal implements ResetInterface
             if ($compacted || [] !== $added || [] !== $adopted) {
                 $this->write($id, $draft, $compacted ? null : [...$added, ...$adopted]);
             }
-
-            // @infection-ignore-all: revisions start at 1, so the events after revision 0 and after -1 are the same.
-            return $this->visible($draft, $fields, 0, $requestedAt);
         });
+
+        // The view is read after the lock is released: decoding a long journal must not hold appends off past
+        // their wait. One snapshot, as in replay(), so that no event is newer than the revision it carries.
+        // @infection-ignore-all: revisions start at 1, so the events after revision 0 and after -1 are the same.
+        return $this->db()->transactional(fn(): array => $this->visible($this->read($id), $fields, 0, $requestedAt));
     }
 
     /** A page polls every few seconds: a draft nobody wrote to since the row it last read, named by `$stamp`,
@@ -457,7 +459,7 @@ class DraftJournal implements ResetInterface
      */
     public function saved(string $id, array $values, ?array $actor = null): void
     {
-        $this->db()->transactional(fn() => $this->checkpoint($id, $values, $actor));
+        $this->guarded($id, fn() => $this->checkpoint($id, $values, $actor));
     }
 
     /** @param array<string, mixed> $values
@@ -537,7 +539,7 @@ class DraftJournal implements ResetInterface
 
     public function created(string $id, string $recordId): void
     {
-        $this->db()->transactional(function () use ($id, $recordId): void {
+        $this->guarded($id, function () use ($id, $recordId): void {
             $draft = $this->read($id, true);
             $draft['recordId'] = $recordId;
             $this->write($id, $draft, []);
@@ -810,6 +812,19 @@ class DraftJournal implements ResetInterface
         } finally {
             $this->unlock($id);
         }
+    }
+
+    /** Work that a Save does under the lock it holds across validation and persistence ({@see lock()}),
+     * and that any other caller does under its own.
+     *
+     * @template T
+     * @param \Closure(Connection): T $work
+     *
+     * @return T
+     */
+    private function guarded(string $id, \Closure $work): mixed
+    {
+        return isset($this->held[$id]) ? $this->db()->transactional($work) : $this->exclusive($id, $work);
     }
 
     /** The SQL is MariaDB's and MySQL's: named locks, INSERT IGNORE, REPLACE and FOR UPDATE. */

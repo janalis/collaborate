@@ -320,6 +320,45 @@ final class DraftJournalBoundariesTest extends TestCase
         )));
     }
 
+    public function testASaveTakesTheDraftsLockUnlessItsCallerHoldsIt(): void
+    {
+        $locks = fn(): int => \count(array_filter($this->db->queries, static fn(string $sql): bool => str_contains(
+            $sql,
+            'GET_LOCK',
+        )));
+        $this->db->queries = [];
+
+        $this->journal->saved('record', ['choice' => 'b']);
+        $this->journal->created('record', '42');
+        self::assertSame(2, $locks());
+        self::assertCount(2, $this->releases());
+
+        $this->db->queries = [];
+        $this->journal->lock('record');
+        $this->journal->saved('record', ['choice' => 'c']);
+        $this->journal->created('record', '43');
+        $this->journal->unlock('record');
+        self::assertSame(1, $locks());
+        self::assertCount(1, $this->releases());
+    }
+
+    public function testJoinReadsTheJournalOnceItReleasedTheDraft(): void
+    {
+        $this->journal->append('record', $this->fields, $this->event(), 1, 'Alice');
+        $this->db->queries = [];
+
+        $view = $this->journal->join('record', $this->fields);
+
+        // Decoding the whole journal under the lock would hold off every append of the draft past its wait.
+        self::assertCount(1, $view['events']);
+        $position = fn(string $statement): int => (
+            array_find_key($this->db->queries, static fn(string $sql): bool => str_contains($sql, $statement)) ?? -1
+        );
+        $release = $position('RELEASE_LOCK');
+        self::assertGreaterThan(-1, $release);
+        self::assertGreaterThan($release, $position('SELECT payload FROM collaborate_draft_event'));
+    }
+
     public function testANestedLockIsReleasedByItsLastUnlockAndAnUnheldOneIsNotReleased(): void
     {
         $other = DriverManager::getConnection(DraftJournalTest::connection()->getParams());

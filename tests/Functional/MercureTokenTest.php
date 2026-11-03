@@ -8,11 +8,15 @@ use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Controller\CursorController;
 use Janalis\Collaborate\Controller\HubController;
 use Janalis\Collaborate\Cursor\PageGrant;
+use Janalis\Collaborate\DependencyInjection\Configuration;
 use Janalis\Collaborate\Doctrine\ChangeCollector;
 use Janalis\Collaborate\Doctrine\RecordIdentifier;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftSave;
+use Janalis\Collaborate\Draft\DraftValues;
+use Janalis\Collaborate\Draft\EventValidator;
+use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\EasyAdmin\UpdatesSubscriber;
 use Janalis\Collaborate\Form\CollaborateFormExtension;
 use Janalis\Collaborate\Grant;
@@ -39,11 +43,15 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 #[UsesClass(UpdatesSubscriber::class)]
 #[UsesClass(DraftSave::class)]
 #[UsesClass(DraftJournal::class)]
+#[UsesClass(DraftValues::class)]
+#[UsesClass(EventValidator::class)]
+#[UsesClass(FieldDefinitions::class)]
 #[UsesClass(RecordIdentifier::class)]
 #[CoversClass(HubController::class)]
 #[CoversClass(CursorController::class)]
 #[CoversClass(CollaborateExtension::class)]
 #[UsesClass(CollaborateBundle::class)]
+#[UsesClass(Configuration::class)]
 #[UsesClass(PageGrant::class)]
 #[UsesClass(DraftAccess::class)]
 #[UsesClass(Grant::class)]

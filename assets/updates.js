@@ -1,6 +1,7 @@
 import { hubFor } from './hub.js';
 
-const stateKey = `collaborate-update:${location.pathname}${location.search}`;
+// Read when used: a host that changes the address without loading (`history.pushState`) has another page.
+const stateKey = () => `collaborate-update:${location.pathname}${location.search}`;
 
 export function initUpdates(
   layer = document.querySelector('[data-collaborate-layer]'),
@@ -12,6 +13,8 @@ export function initUpdates(
   let refresh;
   let stopped = false;
   let suspended = false;
+  // The page's grant was refused: another one entered without loading (`collaborate:enter`) follows saves again.
+  let denied = false;
   const deferredLists = new Map();
   // Lists loading, by when the load started; lists that heard of a save meanwhile, and their retries.
   const reloadingLists = new Map();
@@ -22,9 +25,9 @@ export function initUpdates(
     reloadingLists.set(list, Date.now());
   // EasyAdmin names the page's entity in its body class (`ea-index-Product`, `ea-edit-Product`…).
   const pageEntity = /\bea-(?:index|detail|edit|new)-(\S+)/.exec(document.body.className)?.[1];
-  const saved = sessionStorage.getItem(stateKey);
+  const saved = sessionStorage.getItem(stateKey());
   if (saved) {
-    sessionStorage.removeItem(stateKey);
+    sessionStorage.removeItem(stateKey());
     try {
       const state = JSON.parse(saved);
       requestAnimationFrame(() => {
@@ -166,7 +169,7 @@ export function initUpdates(
       }
       if (!document.body.classList.contains('ea-index') && !document.body.classList.contains('ea-detail')) return;
       sessionStorage.setItem(
-        stateKey,
+        stateKey(),
         JSON.stringify({
           x: window.scrollX,
           y: window.scrollY,
@@ -201,8 +204,21 @@ export function initUpdates(
       closed: () => {
         lost = streamed;
       },
-      denied: stop,
+      denied: refuse,
     });
+  }
+
+  function refuse() {
+    denied = true;
+    suspend();
+  }
+
+  function enter(event) {
+    if (!denied || stopped || typeof event.detail?.grant !== 'string') return;
+    denied = false;
+    suspended = false;
+    listen();
+    connect();
   }
 
   function listen() {
@@ -235,7 +251,7 @@ export function initUpdates(
     else stop();
   }
   function restore(event) {
-    if (!event.persisted || stopped || !suspended) return;
+    if (!event.persisted || stopped || denied || !suspended) return;
     suspended = false;
     listen();
     connect();
@@ -246,9 +262,11 @@ export function initUpdates(
     suspend();
     window.removeEventListener('pagehide', hide);
     window.removeEventListener('pageshow', restore);
+    document.removeEventListener('collaborate:enter', enter);
   }
   window.addEventListener('pagehide', hide);
   window.addEventListener('pageshow', restore);
+  document.addEventListener('collaborate:enter', enter);
   listen();
   connect();
   return { stop, changed };

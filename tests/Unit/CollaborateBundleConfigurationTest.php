@@ -6,6 +6,7 @@ namespace Janalis\Collaborate\Tests\Unit;
 
 use Doctrine\Bundle\DoctrineBundle\DependencyInjection\DoctrineExtension;
 use Janalis\Collaborate\CollaborateBundle;
+use Janalis\Collaborate\DependencyInjection\Configuration;
 use Janalis\Collaborate\Tests\Fixtures\Arrays;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -23,6 +24,7 @@ use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigura
 use Symfony\Component\DependencyInjection\Loader\PhpFileLoader;
 
 #[CoversClass(CollaborateBundle::class)]
+#[CoversClass(Configuration::class)]
 final class CollaborateBundleConfigurationTest extends TestCase
 {
     public function testTheDefaults(): void

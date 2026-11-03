@@ -1,13 +1,10 @@
 import { hasPendingUpload } from '../ckeditor5/source.js';
-import { hubFor } from '../hub.js';
+import { backgroundFetch, hubFor } from '../hub.js';
 import { CollaborateBar, confirmAction } from './bar.js';
 import { initializeCollections } from './collections.js';
 import { renderConflicts } from './conflicts.js';
 import { initializeText, initializeValue, valueAdapter } from './fields.js';
 
-// Captured when the module is evaluated: draft traffic is background traffic, and a host that wraps
-// `window.fetch` (a loading indicator, say) must load easyadmin.js before installing its wrapper.
-const backgroundFetch = window.fetch.bind(window);
 const sessions = new WeakMap();
 const grantScope = (grant) =>
   JSON.parse(
@@ -912,6 +909,15 @@ export class DraftSession {
     if (this.stopped || this.suspended) return;
     this.poll = setInterval(
       () => {
+        // A host that replaced its content took the form away: the session goes with it, its timers,
+        // listeners and hub membership included.
+        if (!this.form.isConnected) {
+          this.stop();
+          // Put back, the form starts a session of its own. A session stopped for any other reason (a Join
+          // refused, say) keeps its form: each field asking for it must not try again.
+          if (sessions.get(this.form) === this) sessions.delete(this.form);
+          return;
+        }
         // The hub announces every change. While it is connected, a pull every 30 s only covers a lost publication.
         if (!this.live || !(Date.now() - this.pulled < this.setting('replayConnected', 30_000))) this.schedule();
       },

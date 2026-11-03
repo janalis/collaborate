@@ -180,6 +180,20 @@ test('the layer is a popover of the top layer, raised above a dialog that opens'
   document.querySelector('dialog').removeAttribute('open');
   await flush();
   expect(HTMLElement.prototype.showPopover).toHaveBeenCalledTimes(2);
+  // A stopped layer is as it was before it started, and starts again.
+  expect(layer().hasAttribute('popover')).toBe(false);
+  expect(layer().dataset.popoverOpen).toBeUndefined();
+  for (const name of ['initialized', 'labels', 'hidden']) expect(layer().dataset[name]).toBeUndefined();
+  await start();
+  expect(instance).not.toBeNull();
+  expect(cursorsFor(layer())).toBe(instance);
+  expect(layer().getAttribute('popover')).toBe('manual');
+  // A popover already hidden is not hidden again.
+  layer().hidePopover();
+  HTMLElement.prototype.hidePopover.mockClear();
+  instance.stop();
+  instance = null;
+  expect(HTMLElement.prototype.hidePopover).not.toHaveBeenCalled();
 });
 
 test('without popovers, or unless the host asks, the layer stays where it is', async () => {
@@ -189,7 +203,6 @@ test('without popovers, or unless the host asks, the layer stays where it is', a
   instance.stop();
   instance = null;
   HTMLElement.prototype.showPopover = vi.fn();
-  layer().removeAttribute('data-initialized');
   await start({ ...CONFIG, topLayer: false, idle: 0, presence: 'avatars' });
   expect(layer().hasAttribute('popover')).toBe(false);
   expect(layer().dataset.labels).toBeUndefined();
@@ -313,6 +326,31 @@ test('peers on records are marked, drawn in distinct colours, dimmed when still 
   expect(first.classList.contains('collaborate-cursor--idle')).toBe(true);
   receive({ sequence: 40, anchor: { ...anchor, x: 0.9 } });
   expect(first.classList.contains('collaborate-cursor--idle')).toBe(false);
+});
+
+test('records are marked again once a peer changes record or popup, or the page moves, and not as it says who', async () => {
+  await start();
+  receive();
+  await vi.advanceTimersByTimeAsync(20);
+  expect(document.querySelector('.collaborate-marker')).not.toBeNull();
+  // Only a marker measures the cells of its row.
+  const measured = vi.spyOn(document.querySelector('tr[data-key="a"]'), 'querySelector');
+  receive({ sequence: 2, anchor: { ...anchor, x: 0.9 } });
+  await vi.advanceTimersByTimeAsync(220);
+  expect(measured).not.toHaveBeenCalled();
+  receive({ sequence: 3, anchor: { ...anchor, x: 0.9 }, popup: { kind: 'share', key: 'a' } });
+  await vi.advanceTimersByTimeAsync(20);
+  expect(measured).toHaveBeenCalledOnce();
+  window.dispatchEvent(new Event('resize'));
+  await vi.advanceTimersByTimeAsync(20);
+  expect(measured).toHaveBeenCalledTimes(2);
+  // The menu scrolls to a peer, then says where they are: the announcement moves nothing on the page.
+  instance.findReader(2);
+  await vi.advanceTimersByTimeAsync(20);
+  measured.mockClear();
+  await vi.advanceTimersByTimeAsync(100);
+  expect(document.querySelector('.collaborate-announce').textContent).toBe('Alice is sharing a.mp3');
+  expect(measured).not.toHaveBeenCalled();
 });
 
 test('a peer in a popup of a record is said in it, and the popup open here is told to the others', async () => {

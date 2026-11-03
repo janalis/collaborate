@@ -13,12 +13,16 @@ use Janalis\Collaborate\Controller\HubController;
 use Janalis\Collaborate\Cursor\CursorEvent;
 use Janalis\Collaborate\Cursor\CursorPosition;
 use Janalis\Collaborate\Cursor\PageGrant;
+use Janalis\Collaborate\DependencyInjection\Configuration;
 use Janalis\Collaborate\Doctrine\ChangeCollector;
 use Janalis\Collaborate\Doctrine\RecordIdentifier;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftSave;
 use Janalis\Collaborate\Draft\DraftText;
+use Janalis\Collaborate\Draft\DraftValues;
+use Janalis\Collaborate\Draft\EventValidator;
+use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\Draft\FieldKeyResolver;
 use Janalis\Collaborate\EasyAdmin\DraftRefreshSubscriber;
 use Janalis\Collaborate\EasyAdmin\EasyAdminFormContext;
@@ -61,6 +65,7 @@ use Twig\Environment;
 /** The bundle in an application that installs EasyAdmin without registering it, with its own admin pages. */
 #[CoversClass(RoleDraftAccessChecker::class)]
 #[CoversClass(CollaborateBundle::class)]
+#[CoversClass(Configuration::class)]
 #[CoversClass(PurgeDraftsCommand::class)]
 #[CoversClass(CursorController::class)]
 #[CoversClass(DraftController::class)]
@@ -72,6 +77,9 @@ use Twig\Environment;
 #[CoversClass(RecordIdentifier::class)]
 #[CoversClass(DraftAccess::class)]
 #[CoversClass(DraftJournal::class)]
+#[CoversClass(DraftValues::class)]
+#[CoversClass(EventValidator::class)]
+#[CoversClass(FieldDefinitions::class)]
 #[CoversClass(DraftSave::class)]
 #[CoversClass(DraftText::class)]
 #[CoversClass(FieldKeyResolver::class)]

@@ -67,7 +67,7 @@ adapters. The host's bare imports (`ckeditor5`,
 ```sh
 make test-js             # vitest run (npm test)
 npm run test:coverage    # with V8 coverage, in var/coverage-vitest
-make lint-js             # Biome (npm run lint)
+make lint-js             # Biome and TypeScript (npm run lint)
 ```
 
 ## The test applications

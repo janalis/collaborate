@@ -5,6 +5,41 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- On MySQL, which returns JSON objects with their keys sorted, a saved value
+  holding an object no longer reads as changed: Save no longer refuses it as
+  changed outside the draft, Join reports no conflict for it, a Save records
+  no needless batch and Replay recognises the page's digest. MySQL also runs
+  in CI.
+- The journal's size counts the batches as stored, with their revision and
+  author, on MariaDB and MySQL alike, so a draft can no longer pass
+  `max_draft_bytes` and a checkpoint finds the size the updates added up to.
+- Field states are written with `REPLACE`, not MySQL's deprecated `VALUES()`.
+- Join builds the page's view once it has released the draft: decoding a
+  long journal no longer holds off the draft's appends past their wait (503).
+- `DraftJournal::saved()` and `created()` take the draft's lock unless their
+  caller holds it.
+- Saved-view refresh follows saves again once a refused page enters another
+  place (`collaborate:enter`), and keeps the view of the address the page has
+  when it refreshes, after a `history.pushState`.
+- Cursors stopped on a layer start again on it, and leave it as they found it.
+- A draft session whose form a host removed stops: its replays, listeners and
+  hub membership no longer outlive the form, which starts a new session if
+  it comes back.
+- A peer's event redraws that peer alone: its pointer is measured in the next
+  frame rather than as the event comes, the markers and the popup line are
+  drawn again only once a peer changes record, popup, name or colour, and a
+  caret that did not move is not measured. A frame measures every pointer
+  and record before it draws any, looks each region, path and record up once,
+  and the layer's announcements and popup lines no longer draw the page again.
+
+### Upgrading
+
+- `collaborate_draft` has an index on `updated_at`, which the purge reads:
+  generate a migration (`doctrine:migrations:diff`) or add
+  `CREATE INDEX collaborate_draft_updated_at ON collaborate_draft (updated_at)`.
+
 ## [0.1.1] - 2026-11-02
 
 ### Added

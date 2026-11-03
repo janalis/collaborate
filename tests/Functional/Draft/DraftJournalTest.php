@@ -15,8 +15,12 @@ use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftSave;
 use Janalis\Collaborate\Draft\DraftText;
+use Janalis\Collaborate\Draft\DraftValues;
+use Janalis\Collaborate\Draft\EventValidator;
+use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Article;
 use Janalis\Collaborate\Tests\Fixtures\Draft\InterleavingConnection;
+use Janalis\Collaborate\Tests\Fixtures\Draft\JsonAssertions;
 use Janalis\Collaborate\Tests\Fixtures\Draft\StatementRecordingConnection;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Tag;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Tagging;
@@ -51,11 +55,16 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  */
 /** @phpstan-import-type SignedScope from DraftAccess */
 #[CoversClass(DraftJournal::class)]
+#[CoversClass(DraftValues::class)]
+#[CoversClass(EventValidator::class)]
+#[CoversClass(FieldDefinitions::class)]
 #[CoversClass(DraftSave::class)]
 #[UsesClass(RecordIdentifier::class)]
 #[UsesClass(DraftText::class)]
 final class DraftJournalTest extends TestCase
 {
+    use JsonAssertions;
+
     /** The defaults of the `collaborate.drafts` limits the journal is built with. */
     private const int MAX_UPDATE_BYTES = 262_144;
     private const int MAX_DRAFT_BYTES = 10_485_760;
@@ -269,10 +278,10 @@ final class DraftJournalTest extends TestCase
     {
         $event = $this->event();
         $accepted = $this->journal->append('record', $this->fields, $event, 1, 'Alice');
-        self::assertSame($accepted, $this->journal->append('record', $this->fields, $event, 1, 'Alice'));
+        self::assertSameJson($accepted, $this->journal->append('record', $this->fields, $event, 1, 'Alice'));
         $otherWorker = new DraftJournal($this->db, firstGeneration: 1);
         $replay = $otherWorker->replay('record', ['body' => $this->fields['body']], 0);
-        self::assertSame([$accepted], $replay['events']);
+        self::assertSameJson([$accepted], $replay['events']);
         self::assertSame(3, $replay['fields']['body']['version']);
         self::assertArrayNotHasKey('choice', $replay['fields']);
         self::assertSame([], $otherWorker->replay('record', $this->fields, 1)['events']);
@@ -380,6 +389,29 @@ final class DraftJournalTest extends TestCase
         );
         $this->expectException(ConflictHttpException::class);
         $this->journal->lockSave('order', 1, 0, ['places[__collection__]' => ['a']]);
+    }
+
+    public function testAnObjectValueIsTheSameWhateverTheOrderOfItsKeys(): void
+    {
+        // MySQL stores a JSON object with its keys sorted, MariaDB as written: neither order is a change.
+        $fields = [
+            'period' => [
+                'type' => 'value',
+                'initial' => ['from' => ['year' => 2026, 'month' => 11, 'day' => 3], 'days' => 7],
+            ],
+        ];
+        $this->journal->join('keys', $fields);
+        $this->journal->saved('keys', [
+            'period' => ['days' => 7, 'from' => ['day' => 3, 'month' => 11, 'year' => 2026]],
+        ]);
+
+        $view = $this->journal->join('keys', $fields, microtime(true) + 1);
+        self::assertSame(0, $view['revision']);
+        self::assertSame([], $view['conflicts']);
+        self::assertSame($view['digest'], $this->journal->replay('keys', $fields, 0)['digest']);
+        $this->journal->lockSave('keys', 1, 0, [
+            'period' => ['days' => 7, 'from' => ['month' => 11, 'year' => 2026, 'day' => 3]],
+        ]);
     }
 
     public function testTheOrderOfACollectionThatStoresItIsAnExternalChange(): void
@@ -540,7 +572,10 @@ final class DraftJournalTest extends TestCase
         $accepted = $this->journal->append('record', $this->fields, $event, 2, 'Bob');
         $labels = $accepted['labels'] ?? null;
         self::assertSame([42 => 'Ada', 7 => 'Zoë'], $labels);
-        self::assertSame($labels, $this->journal->replay('record', $this->fields, 0)['events'][0]['labels'] ?? null);
+        self::assertSameJson(
+            $labels,
+            $this->journal->replay('record', $this->fields, 0)['events'][0]['labels'] ?? null,
+        );
         $unlabelled = $this->journal->append(
             'record',
             $this->fields,
@@ -668,9 +703,16 @@ final class DraftJournalTest extends TestCase
         self::assertStringContainsString($greek, $stored);
         $this->journal->saved('record', ['choice' => 'b']);
         self::assertSame(
-            (int) $this->db->fetchOne('SELECT SUM(LENGTH(payload)) FROM collaborate_draft_event WHERE draft_id = ?', [
-                'record',
-            ]),
+            // As stored by PHP: MySQL would measure its own reformatted JSON.
+            array_sum(array_map(
+                static fn(mixed $payload): int => \strlen(json_encode(
+                    json_decode((string) $payload, flags: \JSON_THROW_ON_ERROR),
+                    \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES,
+                )),
+                $this->db->fetchFirstColumn('SELECT payload FROM collaborate_draft_event WHERE draft_id = ?', [
+                    'record',
+                ]),
+            )),
             (int) $this->db->fetchOne('SELECT bytes FROM collaborate_draft WHERE id = ?', ['record']),
         );
         self::assertLessThan(self::MAX_UPDATE_BYTES, \strlen($stored));
@@ -683,7 +725,7 @@ final class DraftJournalTest extends TestCase
         self::assertSame('b', $peer['fields']['choice']['value']);
         self::assertSame(1, $peer['fields']['choice']['version']);
         self::assertSame(1, $peer['savedRevision']);
-        self::assertSame(
+        self::assertSameJson(
             [
                 'field' => 'choice',
                 'kind' => 'value',
@@ -1892,9 +1934,9 @@ final class DraftJournalTest extends TestCase
         // Entries without a stored record have no alias.
         self::assertSame([], $this->journal->aliases('retry'));
         // The response was lost: the retry finds the entry removed, then the record created.
-        self::assertSame($accepted, $this->journal->append('retry', $fields, $kind, 1, 'Alice'));
+        self::assertSameJson($accepted, $this->journal->append('retry', $fields, $kind, 1, 'Alice'));
         $this->journal->created('retry', '42');
-        self::assertSame($accepted, $this->journal->append('retry', $fields, $kind, 1, 'Alice'));
+        self::assertSameJson($accepted, $this->journal->append('retry', $fields, $kind, 1, 'Alice'));
         $this->expectException(ConflictHttpException::class);
         $this->journal->append('retry', $fields, array_replace($kind, ['id' => 'fresh-batch-1234567']), 1, 'Alice');
     }

@@ -10,6 +10,7 @@ use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Controller\CursorController;
 use Janalis\Collaborate\Controller\HubController;
 use Janalis\Collaborate\Cursor\PageGrant;
+use Janalis\Collaborate\DependencyInjection\Configuration;
 use Janalis\Collaborate\Doctrine\ChangeCollector;
 use Janalis\Collaborate\EasyAdmin\EasyAdminFormContext;
 use Janalis\Collaborate\EasyAdmin\UpdatesSubscriber;
@@ -31,6 +32,7 @@ use Symfony\Component\DependencyInjection\Extension\ExtensionInterface;
 use Symfony\Component\DependencyInjection\Reference;
 
 #[CoversClass(CollaborateBundle::class)]
+#[CoversClass(Configuration::class)]
 final class CollaborateBundleTest extends TestCase
 {
     public function testEveryOptionBecomesAParameter(): void

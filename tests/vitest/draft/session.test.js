@@ -1519,6 +1519,50 @@ test('automatically initializes configured forms once after DOMContentLoaded', a
   expect(form.querySelectorAll('[data-collaborate-status]')).toHaveLength(2);
 });
 
+test('stops once a host takes its form away', async () => {
+  vi.useFakeTimers();
+  const { session, form, fetcher, hub } = fixture();
+  await session.ready;
+  await vi.advanceTimersByTimeAsync(0);
+  expect(hub.members).toHaveLength(1);
+  const replays = () => fetcher.mock.calls.filter(([url]) => url === '/replay').length;
+  // A form moved elsewhere in the page keeps its session.
+  document.body.prepend(form);
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(session.stopped).toBeFalsy();
+  form.remove();
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(session.stopped).toBe(true);
+  expect(hub.members).toEqual([]);
+  const before = replays();
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(replays()).toBe(before);
+});
+
+test('a form a host puts back after its session stopped with it starts another one', async () => {
+  vi.useFakeTimers();
+  const { session: original, form, fetcher, configuration } = fixture();
+  await original.ready;
+  original.stop();
+  form.dataset.collaborate = JSON.stringify(configuration);
+  vi.stubGlobal('fetch', fetcher);
+  vi.resetModules();
+  const module = await import('../../../assets/draft/session.js');
+  const input = form.querySelector('input');
+  const first = module.sessionFor(input);
+  live.push(first);
+  await first.ready;
+  form.remove();
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(first.stopped).toBe(true);
+  document.body.append(form);
+  const second = module.sessionFor(input);
+  live.push(second);
+  expect(second).not.toBe(first);
+  expect(module.sessionFor(input)).toBe(second);
+  await second.ready;
+});
+
 test('handles subscription failures and maps translated collection controls through their physical names', async () => {
   vi.useFakeTimers();
   const failed = fixture();

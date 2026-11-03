@@ -112,6 +112,47 @@ test('stops when the hub refuses the page, without affecting ordinary pages', as
   expect(hub.join).toHaveBeenCalledOnce();
 });
 
+test('follows saves again once the host enters another place after a refusal', async () => {
+  vi.useFakeTimers();
+  document.body.className = 'ea-index';
+  const { updates, hub, reload } = start();
+  const enter = (detail) => document.dispatchEvent(new CustomEvent('collaborate:enter', { detail }));
+  // A page that was not refused keeps its membership: the cursors take the new grant to the hub.
+  enter({ grant: 'g.1' });
+  expect(hub.join).toHaveBeenCalledOnce();
+  hub.members[0].denied();
+  expect(hub.leaves).toBe(1);
+  enter({});
+  enter(undefined);
+  expect(hub.join).toHaveBeenCalledOnce();
+  enter({ grant: 'g.2' });
+  expect(hub.join).toHaveBeenCalledTimes(2);
+  hub.members[0].receive(null, {});
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(reload).toHaveBeenCalledOnce();
+  updates.stop();
+  hub.join.mockClear();
+  enter({ grant: 'g.3' });
+  expect(hub.join).not.toHaveBeenCalled();
+});
+
+test('keeps the view of the address the page has when it refreshes', async () => {
+  vi.useFakeTimers();
+  document.body.className = 'ea-index';
+  const { updates, reload } = start();
+  history.pushState(null, '', '/list?page=2');
+  try {
+    updates.changed();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(reload).toHaveBeenCalledOnce();
+    expect(sessionStorage.getItem('collaborate-update:/list?page=2')).not.toBeNull();
+    expect(sessionStorage.getItem('collaborate-update:/')).toBeNull();
+  } finally {
+    history.replaceState(null, '', '/');
+    updates.stop();
+  }
+});
+
 test.each(['focusRow', 'focusId'])('restores a read view snapshot including batch selection and %s', async (focus) => {
   vi.useFakeTimers();
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});

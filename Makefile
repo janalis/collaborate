@@ -67,7 +67,7 @@ test-integration: ## Run the bundle inside the two test applications (with and w
 test-js: ## Run the Vitest suite
 	$(NPM) test
 
-lint-js: ## Lint the JavaScript (Biome)
+lint-js: ## Lint the JavaScript (Biome) and type-check the modules that opt in (TypeScript)
 	$(NPM) run lint
 
 coverage: ## Require 100% coverage: PHPUnit (pcov, src/ and tools/, every suite) and Vitest (thresholds)

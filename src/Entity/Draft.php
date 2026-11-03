@@ -13,6 +13,8 @@ use Doctrine\ORM\Mapping as ORM;
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'collaborate_draft')]
+// The purge finds the drafts idle since a date: without an index, it reads the whole table.
+#[ORM\Index(name: 'collaborate_draft_updated_at', columns: ['updated_at'])]
 class Draft
 {
     #[ORM\Id]

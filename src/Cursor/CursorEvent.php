@@ -9,7 +9,7 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 /** The part of a cursor event its sender decides, validated; the server adds who sent it. */
 final class CursorEvent
 {
-    /** Pointer shapes every client can draw; `cursors/geometry.js` holds their paths. */
+    /** Pointer shapes every client can draw; `cursors/shapes.js` holds their paths. */
     public const array SHAPES = [
         'default',
         'pointer',

@@ -1,4 +1,4 @@
-import { hubFor, layerConfig } from '../hub.js';
+import { backgroundFetch, hubFor, layerConfig } from '../hub.js';
 import { captureCaret, focusedField, MAX_CARET_OFFSET, resolveCaret, sameCaret } from './carets.js';
 import {
   CURSOR_COLORS,
@@ -69,9 +69,6 @@ function writePointers(shown) {
   }
 }
 
-// Captured when the module is evaluated: cursor traffic is background traffic, and a host that wraps
-// `window.fetch` (a loading indicator, say) must load easyadmin.js before installing its wrapper.
-const backgroundFetch = window.fetch.bind(window);
 const instances = new WeakMap();
 
 /** The cursors of a layer, once started: a host enters another place through `enter()`. */

@@ -1,13 +1,10 @@
 import { hasPendingUpload } from '../ckeditor5/source.js';
-import { hubFor } from '../hub.js';
+import { backgroundFetch, hubFor } from '../hub.js';
 import { CollaborateBar, confirmAction } from './bar.js';
 import { initializeCollections } from './collections.js';
 import { renderConflicts } from './conflicts.js';
 import { initializeText, initializeValue, valueAdapter } from './fields.js';
 
-// Captured when the module is evaluated: draft traffic is background traffic, and a host that wraps
-// `window.fetch` (a loading indicator, say) must load easyadmin.js before installing its wrapper.
-const backgroundFetch = window.fetch.bind(window);
 const sessions = new WeakMap();
 const grantScope = (grant) =>
   JSON.parse(

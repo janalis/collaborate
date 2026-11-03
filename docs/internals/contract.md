@@ -68,7 +68,7 @@ Storage keys: `collaborate-notice:<draft id>`, `collaborate-update:<path><search
 | Module | Role |
 | --- | --- |
 | `hub.js` | One Mercure stream per page; members by `channel` (`cursors`, `updates`, `draft`). |
-| `cursors/cursors.js` (`initCursors`, `cursorsFor`), `carets.js`, `geometry.js` (`configureGeometry`), `presence.js`, `marks.js`, `turn.js` | Pointers, carets, field marks, header avatars or menu, markers, edge arrows, popup lines, the turn of a tab. |
+| `cursors/cursors.js` (`initCursors`, `cursorsFor`), `carets.js`, `geometry.js` (`configureGeometry`), `presence.js`, `marks.js`, `turn.js`, `shapes.js` | Pointers, carets, field marks, header avatars or menu, markers, edge arrows, popup lines, the turn of a tab. |
 | `updates.js` | Saved-list and saved-detail refresh. |
 | `draft/session.js` (`sessionFor`), `bar.js`, `collections.js`, `conflicts.js`, `fields.js`, `hooks.js` (`addRowInitializer`) | Shared drafts. |
 | `ckeditor5/collaborate.js` (`Collaborate` plugin), `operation-buffer.js`, `source.js`, `text-change.js` | CKEditor integration. |

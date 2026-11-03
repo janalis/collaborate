@@ -31,7 +31,9 @@ final class DraftValues
         return !self::same($field['saved'], $value);
     }
 
-    /** Whether two values are equal as JSON. */
+    /** Whether two values are equal as JSON: the keys of an object are unordered, since MySQL stores them
+     * sorted and MariaDB as written.
+     */
     public static function same(mixed $a, mixed $b): bool
     {
         return self::canonical($a) === self::canonical($b);

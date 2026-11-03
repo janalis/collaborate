@@ -1,3 +1,4 @@
+// @ts-check
 // What a page draws of its peers besides their pointers and carets, each a host option: the records they point
 // at or have a popup of, marked with their initials (`cursors.markers`); an arrow at the edge of a pane for a
 // pointer scrolled out of it (`cursors.edges`); and, in a popup of a record, who else has it open
@@ -13,6 +14,11 @@ export function format(message, parameters) {
   return Object.entries(parameters).reduce((text, [name, value]) => text.replaceAll(`%${name}%`, value), message ?? '');
 }
 
+/**
+ * @param {HTMLElement} layer
+ * @param {ReturnType<typeof import('./presence.js').createPresence>} presence
+ * @param {{ markers?: boolean, edges?: string | null, popups?: Record<string, { where?: string, line?: string }>, messages?: Record<string, string> }} [options]
+ */
 export function createMarks(layer, presence, { markers = false, edges = null, popups = {}, messages = {} } = {}) {
   const views = new Map();
   const kinds = Object.keys(popups);
@@ -137,7 +143,9 @@ export function createMarks(layer, presence, { markers = false, edges = null, po
     const mine = active ? capturePopup(kinds) : null;
     const open = mine && document.querySelector(`[data-collaborate-popup="${CSS.escape(mine.kind)}"]`);
     const container = open?.closest('dialog, .modal') ?? open;
-    for (const line of document.querySelectorAll('[data-collaborate-popup-line]')) {
+    for (const line of /** @type {NodeListOf<HTMLElement>} */ (
+      document.querySelectorAll('[data-collaborate-popup-line]')
+    )) {
       if (container?.contains(line)) continue;
       // A placeholder of the host is emptied, a line of the bundle removed.
       if (line.hasAttribute('data-collaborate-popup-presence')) {
@@ -147,7 +155,7 @@ export function createMarks(layer, presence, { markers = false, edges = null, po
       } else line.remove();
     }
     if (!mine || !container) return false;
-    let line = container.querySelector('[data-collaborate-popup-line]');
+    let line = /** @type {HTMLElement | null} */ (container.querySelector('[data-collaborate-popup-line]'));
     if (!line) {
       // There and empty a frame before anything is said in it: a status that comes with its text is read by no
       // screen reader.

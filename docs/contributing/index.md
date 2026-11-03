@@ -36,7 +36,7 @@ See [Testing](./testing) for the database and the test applications.
 | `make lint` | Mago's linter, Biome, markdownlint, editorconfig-checker and actionlint (see [Code style](#code-style)). Set a tool's variable empty to skip it (`make lint MDLINT=`). |
 | `make analyze` | Mago's static analysis. |
 | `make test` | Every PHPUnit suite (`PHPUNIT_ARGS="--filter …"`); `make test-unit`, `make test-functional` and `make test-integration` run one. See [Testing](./testing). |
-| `make test-js` / `make lint-js` | Vitest / Biome. |
+| `make test-js` / `make lint-js` | Vitest / Biome and TypeScript. |
 | `make test-tools` | The release tool's tests (no database needed). |
 | `make coverage` | PHPUnit with PCOV coverage (HTML in `var/coverage`) and Vitest with coverage. |
 | `make infection` | Mutation testing of `src/` against every PHPUnit suite, reports in `var/infection/`. |
@@ -54,6 +54,7 @@ from a local `phpunit.xml` when you keep one.
 |---|---|---|
 | PHP | [Mago](https://mago.carthage.software) | `mago.toml`: formatting (120 columns), linting with the Symfony and PHPUnit integrations, and static analysis over `src`, `tests`, `config` and `tools`. |
 | JavaScript | [Biome](https://biomejs.dev) | `biome.json`: two spaces, single quotes, semicolons, 120 columns. |
+| JavaScript types | [TypeScript](https://www.typescriptlang.org) | `tsconfig.json`: the modules that start with `// @ts-check` are type-checked from their JSDoc, the others by their tests alone; `typings/` describes what the DOM library lacks. |
 | Markdown | [markdownlint](https://github.com/DavidAnson/markdownlint) | `.markdownlint-cli2.jsonc`: the default rules, without line length, inline HTML and code-span spacing checks. |
 | All text files | [editorconfig-checker](https://github.com/editorconfig-checker/editorconfig-checker) | `.editorconfig`: UTF-8, LF, final newline, no trailing whitespace; four spaces in PHP and Twig, two in JavaScript, Sass, YAML and Markdown, tabs in `Makefile` and `Caddyfile`. |
 | GitHub workflows | [actionlint](https://github.com/rhysd/actionlint) | Workflow syntax and expressions. Third-party actions are pinned to a commit. |

@@ -33,11 +33,16 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use Symfony\Bridge\Twig\Extension\FormExtension;
+use Symfony\Bridge\Twig\Extension\TranslationExtension;
+use Symfony\Bridge\Twig\Form\TwigRendererEngine;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\AssetMapper\ImportMap\ImportMapConfigReader;
 use Symfony\Component\AssetMapper\ImportMap\RemotePackageStorage;
+use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\Form\CallbackTransformer;
+use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\CollectionType;
 use Symfony\Component\Form\Extension\Core\Type\DateTimeType;
@@ -49,6 +54,7 @@ use Symfony\Component\Form\FormBuilder;
 use Symfony\Component\Form\FormError;
 use Symfony\Component\Form\FormEvents;
 use Symfony\Component\Form\FormInterface;
+use Symfony\Component\Form\FormRenderer;
 use Symfony\Component\Form\Forms;
 use Symfony\Component\Form\FormView;
 use Symfony\Component\Form\Test\TypeTestCase;
@@ -61,6 +67,8 @@ use Symfony\Component\Security\Csrf\CsrfToken;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use Twig\Environment;
+use Twig\Loader\FilesystemLoader;
+use Twig\RuntimeLoader\FactoryRuntimeLoader;
 
 /**
  * @phpstan-import-type SignedScope from DraftAccess
@@ -571,6 +579,147 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         self::assertArrayNotHasKey(
             'data-collaborate-collection',
             (array) $build()->children['children']->vars['row_attr'],
+        );
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function formThemes(): iterable
+    {
+        foreach ([
+            'form_div_layout',
+            'form_table_layout',
+            'bootstrap_3_layout',
+            'bootstrap_3_horizontal_layout',
+            'bootstrap_4_layout',
+            'bootstrap_4_horizontal_layout',
+            'bootstrap_5_layout',
+            'bootstrap_5_horizontal_layout',
+            'foundation_5_layout',
+            'foundation_6_layout',
+            'tailwind_2_layout',
+            'daisyui_5_layout',
+        ] as $theme) {
+            // A theme the installed Symfony does not ship yet (daisyUI's came with 7.4) is left out.
+            if (!is_file(self::formThemeDirectory() . '/' . $theme . '.html.twig')) {
+                continue;
+            }
+            yield $theme => [$theme . '.html.twig'];
+        }
+    }
+
+    private static function formThemeDirectory(): string
+    {
+        $file = new \ReflectionClass(FormExtension::class)->getFileName();
+        self::assertIsString($file);
+
+        return \dirname($file, 2) . '/Resources/views/Form';
+    }
+
+    /**
+     * Every stock theme renders the rows, the collection widget and the entries the extension marks, so the
+     * scripts find a field's row and a collection's entries whatever the theme.
+     */
+    #[DataProvider('formThemes')]
+    public function testEveryStockFormThemeRendersTheMarkedRowsAndEntries(string $theme): void
+    {
+        $child = new Article();
+        $child->id = 42;
+        $child->title = 'Child';
+        $this->article->children->add($child);
+        $form = $this->factory
+            ->createNamedBuilder('Article', FormType::class, $this->article, ['data_class' => Article::class])
+            ->add('title', TextType::class, ['label' => 'Title label'])
+            ->add('body', RichTextType::class, ['label' => 'Body label'])
+            ->add('status', ChoiceType::class, [
+                'label' => 'Status label',
+                'mapped' => false,
+                'expanded' => true,
+                'choices' => ['Draft' => 'draft', 'Published' => 'published'],
+            ])
+            ->add('featured', CheckboxType::class, [
+                'label' => 'Featured label',
+                'mapped' => false,
+                'required' => false,
+            ])
+            ->add('children', CollectionType::class, [
+                'label' => 'Children label',
+                'entry_type' => PositionedEntryType::class,
+                'entry_options' => ['label' => 'Entry label'],
+                'allow_add' => true,
+                'prototype_name' => '__child__',
+            ])
+            ->getForm();
+        $twig = new Environment(new FilesystemLoader([self::formThemeDirectory()]), ['strict_variables' => true]);
+        $engine = new TwigRendererEngine([$theme], $twig);
+        $twig->addRuntimeLoader(new FactoryRuntimeLoader([
+            FormRenderer::class => static fn(): FormRenderer => new FormRenderer($engine),
+        ]));
+        $twig->addExtension(new FormExtension());
+        $twig->addExtension(new TranslationExtension());
+        $html = $twig->createTemplate('{{ form(form) }}')->render(['form' => $form->createView()]);
+        $page = new Crawler('<!DOCTYPE html><html><body>' . $html . '</body></html>');
+
+        $rowOf = static function (string $control) use ($page, $theme): Crawler {
+            $row = $page->filter($control)->first()->closest('[data-collaborate-row]');
+            self::assertNotNull($row, $control . ' has a row in ' . $theme);
+
+            return $row;
+        };
+        foreach ([
+            'input[name="Article[title]"]' => 'Title label',
+            'textarea[name="Article[body]"]' => 'Body label',
+            'input[name="Article[status]"]' => 'Status label',
+            'input[name="Article[featured]"]' => 'Featured label',
+            'input[name="Article[children][i42][title]"]' => 'Title',
+        ] as $control => $label) {
+            self::assertStringContainsString($label, $rowOf($control)->text(), $control . ' in ' . $theme);
+        }
+
+        $collection = $page->filter('[data-collaborate-collection="Article[children]"]');
+        self::assertCount(1, $collection, $theme);
+        self::assertStringContainsString('Children label', $collection->text(), $theme);
+        $widget = $collection->filter('[data-collaborate-entries="Article[children]"]');
+        self::assertCount(1, $widget, $theme);
+        self::assertSame('__child__', $widget->attr('data-collaborate-placeholder'));
+        $entry = $page->filter('input[name="Article[children][i42][title]"]')->closest('[data-collaborate-entry]');
+        self::assertNotNull($entry, $theme);
+        self::assertCount(1, $widget->filter('[data-collaborate-entry]'), $theme);
+        self::assertStringContainsString('Entry label', $entry->text(), $theme);
+        $prototype = (string) $widget->attr('data-prototype');
+        self::assertMatchesRegularExpression('/^\s*<\w+[^>]*\sdata-collaborate-entry[\s=>]/', $prototype, $theme);
+        self::assertStringContainsString('Article[children][__child__][title]', $prototype, $theme);
+        self::assertStringContainsString('data-collaborate-row', $prototype, $theme);
+    }
+
+    public function testMarkingRowsKeepsTheirOwnAttributes(): void
+    {
+        $view = $this->factory
+            ->createNamedBuilder('Article', FormType::class, $this->article, ['data_class' => Article::class])
+            ->add('title', TextType::class, ['row_attr' => ['class' => 'mb-3', 'data-collaborate-row' => 'kept']])
+            ->getForm()
+            ->createView();
+        self::assertSame(
+            ['class' => 'mb-3', 'data-collaborate-row' => 'kept'],
+            $view->children['title']->vars['row_attr'],
+        );
+        // The root form has no row of its own to mark.
+        self::assertArrayNotHasKey('data-collaborate-row', self::rowAttributes($view));
+    }
+
+    /** @return array<array-key, mixed> */
+    private static function rowAttributes(FormView $view): array
+    {
+        self::assertIsArray($view->vars['row_attr']);
+
+        return $view->vars['row_attr'];
+    }
+
+    public function testRowsAreMarkedOnlyOnAPageThatSharesItsForm(): void
+    {
+        $this->page->page = null;
+        self::assertArrayNotHasKey(
+            'data-collaborate-row',
+            self::rowAttributes($this->form()->createView()->children['title']),
         );
     }
 

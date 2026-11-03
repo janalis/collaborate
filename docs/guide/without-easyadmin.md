@@ -160,43 +160,41 @@ A Save the bundle cannot hold (a peer's edit landed meanwhile, another Save
 holds the draft) is answered with a `303` redirect back to the form and a
 `warning` flash message. Display flash messages on your form pages.
 
-## Field rows
+## Form themes
 
-A peer's field mark outlines the element with the `form-group` class around
-the control it is in, and a control a widget fills (a rich-text editor, the
-search input beside a select) is found from the focused element's
-`form-group`. Render each row inside one, for example with
-`'row_attr' => ['class' => 'form-group']` or a form theme's `form_row`
-block. Without it, the mark outlines the control alone, which for a
-rich-text field is its hidden source textarea, and a peer focused in a
-widget names no field.
+Render the form with any stock Symfony form theme: `form_div_layout`,
+`form_table_layout`, Bootstrap 3, 4 and 5 (horizontal included),
+Foundation 5 and 6, Tailwind 2 or daisyUI 5. Plain `{{ form(form) }}` or
+`form_row()` calls work: peers' field marks outline a field's row, label
+included, and collections stay in sync, with no markup of your own.
 
-## Collection markup
+The bundle marks a shared form's markup through the attributes every theme
+renders:
 
-Collections are synchronized through the markup EasyAdmin renders. A form
-theme of your own must keep:
+- each field's row (`row_attr`) carries `data-collaborate-row`;
+- each shared collection's row carries `data-collaborate-collection`, its
+  widget (`attr`, beside Symfony's `data-prototype`) carries
+  `data-collaborate-entries` and `data-collaborate-placeholder`, and each
+  entry's row, the prototype's included, carries `data-collaborate-entry`.
 
-- the collection's row attributes (`form.vars.row_attr`), which carry
-  `data-collaborate-collection` when the draft shares the collection, and a
-  `data-prototype` attribute holding
-  one rendered entry with `__name__` (or the placeholder named in
-  `data-form-type-name-placeholder`) for its key;
-- an `.ea-form-collection-items` element containing the entries;
-- one `.field-collection-item` element per entry.
+A form theme of your own keeps working as long as its `form_row` renders
+`row_attr`, its collection widget renders `attr`, and entries are rendered
+with `form_row`, which is what Symfony's own blocks do. Templates that
+follow EasyAdmin's markup (a `.form-group` row, `.field-collection-item`
+entries in `.ea-form-collection-items`, the prototype on the collection's
+row) are still read.
 
-```twig
-<fieldset {% for name, value in form.tags.vars.row_attr %} {{ name }}="{{ value }}"{% endfor %}
-          data-prototype="{{ include('_tag.html.twig', {tag: form.tags.vars.prototype})|e('html_attr') }}">
-    <div class="ea-form-collection-items">
-        {% for tag in form.tags %}{{ include('_tag.html.twig', {tag: tag}) }}{% endfor %}
-    </div>
-</fieldset>
-```
-
-Your own add and remove buttons only need to add or remove
-`.field-collection-item` elements: the bundle observes them. Rows a peer
+Your own add and remove buttons only need to add or remove entries in the
+collection's widget: the bundle observes them. Build an added entry from the
+widget's `data-prototype`, replacing its `data-collaborate-placeholder`
+(`__name__` by default) with a new key; with `form_table_layout`, the
+prototype is a table row, so parse it inside a `<table><tbody>`. Rows a peer
 adds are built from the prototype; register the widgets they need with
 [`addRowInitializer()`](./rich-text#_2-create-the-editors-with-the-session).
+
+The state bar and its confirmations are Bootstrap components, whatever the
+form theme: load Bootstrap's CSS and provide `bootstrap/js/src/modal.js`
+(see [Installation](./installation)).
 
 ## What you do not get
 

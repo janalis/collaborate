@@ -47,6 +47,14 @@ final class ArticleType extends AbstractType
             ->add('previewPassword', PasswordType::class, ['mapped' => false, 'required' => false])
             ->add('tags', CollectionType::class, [
                 'entry_type' => TagType::class,
+                // The entry's own buttons, in its help: every stock theme renders it in the entry's row.
+                'entry_options' => [
+                    'label' => false,
+                    'help' =>
+                        '<button type="button" class="btn btn-outline-secondary btn-sm" data-move-up>Move up</button> '
+                            . '<button type="button" class="btn btn-outline-danger btn-sm" data-remove-tag>Remove</button>',
+                    'help_html' => true,
+                ],
                 'allow_add' => true,
                 'allow_delete' => true,
                 'by_reference' => false,

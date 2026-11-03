@@ -58,7 +58,8 @@ read `collaborate.*.enabled` and stay inert when their feature is off.
 |---|---|
 | `easyadmin.js` | Entry point: starts cursors, updates and drafts; re-exports `sessionFor` and `addRowInitializer`. |
 | `hub.js` | One Mercure stream per page; members join by `channel` (`cursors`, `updates`, `draft`); renewal, resend of unknown grant signatures, background renewal of the page grant. |
-| `cursors/cursors.js`, `carets.js`, `geometry.js`, `presence.js` | Pointers, carets, field marks, header avatars, and the platform cursor shapes. |
+| `cursors/cursors.js`, `carets.js`, `geometry.js`, `presence.js`, `marks.js`, `turn.js` | Pointers, carets, field marks, header avatars or menu, markers, edge arrows, popup lines, the turn of a tab. |
+| `cursors/shapes.js` | The platform cursor shapes, re-exported by `geometry.js`. |
 | `updates.js` | Saved-list and saved-detail refresh. |
 | `draft/session.js` | `DraftSession`: one ordered network queue per form, join, replay, save, discard, conflicts, grant renewal; `sessionFor()`. |
 | `draft/fields.js`, `collections.js`, `conflicts.js`, `bar.js`, `hooks.js` | Field adapters, collection rows, the conflict review, the state bar and dialogs, `addRowInitializer()`. |

@@ -90,7 +90,8 @@ export function startEditors(root = document) {
 /** Moves a collection entry above the one before it: the bundle observes the rows moving. */
 export function moveUp(item) {
   let previous = item.previousElementSibling;
-  while (previous && !previous.matches('.field-collection-item')) previous = previous.previousElementSibling;
+  while (previous && !previous.matches('[data-collaborate-entry], .field-collection-item'))
+    previous = previous.previousElementSibling;
   if (previous) previous.before(item);
 }
 

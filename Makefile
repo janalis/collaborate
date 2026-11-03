@@ -67,7 +67,7 @@ test-integration: ## Run the bundle inside the two test applications (with and w
 test-js: ## Run the Vitest suite
 	$(NPM) test
 
-lint-js: ## Lint the JavaScript (Biome)
+lint-js: ## Lint the JavaScript (Biome) and type-check the modules that opt in (TypeScript)
 	$(NPM) run lint
 
 coverage: ## Require 100% coverage: PHPUnit (pcov, src/ and tools/, every suite) and Vitest (thresholds)
@@ -85,6 +85,7 @@ app-setup: ## Prepare the test applications for the browser: assets, EasyAdmin's
 	COLLABORATE_APP=plain APP_ENV=e2e $(CONSOLE) app:setup
 	COLLABORATE_APP=easyadmin APP_ENV=e2e $(CONSOLE) app:setup
 	COLLABORATE_APP=plain APP_ENV=e2e_limits $(CONSOLE) app:setup
+	for env in e2e_div e2e_table e2e_tailwind; do COLLABORATE_APP=plain APP_ENV=$$env $(CONSOLE) app:setup || exit 1; done
 	COLLABORATE_APP=host APP_ENV=e2e $(CONSOLE) app:setup
 
 e2e: app-setup ## Run the Playwright scenarios against the three applications under FrankenPHP (ARGS="--project=plain …")

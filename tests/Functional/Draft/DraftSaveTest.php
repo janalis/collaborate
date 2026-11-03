@@ -10,6 +10,9 @@ use Janalis\Collaborate\Doctrine\RecordIdentifier;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftSave;
+use Janalis\Collaborate\Draft\DraftValues;
+use Janalis\Collaborate\Draft\EventValidator;
+use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Article;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -35,6 +38,9 @@ use Symfony\Component\Translation\IdentityTranslator;
  */
 #[CoversClass(DraftSave::class)]
 #[UsesClass(DraftJournal::class)]
+#[UsesClass(DraftValues::class)]
+#[UsesClass(EventValidator::class)]
+#[UsesClass(FieldDefinitions::class)]
 #[UsesClass(RecordIdentifier::class)]
 final class DraftSaveTest extends TestCase
 {

@@ -1,0 +1,15 @@
+{
+  // Type-checks the modules that opt in with `// @ts-check`; the others are checked by their tests alone.
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "strict": false,
+    "target": "es2024",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["es2024", "dom", "dom.iterable"],
+    "skipLibCheck": true
+  },
+  "include": ["assets/**/*.js", "typings/*.d.ts"]
+}

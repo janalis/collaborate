@@ -1,8 +1,10 @@
+// @ts-check
 import { fetchEventSource } from '@microsoft/fetch-event-source';
 
-// Captured when the module is evaluated: hub traffic is background traffic, and a host that wraps
-// `window.fetch` (a loading indicator, say) must load easyadmin.js before installing its wrapper.
-const backgroundFetch = window.fetch.bind(window);
+// Captured when the module is evaluated, before any module of the bundle that imports it: collaboration traffic
+// is background traffic, and a host that wraps `window.fetch` (a loading indicator, say) must load easyadmin.js
+// before installing its wrapper. Every module sends with this one.
+export const backgroundFetch = window.fetch.bind(window);
 const hubs = new WeakMap();
 
 /** The layer's `data-config` JSON: an absent or malformed one reads as no settings, each module keeping its defaults. */
@@ -23,6 +25,11 @@ export function layerConfig(layer) {
  * A member is `{ channel, draft?, grant?(full), receive(message, data), opened?(session), closed?(), denied?() }`.
  */
 export class CollaborateHub {
+  /**
+   * @param {HTMLElement} layer
+   * @param {typeof fetch} [fetcher]
+   * @param {typeof fetchEventSource} [subscribe]
+   */
   constructor(layer, fetcher = backgroundFetch, subscribe = fetchEventSource) {
     this.layer = layer;
     this.fetcher = fetcher;
@@ -181,9 +188,9 @@ export class CollaborateHub {
         headers: { 'X-Collaborate-Renew': '1' },
       });
       if (!response.ok || response.redirected) return false;
-      const fresh = new DOMParser()
-        .parseFromString(await response.text(), 'text/html')
-        .querySelector('[data-collaborate-layer]');
+      const fresh = /** @type {HTMLElement | null} */ (
+        new DOMParser().parseFromString(await response.text(), 'text/html').querySelector('[data-collaborate-layer]')
+      );
       if (!fresh?.dataset.grant || !fresh.dataset.csrf) return false;
       this.layer.dataset.grant = fresh.dataset.grant;
       this.layer.dataset.csrf = fresh.dataset.csrf;
@@ -208,8 +215,19 @@ export class CollaborateHub {
   }
 }
 
-/** The hub of the page's collaboration layer, which carries its grant, its CSRF token and the session URL. */
-export function hubFor(layer = document.querySelector('[data-collaborate-layer]'), fetcher, subscribe) {
+/**
+ * The hub of the page's collaboration layer, which carries its grant, its CSRF token and the session URL.
+ *
+ * @param {HTMLElement | null} [layer]
+ * @param {typeof fetch} [fetcher]
+ * @param {typeof fetchEventSource} [subscribe]
+ * @returns {CollaborateHub | null}
+ */
+export function hubFor(
+  layer = /** @type {HTMLElement | null} */ (document.querySelector('[data-collaborate-layer]')),
+  fetcher = undefined,
+  subscribe = undefined
+) {
   if (!layer?.dataset.sessionUrl) return null;
   if (!hubs.has(layer)) hubs.set(layer, new CollaborateHub(layer, fetcher, subscribe));
   return hubs.get(layer);

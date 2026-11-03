@@ -1,7 +1,9 @@
 # The test applications under FrankenPHP, each with its own Mercure hub on its own origin:
 #   frankenphp run --config tests/Application/Caddyfile   (from the repository root)
 # Ports: PLAIN_PORT (8710), EASYADMIN_PORT (8720), LIMITS_PORT (8730: the plain application in its
-# `e2e_limits` environment) and HOST_PORT (8740). Database: COLLABORATE_DATABASE_URL.
+# `e2e_limits` environment), HOST_PORT (8740), and the plain application with another stock form theme
+# (PlainKernel::FORM_THEMES): PLAIN_DIV_PORT (8750), PLAIN_TABLE_PORT (8760), PLAIN_TAILWIND_PORT (8770).
+# Database: COLLABORATE_DATABASE_URL.
 {
 	auto_https off
 	admin off
@@ -50,4 +52,16 @@
 
 :{$HOST_PORT:8740} {
 	import app Host {$HOST_PORT:8740} host e2e
+}
+
+:{$PLAIN_DIV_PORT:8750} {
+	import app Plain {$PLAIN_DIV_PORT:8750} plain e2e_div
+}
+
+:{$PLAIN_TABLE_PORT:8760} {
+	import app Plain {$PLAIN_TABLE_PORT:8760} plain e2e_table
+}
+
+:{$PLAIN_TAILWIND_PORT:8770} {
+	import app Plain {$PLAIN_TAILWIND_PORT:8770} plain e2e_tailwind
 }

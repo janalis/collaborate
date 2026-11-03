@@ -746,17 +746,37 @@ test('measures the pointer once per sent event, however many moves the throttle 
   expect(document.elementFromPoint).toHaveBeenCalledWith(50, 25);
 });
 
-test('a frame that only animates a pointer measures no caret', async () => {
+test('a peer that moves is measured in the next frame, with none of the others', async () => {
+  await start();
+  receive({});
+  receive({ userId: 3, clientId: 'bob-client-1234567', label: 'Bob' });
+  await vi.advanceTimersByTimeAsync(220);
+  document.elementFromPoint.mockClear();
+  receive({ sequence: 2, anchor: { ...anchor, x: 0.9 } });
+  // Not as the event comes, between two frames' writes.
+  expect(document.elementFromPoint).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(20);
+  expect(document.elementFromPoint).toHaveBeenCalledOnce();
+  // The frames of its glide measure nothing.
+  await vi.advanceTimersByTimeAsync(200);
+  expect(document.elementFromPoint).toHaveBeenCalledOnce();
+  window.dispatchEvent(new Event('resize'));
+  await vi.advanceTimersByTimeAsync(20);
+  expect(document.elementFromPoint).toHaveBeenCalledTimes(3);
+});
+
+test('a frame measures the carets that moved, and every caret once the page moved', async () => {
   await start();
   notes();
   receive({ caret, anchor });
   await vi.advanceTimersByTimeAsync(20);
   mocks.resolveCaret.mockClear();
-  // The pointer moves: its animation runs over several frames.
+  // The pointer moves, its caret stays: neither the event nor the animation's frames measure the caret.
   receive({ sequence: 2, caret, anchor: { ...anchor, x: 0.9, y: 0.9 } });
+  await vi.advanceTimersByTimeAsync(220);
+  expect(mocks.resolveCaret).not.toHaveBeenCalled();
+  receive({ sequence: 3, caret: { ...caret, end: 4 }, anchor: { ...anchor, x: 0.9, y: 0.9 } });
   await vi.advanceTimersByTimeAsync(20);
-  expect(mocks.resolveCaret).toHaveBeenCalledOnce();
-  await vi.advanceTimersByTimeAsync(200);
   expect(mocks.resolveCaret).toHaveBeenCalledOnce();
   window.dispatchEvent(new Event('resize'));
   await vi.advanceTimersByTimeAsync(20);

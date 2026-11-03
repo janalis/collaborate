@@ -6,6 +6,7 @@ import {
   interpolate,
   isPopup,
   keyOf,
+  measure,
   offscreenAnchor,
   regionNames,
   resolveAnchor,
@@ -135,6 +136,45 @@ test('a record is found among the ones the page shows, by its key compared rathe
   expect(findRecord(null)).toBeNull();
   configureGeometry({ ...host, keyAttribute: null });
   expect(findRecord('a')).toBeNull();
+});
+
+test('a frame finds each region, path and record once, as it would one by one, and forgets them after', () => {
+  // A popup of a record and the reader's own records come before the listing's: none of them is found.
+  document.body.insertAdjacentHTML('afterbegin', '<div data-collaborate-popup="share"><p data-key="b"></p></div>');
+  configureGeometry({ ...host, keyScope: 'body' });
+  const one = { region: 'listing', selector: 'tr[data-key="b"] > td.name' };
+  const lookups = vi.spyOn(document, 'querySelectorAll');
+  const found = measure(() => {
+    const first = [findRecord('a'), findRecord('b'), findRecord('gone'), resolvePath(one)];
+    // A frame within a frame shares its lookups.
+    const again = measure(() => [findRecord('a'), findRecord('b'), resolvePath(one), resolvePath(one)]);
+    return { first, again, lookups: lookups.mock.calls.length };
+  });
+  expect(found.first).toEqual([
+    document.querySelector('tr[data-key="a"]'),
+    document.querySelector('tr[data-key="b"]'),
+    null,
+    document.querySelector('tr[data-key="b"] > td.name'),
+  ]);
+  expect(found.again).toEqual([found.first[0], found.first[1], found.first[3], found.first[3]]);
+  // The scopes of the records, and the region of the path: each once.
+  expect(found.lookups).toBe(2);
+  expect([findRecord('a'), findRecord('b')]).toEqual([found.first[0], found.first[1]]);
+  // Out of the frame, the page is read again: a record gone is gone.
+  document.querySelector('tr[data-key="b"]').remove();
+  lookups.mockClear();
+  expect(findRecord('b')).toBeNull();
+  expect(resolvePath(one)).toBeNull();
+  expect(lookups).toHaveBeenCalledTimes(2);
+  // A frame that throws forgets them too.
+  expect(() =>
+    measure(() => {
+      findRecord('a');
+      throw new Error('drawn');
+    })
+  ).toThrow('drawn');
+  document.querySelector('tr[data-key="a"]').remove();
+  expect(findRecord('a')).toBe(document.querySelector('#inspector [data-key="a"]'));
 });
 
 test('the key of the record a pointer is on', () => {

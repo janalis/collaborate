@@ -4,11 +4,12 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "lint": "biome check",
+    "lint": "biome check && tsc -p .",
     "lint:fix": "biome check --write --unsafe",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc -p ."
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.15",
@@ -19,6 +20,7 @@
     "ckeditor5": "48.2.0",
     "jsdom": "^26.1.0",
     "sass": "1.107.1",
+    "typescript": "6.0.3",
     "vitest": "^5.0.4"
   }
 }

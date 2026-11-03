@@ -1,7 +1,7 @@
 import { test as base, expect } from '@playwright/test';
 
 // The pages of each test application, by Playwright project name (`limits` is the plain application in
-// its `e2e_limits` environment).
+// its `e2e_limits` environment, `plain-*` the plain application rendered by another stock form theme).
 const plain = {
   form: 'article',
   index: '/admin/articles',
@@ -11,6 +11,9 @@ const plain = {
 const routes = {
   plain,
   limits: plain,
+  'plain-div': plain,
+  'plain-table': plain,
+  'plain-tailwind': plain,
   easyadmin: {
     form: 'Article',
     index: '/admin/article',
@@ -99,7 +102,9 @@ export class Editor {
 
   /** The rows of the tag collection, in the order shown. */
   get tagRows() {
-    return this.form.locator('[data-collaborate-collection] .field-collection-item');
+    return this.form.locator(
+      `[data-collaborate-collection] ${this.easyAdmin ? '.field-collection-item' : '[data-collaborate-entry]'}`
+    );
   }
 
   /** The values of the tag names, in the order shown. */

@@ -13,6 +13,7 @@ use Janalis\Collaborate\Controller\HubController;
 use Janalis\Collaborate\Cursor\CursorEvent;
 use Janalis\Collaborate\Cursor\CursorPosition;
 use Janalis\Collaborate\Cursor\PageGrant;
+use Janalis\Collaborate\DependencyInjection\Configuration;
 use Janalis\Collaborate\Doctrine\ChangeCollector;
 use Janalis\Collaborate\Doctrine\RecordIdentifier;
 use Janalis\Collaborate\Draft\DraftAccess;
@@ -64,6 +65,7 @@ use Twig\Environment;
 /** The bundle in an application that installs EasyAdmin without registering it, with its own admin pages. */
 #[CoversClass(RoleDraftAccessChecker::class)]
 #[CoversClass(CollaborateBundle::class)]
+#[CoversClass(Configuration::class)]
 #[CoversClass(PurgeDraftsCommand::class)]
 #[CoversClass(CursorController::class)]
 #[CoversClass(DraftController::class)]

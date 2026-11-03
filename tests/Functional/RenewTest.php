@@ -6,6 +6,7 @@ namespace Janalis\Collaborate\Tests\Functional;
 
 use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Cursor\PageGrant;
+use Janalis\Collaborate\DependencyInjection\Configuration;
 use Janalis\Collaborate\Doctrine\ChangeCollector;
 use Janalis\Collaborate\Doctrine\RecordIdentifier;
 use Janalis\Collaborate\Draft\DraftAccess;
@@ -40,6 +41,7 @@ use Symfony\Component\HttpFoundation\Session\SessionFactoryInterface;
 #[UsesClass(RecordIdentifier::class)]
 #[CoversClass(RenewSubscriber::class)]
 #[UsesClass(CollaborateBundle::class)]
+#[UsesClass(Configuration::class)]
 #[UsesClass(PageGrant::class)]
 #[UsesClass(DraftAccess::class)]
 #[UsesClass(Grant::class)]

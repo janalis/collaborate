@@ -11,6 +11,7 @@ use Janalis\Collaborate\Controller\HubController;
 use Janalis\Collaborate\Cursor\CursorEvent;
 use Janalis\Collaborate\Cursor\CursorPosition;
 use Janalis\Collaborate\Cursor\PageGrant;
+use Janalis\Collaborate\DependencyInjection\Configuration;
 use Janalis\Collaborate\Doctrine\ChangeCollector;
 use Janalis\Collaborate\Doctrine\RecordIdentifier;
 use Janalis\Collaborate\Draft\DraftAccess;
@@ -41,6 +42,7 @@ use Symfony\Component\DomCrawler\Crawler;
  */
 #[CoversClass(RoleDraftAccessChecker::class)]
 #[CoversClass(CollaborateBundle::class)]
+#[CoversClass(Configuration::class)]
 #[CoversClass(CursorController::class)]
 #[CoversClass(HubController::class)]
 #[CoversClass(CursorEvent::class)]

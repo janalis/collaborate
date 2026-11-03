@@ -8,6 +8,7 @@ use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Controller\CursorController;
 use Janalis\Collaborate\Controller\HubController;
 use Janalis\Collaborate\Cursor\PageGrant;
+use Janalis\Collaborate\DependencyInjection\Configuration;
 use Janalis\Collaborate\Doctrine\ChangeCollector;
 use Janalis\Collaborate\Doctrine\RecordIdentifier;
 use Janalis\Collaborate\Draft\DraftAccess;
@@ -50,6 +51,7 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 #[CoversClass(CursorController::class)]
 #[CoversClass(CollaborateExtension::class)]
 #[UsesClass(CollaborateBundle::class)]
+#[UsesClass(Configuration::class)]
 #[UsesClass(PageGrant::class)]
 #[UsesClass(DraftAccess::class)]
 #[UsesClass(Grant::class)]

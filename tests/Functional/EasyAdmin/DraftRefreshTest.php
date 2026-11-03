@@ -12,6 +12,7 @@ use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Command\PurgeDraftsCommand;
 use Janalis\Collaborate\Controller\DraftController;
 use Janalis\Collaborate\Cursor\PageGrant;
+use Janalis\Collaborate\DependencyInjection\Configuration;
 use Janalis\Collaborate\Doctrine\ChangeCollector;
 use Janalis\Collaborate\Doctrine\RecordIdentifier;
 use Janalis\Collaborate\Doctrine\TranslationMapperInterface;
@@ -49,6 +50,7 @@ use Symfony\Component\Console\Command\LazyCommand;
 #[CoversClass(DraftRefreshSubscriber::class)]
 #[CoversClass(EasyAdminFormContext::class)]
 #[UsesClass(CollaborateBundle::class)]
+#[UsesClass(Configuration::class)]
 #[UsesClass(RoleDraftAccessChecker::class)]
 #[UsesClass(PurgeDraftsCommand::class)]
 #[UsesClass(DraftController::class)]

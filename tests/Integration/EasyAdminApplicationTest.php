@@ -13,6 +13,7 @@ use Janalis\Collaborate\Controller\HubController;
 use Janalis\Collaborate\Cursor\CursorEvent;
 use Janalis\Collaborate\Cursor\CursorPosition;
 use Janalis\Collaborate\Cursor\PageGrant;
+use Janalis\Collaborate\DependencyInjection\Configuration;
 use Janalis\Collaborate\Doctrine\ChangeCollector;
 use Janalis\Collaborate\Doctrine\RecordIdentifier;
 use Janalis\Collaborate\Draft\DraftAccess;
@@ -51,6 +52,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 /** The bundle in an EasyAdmin application: its adapter is the form context, and saved lists refresh. */
 #[CoversClass(RoleDraftAccessChecker::class)]
 #[CoversClass(CollaborateBundle::class)]
+#[CoversClass(Configuration::class)]
 #[CoversClass(PurgeDraftsCommand::class)]
 #[CoversClass(CursorController::class)]
 #[CoversClass(DraftController::class)]

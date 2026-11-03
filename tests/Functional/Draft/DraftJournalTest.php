@@ -15,6 +15,9 @@ use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftSave;
 use Janalis\Collaborate\Draft\DraftText;
+use Janalis\Collaborate\Draft\DraftValues;
+use Janalis\Collaborate\Draft\EventValidator;
+use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Article;
 use Janalis\Collaborate\Tests\Fixtures\Draft\InterleavingConnection;
 use Janalis\Collaborate\Tests\Fixtures\Draft\JsonAssertions;
@@ -52,6 +55,9 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  */
 /** @phpstan-import-type SignedScope from DraftAccess */
 #[CoversClass(DraftJournal::class)]
+#[CoversClass(DraftValues::class)]
+#[CoversClass(EventValidator::class)]
+#[CoversClass(FieldDefinitions::class)]
 #[CoversClass(DraftSave::class)]
 #[UsesClass(RecordIdentifier::class)]
 #[UsesClass(DraftText::class)]

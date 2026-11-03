@@ -11,6 +11,9 @@ use Janalis\Collaborate\Doctrine\RecordIdentifier;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftSave;
+use Janalis\Collaborate\Draft\DraftValues;
+use Janalis\Collaborate\Draft\EventValidator;
+use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\EasyAdmin\UpdatesSubscriber;
 use Janalis\Collaborate\Form\CollaborateFormExtension;
 use Janalis\Collaborate\Grant;
@@ -31,6 +34,9 @@ use Symfony\Component\HttpFoundation\Session\SessionFactoryInterface;
 #[UsesClass(UpdatesSubscriber::class)]
 #[UsesClass(DraftSave::class)]
 #[UsesClass(DraftJournal::class)]
+#[UsesClass(DraftValues::class)]
+#[UsesClass(EventValidator::class)]
+#[UsesClass(FieldDefinitions::class)]
 #[UsesClass(RecordIdentifier::class)]
 #[CoversClass(RenewSubscriber::class)]
 #[UsesClass(CollaborateBundle::class)]

@@ -19,6 +19,9 @@ use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftSave;
 use Janalis\Collaborate\Draft\DraftText;
+use Janalis\Collaborate\Draft\DraftValues;
+use Janalis\Collaborate\Draft\EventValidator;
+use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\Draft\FieldKeyResolver;
 use Janalis\Collaborate\EasyAdmin\DraftRefreshSubscriber;
 use Janalis\Collaborate\EasyAdmin\EasyAdminFormContext;
@@ -59,6 +62,9 @@ use PHPUnit\Framework\Attributes\CoversClass;
 #[CoversClass(RecordIdentifier::class)]
 #[CoversClass(DraftAccess::class)]
 #[CoversClass(DraftJournal::class)]
+#[CoversClass(DraftValues::class)]
+#[CoversClass(EventValidator::class)]
+#[CoversClass(FieldDefinitions::class)]
 #[CoversClass(DraftSave::class)]
 #[CoversClass(DraftText::class)]
 #[CoversClass(FieldKeyResolver::class)]

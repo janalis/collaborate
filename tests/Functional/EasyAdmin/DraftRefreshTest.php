@@ -18,6 +18,9 @@ use Janalis\Collaborate\Doctrine\TranslationMapperInterface;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftSave;
+use Janalis\Collaborate\Draft\DraftValues;
+use Janalis\Collaborate\Draft\EventValidator;
+use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\Draft\FieldKeyResolverInterface;
 use Janalis\Collaborate\EasyAdmin\DraftRefreshSubscriber;
 use Janalis\Collaborate\EasyAdmin\EasyAdminFormContext;
@@ -54,6 +57,9 @@ use Symfony\Component\Console\Command\LazyCommand;
 #[UsesClass(RecordIdentifier::class)]
 #[UsesClass(DraftAccess::class)]
 #[UsesClass(DraftJournal::class)]
+#[UsesClass(DraftValues::class)]
+#[UsesClass(EventValidator::class)]
+#[UsesClass(FieldDefinitions::class)]
 #[UsesClass(DraftSave::class)]
 #[UsesClass(SaveSubscriber::class)]
 #[UsesClass(UpdatesSubscriber::class)]

@@ -9,6 +9,9 @@ use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Exception\LockWaitTimeoutException;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftText;
+use Janalis\Collaborate\Draft\DraftValues;
+use Janalis\Collaborate\Draft\EventValidator;
+use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\Tests\Fixtures\Draft\InterleavingConnection;
 use Janalis\Collaborate\Tests\Fixtures\Draft\JsonAssertions;
 use Janalis\Collaborate\Tests\Fixtures\Draft\StatementRecordingConnection;
@@ -25,6 +28,9 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  * and its temporary tables.
  */
 #[CoversClass(DraftJournal::class)]
+#[CoversClass(DraftValues::class)]
+#[CoversClass(EventValidator::class)]
+#[CoversClass(FieldDefinitions::class)]
 #[UsesClass(DraftText::class)]
 final class DraftJournalBoundariesTest extends TestCase
 {

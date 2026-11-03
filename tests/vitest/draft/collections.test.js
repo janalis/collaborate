@@ -318,7 +318,7 @@ test('rewrites nested collection names and prototypes when a new parent receives
   const node = document.createElement('div');
   node.className = 'field-collection-item';
   node.innerHTML =
-    '<input name="Record[items][0][title]"><div data-collaborate-collection="Record[items][0][nested]"><div class="ea-form-collection-items"></div></div>';
+    '<input name="Record[items][0][title]"><div data-collaborate-collection="Record[items][0][nested]"><div class="ea-form-collection-items" data-collaborate-entries="Record[items][0][nested]"></div></div>';
   const nested = node.querySelector('[data-collaborate-collection]');
   nested.dataset.prototype =
     '<div class="field-collection-item"><input name="Record[items][0][nested][__name__][name]"></div>';
@@ -326,6 +326,9 @@ test('rewrites nested collection names and prototypes when a new parent receives
   document.dispatchEvent(new Event('ea.collection.item-added'));
   expect(nested.dataset.collaborateCollection).toBe(`Record[items][${node.dataset.collaborateItem}][nested]`);
   expect(nested.dataset.prototype).toContain(`Record[items][${node.dataset.collaborateItem}][nested][__name__][name]`);
+  expect(nested.querySelector('[data-collaborate-entries]').dataset.collaborateEntries).toBe(
+    `Record[items][${node.dataset.collaborateItem}][nested]`
+  );
   stop();
 });
 

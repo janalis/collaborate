@@ -1,4 +1,4 @@
-import { rowOf } from '../markup.js';
+import { ENTRY, rowOf } from '../markup.js';
 import { anchorPath, isTextControl, resolvePath, sharesCaret } from './geometry.js';
 
 export const MAX_CARET_OFFSET = 10485760;
@@ -229,7 +229,11 @@ export function focusedField(element = document.activeElement) {
   let control = element.name ? element : null;
   // A rich editor edits its source textarea; a widget's search input sits beside the select it fills.
   control ||= element.closest('.ck-editor__editable')?.ckeditorInstance?.sourceElement;
-  control ||= rowOf(element)?.querySelector('select[name], textarea[name], input[name]:not([type="hidden"])');
+  // A collection entry's own row holds its buttons and help, not a field: focus there names none.
+  const row = rowOf(element);
+  if (row && !row.matches(ENTRY)) {
+    control ||= row.querySelector('select[name], textarea[name], input[name]:not([type="hidden"])');
+  }
   if (!control?.name || UNSHARED.includes(control.type) || control.name.length > 512) return null;
   return control.name;
 }

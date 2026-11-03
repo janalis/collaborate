@@ -70,15 +70,18 @@ export function initializeCollections(session) {
         container.querySelector('.ea-form-collection-items');
       if (!parent) return;
       const added = [];
+      let prototype;
+      let placeholder;
       for (const [key] of ordered) {
         let node = nodes.get(key);
         if (!node) {
-          const prototype = prototypeOf(container);
+          prototype ??= prototypeOf(container);
           if (!prototype) {
             session.setStatus('incompatible');
             continue;
           }
-          node = parseEntry(prototype.replaceAll(placeholderOf(container), key));
+          placeholder ??= placeholderOf(container);
+          node = parseEntry(prototype.replaceAll(placeholder, key));
           if (!node) continue;
           node.dataset.collaborateItem = key;
           parent.append(node);
@@ -197,6 +200,8 @@ export function initializeCollections(session) {
             for (const control of node.querySelectorAll('[name]')) control.name = control.name.replace(before, after);
             for (const nested of node.querySelectorAll('[data-collaborate-collection]'))
               nested.dataset.collaborateCollection = nested.dataset.collaborateCollection.replace(before, after);
+            for (const nested of node.querySelectorAll('[data-collaborate-entries]'))
+              nested.dataset.collaborateEntries = nested.dataset.collaborateEntries.replace(before, after);
             for (const nested of node.querySelectorAll('[data-prototype]'))
               nested.dataset.prototype = nested.dataset.prototype.replaceAll(before, after);
             node.dataset.collaborateItem = key;

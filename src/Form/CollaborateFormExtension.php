@@ -308,11 +308,7 @@ final class CollaborateFormExtension extends AbstractTypeExtension
             $placeholder = $form->getConfig()->getOption('prototype_name', '__name__');
             $attributes['data-collaborate-placeholder'] = $placeholder;
             $view->vars['attr'] = $attributes;
-            $entries = $view->children;
-            if (($view->vars['prototype'] ?? null) instanceof FormView) {
-                $entries[] = $view->vars['prototype'];
-            }
-            foreach ($entries as $entry) {
+            foreach (self::childrenOf($view) as $entry) {
                 self::addRowAttribute($entry, 'data-collaborate-entry');
             }
         }
@@ -384,14 +380,25 @@ final class CollaborateFormExtension extends AbstractTypeExtension
      */
     private static function markRows(FormView $view): void
     {
-        $children = $view->children;
-        if (($view->vars['prototype'] ?? null) instanceof FormView) {
-            $children[] = $view->vars['prototype'];
-        }
-        foreach ($children as $child) {
+        foreach (self::childrenOf($view) as $child) {
             self::addRowAttribute($child, 'data-collaborate-row');
             self::markRows($child);
         }
+    }
+
+    /**
+     * The children of `$view`, its collection prototype included.
+     *
+     * @return list<FormView>
+     */
+    private static function childrenOf(FormView $view): array
+    {
+        $children = array_values($view->children);
+        if (($view->vars['prototype'] ?? null) instanceof FormView) {
+            $children[] = $view->vars['prototype'];
+        }
+
+        return $children;
     }
 
     /** Adds an empty attribute to the row of `$view`, keeping the attributes already there. */

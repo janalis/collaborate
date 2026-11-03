@@ -8,7 +8,9 @@ startEditors();
 
 /** The entry a collection's prototype renders: a table layout's is a row, parsed within a table body. */
 function entryOf(widget) {
-  const html = widget.dataset.prototype.replaceAll('__name__', `n${Date.now().toString(36)}`).trim();
+  const html = widget.dataset.prototype
+    .replaceAll(widget.dataset.collaboratePlaceholder || '__name__', `n${Date.now().toString(36)}`)
+    .trim();
   const template = document.createElement('template');
   const row = /^<tr[\s>]/i.test(html);
   template.innerHTML = row ? `<table><tbody>${html}</tbody></table>` : html;

@@ -244,3 +244,16 @@ test('names the shared form control in focus, through a choice widget or a rich 
   form.querySelector('[name="Record[title]"]').focus();
   expect(focusedField()).toBe('Record[title]');
 });
+
+test("names a stock theme row's control from its widget, and no field from a collection entry's own buttons", () => {
+  document.body.innerHTML =
+    '<form data-collaborate="{}">' +
+    '<div data-collaborate-row><select name="Record[owner]"></select><input class="search"></div>' +
+    '<div data-collaborate-row data-collaborate-entry>' +
+    '<div data-collaborate-row><input name="Record[tags][0][name]"></div>' +
+    '<button type="button" id="remove">Remove</button>' +
+    '</div></form>';
+  expect(focusedField(document.querySelector('.search'))).toBe('Record[owner]');
+  expect(focusedField(document.getElementById('remove'))).toBeNull();
+  expect(focusedField(document.querySelector('[name="Record[tags][0][name]"]'))).toBe('Record[tags][0][name]');
+});

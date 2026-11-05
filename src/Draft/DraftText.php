@@ -32,18 +32,7 @@ final class DraftText
                 if (!\is_array($operation['nodes'] ?? null) || !array_is_list($operation['nodes'])) {
                     throw new BadRequestHttpException('Invalid plain-text insertion.');
                 }
-                $inserted = '';
-                foreach ($operation['nodes'] as $node) {
-                    if (
-                        !\is_array($node)
-                        || !\is_string($node['data'] ?? null)
-                        || [] !== array_diff(array_keys($node), ['data', 'attributes'])
-                        || [] !== ($node['attributes'] ?? [])
-                    ) {
-                        throw new BadRequestHttpException('Plain text cannot contain model elements or attributes.');
-                    }
-                    $inserted .= $node['data'];
-                }
+                $inserted = implode('', array_map(self::node(...), $operation['nodes']));
                 $units = $this->convert($inserted, 'UTF-16LE', 'UTF-8');
                 if ($removed) {
                     $graveyard += intdiv(\strlen($units), 2);
@@ -138,12 +127,27 @@ final class DraftText
             throw new BadRequestHttpException('Invalid plain-text position.');
         }
 
-        $offset = $value['path'][$paragraph ? 1 : 0];
-        if (!\is_int($offset) || $offset < 0) {
+        $index = $paragraph ? 1 : 0;
+        if (!\is_int($value['path'][$index]) || $value['path'][$index] < 0) {
             throw new BadRequestHttpException('Invalid plain-text offset.');
         }
 
-        return $offset;
+        return $value['path'][$index];
+    }
+
+    /** An inserted node's text: plain text holds text nodes only. */
+    private static function node(mixed $node): string
+    {
+        if (
+            !\is_array($node)
+            || !\is_string($node['data'] ?? null)
+            || [] !== array_diff(array_keys($node), ['data', 'attributes'])
+            || [] !== ($node['attributes'] ?? [])
+        ) {
+            throw new BadRequestHttpException('Plain text cannot contain model elements or attributes.');
+        }
+
+        return $node['data'];
     }
 
     private function boundary(string $text, int $offset): void

@@ -25,6 +25,7 @@ final class Database
         $url = Environment::get('COLLABORATE_DATABASE_URL') ?? self::DEFAULT_URL;
         $token = Environment::get('TEST_TOKEN');
         $suffix = (string) preg_replace('/\W/', '_', $environment . (null === $token ? '' : '_' . $token));
+        $match = [];
         $base = preg_match('#^[a-z0-9+]+://[^/]+/([^?]+)#i', $url, $match) ? $match[1] : 'collaborate';
         $name = $base . '_' . $app . '_' . $suffix;
 

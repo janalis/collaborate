@@ -68,7 +68,11 @@ export class DraftSession {
       new Set([...form.children, ...Array.from(form.elements).filter((element) => !form.contains(element))])
     ).filter((element) => !element.hasAttribute('inert'));
     for (const element of this.startupControls) element.setAttribute('inert', '');
-    this.bar = new CollaborateBar(configuration.messages, () => this.discardDraft());
+    this.bar = new CollaborateBar(
+      configuration.messages,
+      () => this.discardDraft(),
+      () => this.saveFromBar()
+    );
     this.discard = this.bar.discard;
     form.prepend(this.bar.element);
     this.setStatus('connecting');
@@ -881,6 +885,30 @@ export class DraftSession {
     this.awaited = Math.max(this.awaited, revision);
     // A replay under way reads again once done, unless it reached that revision.
     if (!this.pulling) this.schedule();
+  }
+
+  /**
+   * The submit button the bar's Save stands for: one the host marks `data-collaborate-submitter`, else EasyAdmin's
+   * `saveAndContinue` (the editor stays on the record), else its `saveAndReturn` (never "save and add another",
+   * which would open an empty form), else the form's first. Buttons outside the form that name it (`form="…"`, as
+   * EasyAdmin's page actions do) count.
+   */
+  submitter() {
+    const buttons = Array.from(this.form.elements).filter((control) => control.type === 'submit' && !control.disabled);
+    return (
+      buttons.find((button) => button.hasAttribute('data-collaborate-submitter')) ??
+      buttons.find((button) => button.value === 'saveAndContinue') ??
+      buttons.find((button) => button.value === 'saveAndReturn') ??
+      buttons[0] ??
+      null
+    );
+  }
+
+  /** The bar's Save submits the form as its own button would, through the same draft-aware submit handler. */
+  saveFromBar() {
+    const submitter = this.submitter();
+    if (submitter) this.form.requestSubmit(submitter);
+    else this.form.requestSubmit();
   }
 
   async discardDraft() {

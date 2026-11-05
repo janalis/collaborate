@@ -37,7 +37,7 @@ abstract class CollaborationTestCase extends ApplicationTestCase
         self::assertSame('/admin/collaborate/__action__', $configuration['url']);
         self::assertFalse($configuration['isNew']);
         self::assertNull($configuration['invitation']);
-        self::assertSame('Shared draft saved by %name%.', $configuration['messages']['savedBy']);
+        self::assertSame('All changes saved by %name%.', $configuration['messages']['savedBy']);
         self::assertSame(
             ['replayConnected' => 30_000, 'replayDisconnected' => 5_000, 'joinRetry' => 12_000, 'labelLength' => 255],
             $configuration['config'],
@@ -84,8 +84,7 @@ abstract class CollaborationTestCase extends ApplicationTestCase
         self::assertSame(15, $session['userId']);
         self::assertSame([], $session['resend']);
         self::assertSame([1], $session['denied']);
-        $topics = $session['topics'];
-        self::assertIsArray($topics);
+        $topics = Arrays::array($session['topics']);
         self::assertCount(3, $topics);
         self::assertStringStartsWith('urn:collaborate:cursors:', (string) $topics[0]);
         self::assertSame('urn:collaborate:updates', $topics[1]);
@@ -304,10 +303,10 @@ abstract class CollaborationTestCase extends ApplicationTestCase
     /** @param array{grant: string, ...} $configuration */
     protected static function draftId(array $configuration): string
     {
-        $id = self::scope($configuration['grant'])['id'] ?? null;
-        self::assertIsString($id);
+        $scope = self::scope($configuration['grant']);
+        self::assertIsString($scope['id'] ?? null);
 
-        return $id;
+        return $scope['id'];
     }
 
     /** @param array{grant: string, ...} $configuration */
@@ -326,11 +325,8 @@ abstract class CollaborationTestCase extends ApplicationTestCase
     /** @return array<string, mixed> */
     protected static function schema(string $grant): array
     {
-        $fields = self::scope($grant)['fields'] ?? null;
-        self::assertIsArray($fields);
-
         /** @var array<string, mixed> */
-        return $fields;
+        return Arrays::array(self::scope($grant)['fields'] ?? null);
     }
 
     /** @return array<string, mixed> */

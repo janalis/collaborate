@@ -157,8 +157,8 @@ alone, have a table of their own below.
 | Order saved from the reordering page | `collections › saves the order from the page that reordered it` | ✓ | ✓ | |
 | **State bar** | | | | |
 | Connecting (grey, spinner), controls inert until ready, Discard off | `draft-states › locks the form while it connects, then shows the saved draft` | ✓ | ✓ | |
-| Saved (green, check icon, announced) | same; `saving › saves the draft and tells the other pages who saved it` | ✓ | ✓ | |
-| Unsaved (blue, pen), Synchronizing (blue, spinner, not announced) | `draft-states › shows unsaved changes, and synchronizes without announcing it` | ✓ | ✓ | |
+| Saved (green, check icon, announced), neither Save nor Discard offered | same; `saving › saves the draft and tells the other pages who saved it` | ✓ | ✓ | |
+| Unsaved (blue, pen, "Click Save"), Synchronizing (blue, spinner, not announced) | `draft-states › shows unsaved changes, and synchronizes without announcing it` | ✓ | ✓ | |
 | Interrupted (amber, plug) on a network outage, edits sent once back | `draft-states › keeps edits through a network outage and sends them once it is over` | ✓ | ✓ | |
 | Interrupted on a failing journal (5xx), recovery | `draft-states › retries edits the journal failed to store` | ✓ | ✓ | |
 | Hub outage: replay every 5 s, nothing lost, stream recovery | `draft-states › follows the draft by replaying it while the hub is unreachable` | ✓ | ✓ | |
@@ -175,8 +175,9 @@ alone, have a table of their own below.
 | In conflict (amber, compare icon) | `conflicts › lists each difference by its label, as read, with the words that changed` | ✓ | ✓ | |
 | Full (red, database) | `limits › refuse an update too large, and the draft shows full until discarded` | | | ✓ |
 | **Saving** | | | | |
-| Save, "Shared draft saved by …" on peers, own save unnamed | `saving › saves the draft and tells the other pages who saved it`; `collaboration › tells the other editor of a save, which keeps the shared values` | ✓ | ✓ | |
-| Save overtaken by a peer edit: back to the form with a warning, saved again | `saving › sends back to the form a save a peer edit overtook, which then saves again` | ✓ | ✓ | |
+| Save, "All changes saved by …" on peers, own save unnamed | `saving › saves the draft and tells the other pages who saved it`; `collaboration › tells the other editor of a save, which keeps the shared values` | ✓ | ✓ | |
+| Save from the bar: Save first among its actions, offered only while unsaved, the page stays on the record | `saving › saves from the bar, staying on the page, and offers Save only while changes are unsaved` | ✓ | ✓ | |
+| Save overtaken by a peer edit (posted from the bar): back to the form with a warning, saved again | `saving › sends back to the form a save a peer edit overtook, which then saves again` | ✓ | ✓ | |
 | Validation error keeps the draft and the submitted values | `saving › keeps the draft and the submitted values when validation fails` | ✓ | ✓ | |
 | Save blocked by conflicts brings the review into view and focus | `conflicts › brings the review into view and focus instead of saving` | ✓ | ✓ | |
 | **Discarding** | | | | |

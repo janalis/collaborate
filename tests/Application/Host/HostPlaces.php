@@ -23,12 +23,14 @@ final readonly class HostPlaces implements PlaceProviderInterface
 
     public function place(Request $request): ?array
     {
-        $folder = $request->attributes->get('folder');
-        if (!\in_array($request->attributes->get('_route'), self::ROUTES, true) || !\is_string($folder)) {
+        $attributes = $request->attributes->all();
+        if (
+            !\in_array($attributes['_route'] ?? null, self::ROUTES, true) || !\is_string($attributes['folder'] ?? null)
+        ) {
             return null;
         }
 
-        return ['library', $folder];
+        return ['library', $attributes['folder']];
     }
 
     public function canEnter(UserInterface $user, array $place): bool
@@ -52,16 +54,26 @@ final readonly class HostPlaces implements PlaceProviderInterface
     private function revoked(): array
     {
         $json = is_file($this->file()) ? (string) file_get_contents($this->file()) : '[]';
-        $folders = json_decode($json, true);
 
-        $revoked = [];
-        foreach (\is_array($folders) ? $folders : [] as $folder) {
-            if (\is_string($folder)) {
-                $revoked[] = $folder;
+        return self::strings(json_decode($json, true));
+    }
+
+    /** @return list<string> */
+    private static function strings(mixed $folders): array
+    {
+        if (!\is_array($folders)) {
+            return [];
+        }
+        $strings = [];
+        foreach (array_keys($folders) as $key) {
+            if (!\is_string($folders[$key])) {
+                continue;
             }
+
+            $strings[] = $folders[$key];
         }
 
-        return $revoked;
+        return $strings;
     }
 
     private function file(): string

@@ -19,9 +19,9 @@ final class TestPlaces implements PlaceProviderInterface
 
     public function place(Request $request): ?array
     {
-        $place = $request->attributes->get('_place');
+        $attributes = $request->attributes->all();
 
-        return \is_array($place) ? $place : null;
+        return \is_array($attributes['_place'] ?? null) ? $attributes['_place'] : null;
     }
 
     public function canEnter(UserInterface $user, array $place): bool

@@ -5,6 +5,37 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- The state bar offers **Save** while the draft holds unsaved changes. It
+  submits the form through its usual path, with the button that keeps the
+  editor on the page: one marked `data-collaborate-submitter`, else
+  EasyAdmin's `saveAndContinue`, else its `saveAndReturn`, else the first. Before this, the bar's only
+  button was Discard, and editors working alone took it for the way to deal
+  with "unsaved changes", which erased their work.
+- **Discard changes** (formerly *Discard shared draft*) comes after Save and
+  is styled as a secondary link. It is hidden, not just disabled, in the
+  states it cannot act from, the saved state included. Its dialog says that
+  the changes are erased and that Save keeps them.
+- The messages say what the editor can do: "All changes saved.", "Unsaved
+  changes, kept automatically. Click Save to record them.". The new
+  translation keys are `save`, and the reworded `saved`, `savedBy`, `draft`,
+  `discard` and `confirmDiscard*`; hosts that override these strings need
+  the new source keys.
+
+### Fixed
+
+- A save in a non-default locale checkpoints the value each translated field
+  holds once the record is persisted, as for every other field, where it
+  checkpointed the submitted value. When the save stores a value of its own
+  (a slug its listener derives from the new name), the draft and the record
+  now agree instead of showing a conflict on the next page.
+
+### Deprecated
+
+- `FieldKeyResolverInterface::savedElsewhere()` is no longer called; it is
+  removed in 0.3.
+
 ## [0.2.3] - 2026-11-05
 
 ### Fixed

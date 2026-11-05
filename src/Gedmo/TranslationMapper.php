@@ -15,12 +15,19 @@ final class TranslationMapper implements TranslationMapperInterface
         if (!$entity instanceof AbstractTranslation) {
             return null;
         }
-        $class = $entity->getObjectClass();
-        if (!\is_string($class) || !class_exists($class)) {
+        // Gedmo declares strings: a translation not yet filled holds no class, and the foreign key column
+        // holds the object's id, an int once hydrated.
+        $class = self::className($entity->getObjectClass());
+        if (null === $class) {
             return null;
         }
 
-        // Gedmo declares a string; the column holds the object's id, an int once hydrated.
-        return [$class, (string) $entity->getForeignKey()];
+        return [$class, \strval($entity->getForeignKey())];
+    }
+
+    /** @return class-string|null */
+    private static function className(mixed $class): ?string
+    {
+        return \is_string($class) && class_exists($class) ? $class : null;
     }
 }

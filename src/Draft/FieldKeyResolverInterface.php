@@ -20,7 +20,10 @@ interface FieldKeyResolverInterface
 
     /**
      * Whether a saved record no longer holds the value submitted for that field, which went to another
-     * locale's storage: the draft then checkpoints the submitted value.
+     * locale's storage.
+     *
+     * @deprecated since 0.2.4, no longer called: a save checkpoints the value the record holds once persisted,
+     *             which Gedmo leaves on the property in every locale. Removed in 0.3.
      *
      * @param class-string $ownerClass
      */

@@ -1418,6 +1418,7 @@ test('blocks early submits, exposes invitations and opens a record already creat
 test('allows an explicit discard while synchronization is stopped and handles a saved-record reset choice', async () => {
   const { session, fetcher, form } = fixture();
   await session.ready;
+  session.setStatus('draft');
   session.stopped = true;
   form.querySelector('[data-collaborate-discard]').click();
   await vi.waitFor(() => expect(fetcher.mock.calls.some(([url]) => url === '/discard')).toBe(true));
@@ -1951,12 +1952,17 @@ test('keeps Discard off while its request runs and in states it cannot succeed f
   });
   vi.spyOn(session, 'rejoin').mockImplementation(() => {});
   const button = form.querySelector('[data-collaborate-discard]');
+  // Nothing to discard on a saved draft.
+  expect(button.disabled).toBe(true);
+  session.setStatus('draft');
   expect(button.disabled).toBe(false);
   const discarding = session.discardDraft();
   await vi.waitFor(() => expect(release).toBeTypeOf('function'));
   expect(button.disabled).toBe(true);
   release();
   await discarding;
+  // No longer busy: an unsaved state offers it again.
+  session.setStatus('draft');
   expect(button.disabled).toBe(false);
   session.halt('denied');
   expect(button.disabled).toBe(true);
@@ -2243,4 +2249,71 @@ describe('starting on its own', () => {
     expect(shared.dataset.collaborateState).toBe('unavailable');
     expect(shared.querySelector('input').hasAttribute('inert')).toBe(false);
   });
+});
+
+test("the bar's Save stands for the button that keeps the editor on the page, or the one the host marks", async () => {
+  const { session, form } = fixture();
+  await session.ready;
+  form.id = 'record-form';
+  // EasyAdmin draws its page actions outside the form and ties them to it with `form="…"`.
+  document.body.insertAdjacentHTML(
+    'afterbegin',
+    '<button type="submit" form="record-form" name="ea[newForm][btn]" value="saveAndReturn">Save changes</button>' +
+      '<button type="submit" form="record-form" name="ea[newForm][btn]" value="saveAndContinue">Save and continue</button>'
+  );
+  const [ret, stay] = document.querySelectorAll('button[form]');
+  expect(session.submitter()).toBe(stay);
+  stay.disabled = true;
+  expect(session.submitter()).toBe(ret);
+  // A new page has no "continue": Save and return, never "add another", which would open an empty form.
+  document.body.insertAdjacentHTML(
+    'afterbegin',
+    '<button type="submit" form="record-form" name="ea[newForm][btn]" value="saveAndAddAnother">Add another</button>'
+  );
+  expect(session.submitter()).toBe(ret);
+  ret.disabled = true;
+  expect(session.submitter().value).toBe('saveAndAddAnother');
+  ret.disabled = false;
+  stay.disabled = false;
+  const own = form.querySelector('button[type="submit"]');
+  own.setAttribute('data-collaborate-submitter', '');
+  expect(session.submitter()).toBe(own);
+  // The bar's own buttons are plain buttons, never a submitter.
+  expect(session.bar.save.type).toBe('button');
+});
+
+test("the bar's Save submits through the draft's own submit path, with that submitter", async () => {
+  const { session, form, fetcher, configuration } = fixture();
+  await session.ready;
+  const transport = fetcher.getMockImplementation();
+  fetcher.mockImplementation(async (url, options) => {
+    if (!options.method) return Response.json({ configuration, tokens: {} });
+    return transport(url, options);
+  });
+  const nativeSubmit = vi.fn((event) => event.preventDefault());
+  form.addEventListener('submit', nativeSubmit);
+  const submitted = [];
+  vi.spyOn(form, 'requestSubmit').mockImplementation((submitter) => {
+    submitted.push(submitter);
+    form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true, submitter }));
+  });
+  form.querySelector('input').value = 'Typed';
+  form.querySelector('input').dispatchEvent(new Event('input', { bubbles: true }));
+  await vi.waitFor(() => expect(session.bar.save.hidden).toBe(false));
+  session.bar.save.click();
+  await vi.waitFor(() => expect(nativeSubmit).toHaveBeenCalledOnce());
+  const button = form.querySelector('button[type="submit"]');
+  // The bar's click asks for a submission, which the draft holds until synchronized, then posts it again.
+  expect(submitted).toEqual([button, button]);
+  expect(nativeSubmit.mock.calls[0][0].submitter).toBe(button);
+  expect(form.elements.namedItem('_collaborate_revision').value).toBe(String(session.revision));
+});
+
+test("the bar's Save asks for a plain submission when the form has no submit button", async () => {
+  const { session, form } = fixture();
+  await session.ready;
+  form.querySelector('button[type="submit"]').remove();
+  const requested = vi.spyOn(form, 'requestSubmit').mockImplementation(() => {});
+  session.saveFromBar();
+  expect(requested).toHaveBeenCalledWith();
 });

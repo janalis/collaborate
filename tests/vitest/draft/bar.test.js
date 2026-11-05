@@ -23,7 +23,8 @@ import Modal from 'bootstrap/js/src/modal.js';
 import { CollaborateBar, confirmAction, STATES } from '../../../assets/draft/bar.js';
 
 const messages = {
-  discard: 'Discard shared draft',
+  save: 'Save',
+  discard: 'Discard changes',
   close: 'Close',
   copyInvitation: 'Copy invitation link',
   copied: 'Copied',
@@ -32,8 +33,8 @@ const messages = {
   openRecord: 'Open saved record',
 };
 
-function bar(onDiscard = vi.fn()) {
-  const created = new CollaborateBar(messages, onDiscard);
+function bar(onDiscard = vi.fn(), onSave = vi.fn()) {
+  const created = new CollaborateBar(messages, onDiscard, onSave);
   document.body.append(created.element);
   return created;
 }
@@ -46,10 +47,10 @@ afterEach(() => {
 
 test('shows each state in its alert variant and icon, a spinner while it waits', () => {
   const shown = bar();
-  shown.setState('saved', 'Shared draft saved.');
+  shown.setState('saved', 'All changes saved.');
   expect(shown.element.className).toContain('alert-success');
   expect(shown.icon.className).toContain('fa-circle-check');
-  expect(shown.text.textContent).toBe('Shared draft saved.');
+  expect(shown.text.textContent).toBe('All changes saved.');
   shown.setState('denied', 'Access expired.');
   expect(shown.element.classList.contains('alert-success')).toBe(false);
   expect(shown.element.className).toContain('alert-danger');
@@ -89,10 +90,50 @@ test('enables Discard only where it can succeed and while no request of its own 
   shown.setBusy(false);
   shown.discard.click();
   expect(onDiscard).toHaveBeenCalledOnce();
-  for (const key of ['discarded', 'created', 'failed', 'denied', 'incompatible', 'unavailable']) {
+  for (const key of ['saved', 'discarded', 'created', 'failed', 'denied', 'incompatible', 'unavailable']) {
     shown.setState(key, key);
     expect(shown.discard.disabled).toBe(true);
+    expect(shown.discard.hidden).toBe(true);
   }
+});
+
+test('offers Save while the draft holds unsaved changes, first among its actions, and hides it otherwise', () => {
+  const onSave = vi.fn();
+  const shown = bar(vi.fn(), onSave);
+  expect([...shown.actions.children]).toEqual([shown.save, shown.discard]);
+  expect(shown.save.textContent).toBe('Save');
+  expect(shown.save.type).toBe('button');
+  for (const key of ['draft', 'pending', 'offline', 'changed']) {
+    shown.setState(key, key);
+    expect(shown.save.hidden).toBe(false);
+    expect(shown.save.disabled).toBe(false);
+    // Unsaved changes always come with Save beside Discard: Discard is never the bar's only way out.
+    expect(shown.discard.hidden).toBe(false);
+  }
+  shown.setBusy(true);
+  expect(shown.save.disabled).toBe(true);
+  shown.setBusy(false);
+  shown.save.click();
+  expect(onSave).toHaveBeenCalledOnce();
+  for (const key of ['connecting', 'saved', 'conflict', 'full', 'discarded', 'created', 'failed', 'denied']) {
+    shown.setState(key, key);
+    expect(shown.save.hidden).toBe(true);
+    expect(shown.save.disabled).toBe(true);
+  }
+});
+
+test('offers no Save without a handler for it', () => {
+  const shown = new CollaborateBar(messages, vi.fn());
+  shown.setState('draft', 'Unsaved.');
+  expect(shown.save.hidden).toBe(true);
+  expect(shown.discard.hidden).toBe(false);
+});
+
+test('puts the invitation and open-record buttons before Save', () => {
+  const shown = bar();
+  const invite = shown.invitation('/new?draft=1');
+  const open = shown.openRecord('/record/1/edit');
+  expect([...shown.actions.children]).toEqual([invite, open, shown.save, shown.discard]);
 });
 
 test('shows a dismissible notice, replacing the previous one, and announces it', () => {
@@ -115,7 +156,7 @@ test('copies the absolute invitation link and says so for two seconds', async ()
   vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
   const shown = bar();
   const button = shown.invitation('/admin/product/new?draft=abc');
-  expect(button.nextElementSibling).toBe(shown.discard);
+  expect(button.nextElementSibling).toBe(shown.save);
   button.click();
   await vi.advanceTimersByTimeAsync(0);
   expect(writeText).toHaveBeenCalledWith(new URL('/admin/product/new?draft=abc', location.href).href);
@@ -150,12 +191,12 @@ test('shows the invitation link selected for copying by hand where the clipboard
   expect(shown.element.querySelectorAll('[data-collaborate-invitation-url]')).toHaveLength(1);
 });
 
-test('offers the saved record beside Discard', () => {
+test('offers the saved record beside Save and Discard', () => {
   const shown = bar();
   const link = shown.openRecord('/record/42/edit');
   expect(link.getAttribute('href')).toBe('/record/42/edit');
   expect(link.textContent).toBe('Open saved record');
-  expect(link.nextElementSibling).toBe(shown.discard);
+  expect(link.nextElementSibling).toBe(shown.save);
 });
 
 test('asks in a dialog outside the form, Cancel focused, and resolves whether it was confirmed', async () => {

@@ -26,9 +26,11 @@ test.describe('the state bar', () => {
     await expectState(alice, 'saved', {
       variant: 'success',
       icon: 'fa-circle-check',
-      text: 'Shared draft saved.',
+      text: 'All changes saved.',
     });
-    await expect(alice.discardButton).toBeEnabled();
+    // Nothing to save or discard: the saved bar offers neither.
+    await expect(alice.barSaveButton).toBeHidden();
+    await expect(alice.discardButton).toBeHidden();
   });
 
   test('shows unsaved changes, and synchronizes without announcing it', async ({ article, editor }) => {
@@ -42,13 +44,13 @@ test.describe('the state bar', () => {
     await expectState(alice, 'pending', { variant: 'info', text: 'Synchronizing changes…', announced: false });
     await expect(alice.barElement.locator('.collaborate-bar__icon')).toHaveClass(/spinner-border/);
     // The live region still says the last announced state.
-    await expect(alice.announcer).toHaveText('Shared draft saved.');
+    await expect(alice.announcer).toHaveText('All changes saved.');
 
     await append.release();
     await expectState(alice, 'draft', {
       variant: 'info',
       icon: 'fa-pen',
-      text: 'Shared draft has unsaved changes.',
+      text: 'Unsaved changes, kept automatically. Click Save to record them.',
     });
   });
 
@@ -116,6 +118,8 @@ test.describe('the state bar', () => {
     const id = await article();
     const alice = await editor('alice');
     await alice.edit(id);
+    await alice.control('title').fill('Refused once');
+    await alice.synchronized();
     await alice.recordStates();
     await alice.answerOnce(journal('discard'), 409);
 
@@ -123,16 +127,16 @@ test.describe('the state bar', () => {
     await alice.decide(true);
 
     await expect.poll(() => alice.states()).toContain('changed');
-    await expectState(alice, 'saved');
-    expect(await alice.page.evaluate(() => document.querySelector('[data-collaborate-announcer]').textContent)).toBe(
-      'Shared draft saved.'
-    );
+    await expectState(alice, 'draft');
+    await expect(alice.control('title')).toHaveValue('Refused once');
   });
 
   test('shows a refusal, and offers no Discard from it', async ({ article, editor }) => {
     const id = await article();
     const alice = await editor('alice');
     await alice.edit(id);
+    await alice.control('title').fill('Refused');
+    await alice.synchronized();
     await alice.answerOnce(journal('discard'), 400);
 
     await alice.discardButton.click();

@@ -35,7 +35,10 @@ test.describe('shared pointers', () => {
     await expect(cursor).toHaveAttribute('data-color', /.+/);
     // An I-beam over a text field, a hand over a button.
     await expect(cursor).toHaveAttribute('data-shape', 'text');
-    await hover(bob.page, bob.discardButton);
+    // The bar's Save, shown once the draft holds an unsaved change.
+    await bob.control('summary').fill('Unsaved');
+    await expect(bob.barSaveButton).toBeVisible();
+    await hover(bob.page, bob.barSaveButton);
     await expect(cursor).toHaveAttribute('data-shape', 'pointer');
   });
 

@@ -18,7 +18,11 @@ With them:
   shares the draft of its record; a new page shares the draft of its own
   new record, which its invitation link opens on other pages.
 - **Save goes through EasyAdmin.** Validation, `persistEntity()` /
-  `updateEntity()`, events and redirects stay as they are. The bundle holds
+  `updateEntity()`, events and redirects stay as they are. The bar's
+  **Save** submits the form with EasyAdmin's *Save and continue editing*
+  button, so the editor stays on the record. Where the page has none (a new
+  page by default), it uses *Save*/*Create* and never *Create and add
+  another*. The bundle holds
   the draft's lock from its revision check to the response and records the
   checkpoint after the flush; see [Saving](./shared-drafts#saving).
 - **Index and detail pages refresh** after a save elsewhere touches their

@@ -38,11 +38,18 @@ Above each shared form, a bar shows the draft's state in its own color and
 icon. A visually hidden live region announces each state once, except the
 synchronization every send passes through.
 
+The bar's actions follow its state, and an action a state does not offer is
+hidden. While the draft holds changes the record does not (unsaved,
+synchronizing, interrupted, changed meanwhile), the bar offers **Save**
+first, then **Discard changes**. A saved draft offers neither, so an editor
+working alone never sees the button that erases changes as the bar's only
+action.
+
 | State | Color | Meaning |
 |---|---|---|
 | Connecting | grey | The page is joining the draft; the form's controls are inert until the draft and its editors are ready. |
-| Saved | green | Every change in the draft is saved in the record. After a peer's Save: "Shared draft saved by …". |
-| Unsaved | blue | The draft holds changes the record does not. |
+| Saved | green | "All changes saved." Every change in the draft is saved in the record. After a peer's Save: "All changes saved by …". |
+| Unsaved | blue | "Unsaved changes, kept automatically. Click Save to record them." The draft holds changes the record does not; they survive a reload, and Save records them. |
 | Synchronizing | blue | The page is sending its edits. |
 | Interrupted | amber | The network or the server failed (no answer, 429 or 5xx). Edits stay on the page and are sent when the connection returns; Save can be repeated. |
 | Changed meanwhile | amber | The server refused an edit made on an older state (409); the page reads the draft again. |
@@ -91,7 +98,14 @@ in `sessionStorage` under `collaborate-notice:<draft id>`.
 ## Saving
 
 Save submits the form through the application's normal path (EasyAdmin's,
-or your controller's), with the draft's generation and revision:
+or your controller's), with the draft's generation and revision. The form's
+own buttons and the bar's **Save** take the same path: the bar's Save
+submits the form with the button that keeps the editor on the page. That is
+a submit button marked `data-collaborate-submitter` if there is one, else
+EasyAdmin's `saveAndContinue` button, else its `saveAndReturn` button, else
+the form's first submit button.
+Buttons outside the form that name it with `form="…"` count.
+Saving goes as follows:
 
 1. The page sends its pending edits, then renews its field grant and, on an
    edit page, compares the draft with the saved record again (the
@@ -119,10 +133,11 @@ sends them.
 
 ## Discarding
 
-**Discard shared draft** asks for confirmation (Cancel is focused), warning
-that everyone editing the record loses its unsaved changes. It is offered
-only in states it can succeed from (saved, unsaved, synchronizing,
-interrupted, changed, in conflict, full).
+**Discard changes** asks for confirmation (Cancel is focused). The dialog
+warns that the unsaved changes are erased, the editor's own and those of
+everyone editing the record, and that Save keeps them instead. It is offered
+only in the states that hold changes it can succeed in discarding
+(unsaved, synchronizing, interrupted, changed, in conflict, full).
 
 Discard resets the fields of its form that hold edits, or that a **Keep
 shared draft** kept against the saved record, to the values the draft last
@@ -224,4 +239,6 @@ that has Gedmo's `#[Translatable]` attribute keeps one draft state per
 locale (the request's locale), so pages of two locales share the record's
 draft without sharing that field. New records are created in the kernel's
 default locale. A saved Gedmo translation row (an `AbstractTranslation`
-entity) counts as a change of the record it translates.
+entity) counts as a change of the record it translates. A save in any locale
+checkpoints what each field holds once the record is persisted, so a value
+the save derives itself (a slug, say) does not read as a conflict.

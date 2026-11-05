@@ -116,10 +116,10 @@ class DraftSave implements EventSubscriberInterface
             $request->attributes->set('_collaborate_values', $snapshot());
         }
         if ($state['scope']['new']) {
-            $id = $this->identifier->value($entity);
+            $id = self::idString($this->identifier->value($entity));
             // An edit page addresses single-column ids only: a composite key has no edit page to open.
-            if (\is_int($id) || \is_string($id)) {
-                $this->journal->created($state['scope']['id'], (string) $id);
+            if (null !== $id) {
+                $this->journal->created($state['scope']['id'], $id);
             }
         }
         $state['completed'] = true;
@@ -194,5 +194,10 @@ class DraftSave implements EventSubscriberInterface
         }
         $event->allowCustomResponseCode();
         $event->setResponse(new RedirectResponse($request->getRequestUri(), Response::HTTP_SEE_OTHER));
+    }
+
+    private static function idString(mixed $id): ?string
+    {
+        return \is_int($id) || \is_string($id) ? (string) $id : null;
     }
 }

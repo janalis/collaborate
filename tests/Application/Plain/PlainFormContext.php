@@ -23,19 +23,26 @@ final readonly class PlainFormContext implements FormContextInterface
     public function current(): ?array
     {
         $request = $this->requests->getMainRequest();
-        $record = $request?->attributes->get(self::RECORD);
-        if (null === $request || !\is_array($record) || !($record[0] ?? null) instanceof Article) {
+        if (null === $request) {
             return null;
         }
-        [$article, $new] = $record;
-        $draft = $request->query->get('draft');
+        $attributes = $request->attributes->all();
+        if (
+            !\is_array($attributes[self::RECORD] ?? null) || !($attributes[self::RECORD][0] ?? null) instanceof Article
+        ) {
+            return null;
+        }
+        $record = $attributes[self::RECORD];
+        $article = $record[0];
+        $new = true === ($record[1] ?? null);
+        $query = $request->query->all();
 
         return [
             'entity' => $article,
             'class' => Article::class,
-            'new' => true === $new,
-            'id' => true === $new ? null : (string) $article->id,
-            'draft' => \is_string($draft) ? $draft : null,
+            'new' => $new,
+            'id' => $new ? null : (string) $article->id,
+            'draft' => \is_string($query['draft'] ?? null) ? $query['draft'] : null,
         ];
     }
 

@@ -99,11 +99,11 @@ test.describe('an edit page shared by two editors', () => {
     await alice.synchronized();
     await alice.save();
 
-    await expect(bob.bar).toHaveText('Shared draft saved by Alice.');
+    await expect(bob.bar).toHaveText('All changes saved by Alice.');
     await expect(bob.field('Title')).toHaveValue('Saved by Alice');
     await alice.edit(id);
     await expect(alice.field('Title')).toHaveValue('Saved by Alice');
-    await expect(alice.bar).toHaveText('Shared draft saved.');
+    await expect(alice.bar).toHaveText('All changes saved.');
   });
 
   test('discards the shared draft for everyone after confirmation', async ({ article, editor }) => {
@@ -120,7 +120,7 @@ test.describe('an edit page shared by two editors', () => {
     await alice.page.locator('[data-collaborate-discard]').click();
     const dialog = alice.page.locator('[data-collaborate-confirm]');
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole('heading')).toHaveText('Discard the shared draft?');
+    await expect(dialog.getByRole('heading')).toHaveText('Discard unsaved changes?');
     // Shown once it focuses Cancel: Bootstrap ignores a click while the dialog still fades in.
     await expect(dialog.locator('[data-collaborate-confirm-cancel]')).toBeFocused();
     await dialog.locator('[data-collaborate-confirm-accept]').click();

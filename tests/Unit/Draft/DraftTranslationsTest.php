@@ -27,8 +27,9 @@ final class DraftTranslationsTest extends TestCase
     #[DataProvider('locales')]
     public function testTheCatalogueTranslatesEveryDraftString(string $locale): void
     {
-        $catalogue = Yaml::parseFile(\dirname(__DIR__, 3) . '/translations/collaborate.' . $locale . '.yaml');
-        self::assertIsArray($catalogue);
+        $catalogue = self::array(Yaml::parseFile(
+            \dirname(__DIR__, 3) . '/translations/collaborate.' . $locale . '.yaml',
+        ));
         $keys = [
             ...array_values(CollaborateFormExtension::MESSAGES),
             DraftSave::CHANGED,
@@ -44,5 +45,13 @@ final class DraftTranslationsTest extends TestCase
             self::assertIsString($catalogue[$key] ?? null, $key);
             self::assertNotSame('', $catalogue[$key]);
         }
+    }
+
+    /** @return array<array-key, mixed> */
+    private static function array(mixed $value): array
+    {
+        self::assertIsArray($value);
+
+        return $value;
     }
 }

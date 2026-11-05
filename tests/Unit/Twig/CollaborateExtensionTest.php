@@ -140,7 +140,7 @@ final class CollaborateExtensionTest extends ExtensionTestCase
         $translator
             ->method('trans')
             ->willReturnCallback(
-                static fn(string $id, array $parameters, ?string $domain): string => $domain . ':' . $id,
+                static fn(string $id, array $parameters, ?string $domain): string => ($domain ?? '') . ':' . $id,
             );
         $extension = $this->extension(
             new TestUser(7),

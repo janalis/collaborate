@@ -309,13 +309,16 @@ final class CollaborateBundleConfigurationTest extends TestCase
     /** @param array<array-key, mixed> $config */
     private static function at(array $config, string $path): mixed
     {
-        foreach (explode('.', $path) as $key) {
-            self::assertIsArray($config);
-            self::assertArrayHasKey($key, $config);
-            $config = $config[$key];
-        }
+        return array_reduce(
+            explode('.', $path),
+            static function (mixed $config, string $key): mixed {
+                self::assertIsArray($config);
+                self::assertArrayHasKey($key, $config);
 
-        return $config;
+                return $config[$key];
+            },
+            $config,
+        );
     }
 
     /**

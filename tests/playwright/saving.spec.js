@@ -14,18 +14,50 @@ test.describe('saving a shared draft', () => {
     await alice.synchronized();
 
     await alice.saveAndStay();
-    await expectState(alice, 'saved', { variant: 'success', icon: 'fa-circle-check', text: 'Shared draft saved.' });
+    await expectState(alice, 'saved', { variant: 'success', icon: 'fa-circle-check', text: 'All changes saved.' });
     await expectState(bob, 'saved', {
       variant: 'success',
       icon: 'fa-circle-check',
-      text: 'Shared draft saved by Alice.',
+      text: 'All changes saved by Alice.',
     });
     // Bob's own save is no one else's: his page says the draft is saved, without a name.
     await bob.control('summary').fill('Saved by Bob');
     await bob.synchronized();
     await bob.saveAndStay();
-    await expect(bob.bar).toHaveText('Shared draft saved.');
-    await expect(alice.bar).toHaveText('Shared draft saved by Bob.');
+    await expect(bob.bar).toHaveText('All changes saved.');
+    await expect(alice.bar).toHaveText('All changes saved by Bob.');
+  });
+
+  test('saves from the bar, staying on the page, and offers Save only while changes are unsaved', async ({
+    article,
+    editor,
+  }) => {
+    const id = await article({ title: 'Before' });
+    const alice = await editor('alice');
+    await alice.edit(id);
+    await expect(alice.barSaveButton).toBeHidden();
+
+    await alice.control('title').fill('Saved from the bar');
+    await expectState(alice, 'draft', { text: 'Unsaved changes, kept automatically. Click Save to record them.' });
+    await expect(alice.barSaveButton).toHaveText('Save');
+    await expect(alice.barSaveButton).toBeEnabled();
+    // Save is the bar's first action; Discard comes after it.
+    await expect(alice.barElement.locator('.collaborate-bar__actions button').first()).toHaveAttribute(
+      'data-collaborate-save',
+      ''
+    );
+    await alice.synchronized();
+
+    const posted = alice.page.waitForRequest((request) => request.method() === 'POST' && request.isNavigationRequest());
+    await alice.barSaveButton.click();
+    await posted;
+    await alice.page.waitForLoadState();
+    await alice.joined();
+    await expect(alice.page).toHaveURL(new RegExp(`${alice.routes.edit(id)}`));
+    await expectState(alice, 'saved', { text: 'All changes saved.' });
+    await expect(alice.control('title')).toHaveValue('Saved from the bar');
+    await expect(alice.barSaveButton).toBeHidden();
+    await expect(alice.discardButton).toBeHidden();
   });
 
   test('sends back to the form a save a peer edit overtook, which then saves again', async ({ article, editor }) => {
@@ -55,9 +87,8 @@ test.describe('saving a shared draft', () => {
         await route.continue();
       }
     );
-    await alice.page
-      .getByRole('button', { name: alice.easyAdmin ? 'Save and continue editing' : 'Save', exact: true })
-      .click();
+    // The bar's Save posts through the same path as the form's own button.
+    await alice.barSaveButton.click();
     await held;
     const appended = bob.page.waitForResponse((response) => response.url().endsWith('/collaborate/append'));
     await bob.control('summary').fill('Bob overtook');
@@ -102,6 +133,6 @@ test.describe('saving a shared draft', () => {
     await alice.synchronized();
     await alice.saveAndStay();
     await expectState(alice, 'saved');
-    await expect(bob.bar).toHaveText('Shared draft saved by Alice.');
+    await expect(bob.bar).toHaveText('All changes saved by Alice.');
   });
 });

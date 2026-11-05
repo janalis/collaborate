@@ -166,7 +166,9 @@ and joins the next.
   while it moves.
 - `top_layer` keeps pointers above a modal `<dialog>`, which sits in the top
   layer.
-- `presence: menu` makes the avatars a button: its menu lists each peer with
+- `presence: menu` makes the avatars a button, named after what it shows
+  (initials, the count of the others) then the peers' names, so that speech
+  control finds it by what it reads; its menu lists each peer with
   where they are (the record they point at by its `data-collaborate-label`,
   their popup, idle), finds one (scrolled to, pointed out, announced to
   screen readers), and hides the pointers of the others in every tab of the

@@ -51,7 +51,7 @@ beforeEach(() => {
   Object.defineProperty(document, 'hidden', { configurable: true, value: false });
   document.elementFromPoint = vi.fn(() => document.querySelector('button'));
   vi.stubGlobal('CSS', { escape: (value) => value });
-  vi.stubGlobal('matchMedia', () => ({ matches: false }));
+  vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }));
   vi.stubGlobal(
     'ResizeObserver',
     class {

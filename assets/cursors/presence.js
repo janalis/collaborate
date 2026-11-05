@@ -2,6 +2,8 @@
 export const MAX_SHOWN = 5;
 // On a narrow window the menu's button shows one peer, the others counted (the stylesheet tells which is which).
 export const NARROW_SHOWN = 1;
+// A narrow window, as the stylesheet tells it (`_layer.scss`).
+export const NARROW_QUERY = '(max-width: 575.98px)';
 
 // The server attaches the URL; anything that would load from another origin is dropped all the same.
 export function avatarUrl(value, base = location.href) {
@@ -71,6 +73,8 @@ export function createPresence(
   };
   const bound = new Map();
   let disposed = false;
+  // Which of the menu's stacks shows, the narrow or the wide one: its button is named after what it shows.
+  const narrow = presence === 'menu' && typeof matchMedia === 'function' ? matchMedia(NARROW_QUERY) : null;
 
   const isIdle = (user, now) => idle > 0 && now - user.moved > idle;
 
@@ -230,6 +234,29 @@ export function createPresence(
     return item;
   }
 
+  /**
+   * Names the menu's button: what its stack shows on this window (initials, the count of the others), then the
+   * peers' names. A name holding the visible text is the one speech control finds it by (WCAG 2.5.3).
+   */
+  function name(toggle) {
+    const hidden = narrow?.matches ? 'collaborate-presence--wide' : 'collaborate-presence--narrow';
+    const shown = [...toggle.children]
+      .filter((item) => !item.classList.contains(hidden))
+      .map((item) => item.textContent)
+      .filter(Boolean)
+      .join(' ');
+    toggle.setAttribute('aria-label', shown ? `${shown}: ${toggle.title}` : toggle.title);
+  }
+
+  // The window becoming narrow or wide shows the other stack: the buttons are named again.
+  function resized() {
+    for (const container of containers()) {
+      const toggle = container.querySelector(':scope > .collaborate-presence__toggle');
+      if (toggle) name(toggle);
+    }
+  }
+  narrow?.addEventListener('change', resized);
+
   function renderMenu(container, present, now) {
     const { toggle, menu } = frame(container);
     // The last peer gone, an open menu closes: the header would hide it open.
@@ -255,7 +282,7 @@ export function createPresence(
     toggle.replaceChildren(...stack);
     const names = present.map(([, user]) => user.label).join(', ');
     toggle.title = names;
-    toggle.setAttribute('aria-label', names);
+    name(toggle);
     const entries = present.map(([userId, user]) => entry(menu, userId, user, now));
     for (const item of menu.querySelectorAll(':scope > [data-user-id]')) if (!entries.includes(item)) item.remove();
     let next = menu.querySelector(':scope > .collaborate-presence__header').nextSibling;
@@ -355,6 +382,7 @@ export function createPresence(
   /** Lets go of the containers: the page stops sharing. */
   function dispose() {
     disposed = true;
+    narrow?.removeEventListener('change', resized);
     for (const release of bound.values()) release();
     bound.clear();
   }

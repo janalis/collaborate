@@ -5,6 +5,12 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Allows `symfony/mercure-bundle` 0.7 and `symfony/mercure` 0.10. MercureBundle
+  0.7 clears the subscriber cookie of every hub on logout, unless a host sets
+  `clear_cookie_on_logout: false`.
+
 ## [0.2.0] - 2026-11-03
 
 ### Added

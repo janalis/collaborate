@@ -127,6 +127,7 @@ final class DraftJournalTest extends TestCase
     public static function schema(): array
     {
         $sql = (string) file_get_contents(\dirname(__DIR__, 3) . '/docs/schema.sql');
+        $statements = [];
         preg_match_all('/^CREATE TABLE .+?;$/m', $sql, $statements);
 
         return array_values(array_map(static fn(string $statement): string => rtrim($statement, ';'), $statements[0]));
@@ -185,7 +186,7 @@ final class DraftJournalTest extends TestCase
             ->method('trans')
             ->willReturnCallback(
                 static fn(string $id, array $parameters = [], ?string $domain = null): string => (
-                    '[' . $domain . '] ' . $id
+                    '[' . ($domain ?? '') . '] ' . $id
                 ),
             );
 
@@ -240,6 +241,14 @@ final class DraftJournalTest extends TestCase
     private function lockName(string $id): string
     {
         return 'collaborate:' . substr(hash('xxh128', (string) $this->db->getDatabase()), 0, 16) . ':' . md5($id);
+    }
+
+    /** @return array<array-key, mixed> */
+    private static function array(mixed $value): array
+    {
+        self::assertIsArray($value);
+
+        return $value;
     }
 
     /** @return SignedScope */
@@ -556,7 +565,7 @@ final class DraftJournalTest extends TestCase
     {
         $event = $this->event(['field' => 'choice', 'kind' => 'value', 'version' => 0, 'value' => ['a', 'b']]);
         $accepted = $this->journal->append('record', $this->fields, $event, 2, 'Bob');
-        self::assertSame(['a', 'b'], $accepted['value']);
+        self::assertSame(['a', 'b'], $accepted['value'] ?? null);
         self::assertSame(['a', 'b'], $this->journal->replay('record', $this->fields, 0)['fields']['choice']['value']);
     }
 
@@ -764,10 +773,10 @@ final class DraftJournalTest extends TestCase
         self::assertSame(2, $view['fields']['choice']['version']);
         self::assertSame(2, $view['savedRevision']);
         self::assertSame(1, $view['events'][1]['version']);
-        self::assertSame(['canonical'], $view['events'][1]['value']);
+        self::assertSame(['canonical'], $view['events'][1]['value'] ?? null);
         $this->journal->lockSave('record', 1, 2, ['choice' => ['canonical']]);
         $this->journal->saved('record', ['choice' => []]);
-        self::assertSame([], $this->journal->replay('record', $this->fields, 2)['events'][0]['value']);
+        self::assertSame([], $this->journal->replay('record', $this->fields, 2)['events'][0]['value'] ?? null);
     }
 
     public function testSavingDoesNotResetTheSharedSourceModeToItsFormDefault(): void
@@ -896,7 +905,7 @@ final class DraftJournalTest extends TestCase
         $this->journal->saved('record', ['body' => 'edited'], ['userId' => 1, 'label' => str_repeat('é', 300)]);
         $view = $this->journal->replay('record', $this->fields, 0);
         self::assertSame(1, $view['savedBy']['userId'] ?? null);
-        self::assertSame(str_repeat('é', 255), $view['savedBy']['label'] ?? null);
+        self::assertSame(str_repeat('é', 255), $view['savedBy']['label']);
         // A save outside the draft names nobody.
         $this->journal->saved('record', ['body' => 'again']);
         self::assertNull($this->journal->replay('record', $this->fields, 0)['savedBy']);
@@ -1238,7 +1247,7 @@ final class DraftJournalTest extends TestCase
             1,
             'Alice',
         );
-        self::assertFalse(((array) $accepted['value'])['alive']);
+        self::assertFalse(self::array($accepted['value'] ?? null)['alive']);
         $this->journal->saved('collection', ['items[@n123]' => ['alive' => true, 'order' => 1, 'recordId' => '42']]);
         self::assertSame(['items' => [42 => 'n123']], $this->journal->aliases('collection'));
         self::assertSame([], $this->journal->aliases('missing'));
@@ -1579,7 +1588,7 @@ final class DraftJournalTest extends TestCase
         $fields = ['body' => ['type' => 'rich', 'initial' => 'new', 'schema' => 'v2', 'formName' => 'body']];
         $view = $this->journal->join('adopt', $fields);
         self::assertSame('new', $view['fields']['body']['initial']);
-        self::assertSame('v2', $view['fields']['body']['schema']);
+        self::assertSame('v2', $view['fields']['body']['schema'] ?? null);
         try {
             $this->journal->append('adopt', $fields, $this->event(['generation' => 9]), 1, 'Alice');
             self::fail('A stale generation was accepted.');
@@ -2184,9 +2193,10 @@ final class DraftJournalTest extends TestCase
         $this->journal->append('schema', $v1, $this->event(), 1, 'Alice');
         $this->journal->saved('schema', ['body' => 'edited']);
         $view = $this->journal->join('schema', ['body' => ['type' => 'rich', 'initial' => 'edited', 'schema' => 'v2']]);
-        self::assertSame('v2', $view['fields']['body']['schema']);
+        self::assertSame('v2', $view['fields']['body']['schema'] ?? null);
         self::assertNull($view['fields']['body']['version']);
-        self::assertNull($view['fields']['body']['savedVersion']);
+        self::assertArrayHasKey('savedVersion', $view['fields']['body']);
+        self::assertNull($view['fields']['body']['savedVersion'] ?? null);
         self::assertArrayNotHasKey('initialVersion', $view['fields']['body']);
         self::assertSame('edited', $view['fields']['body']['initial']);
         // The old schema's operations are already part of the adopted value.

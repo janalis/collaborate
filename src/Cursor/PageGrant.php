@@ -129,11 +129,16 @@ final readonly class PageGrant
      */
     private static function decode(string $value): array
     {
-        $place = json_decode(
+        return self::place(json_decode(
             (string) base64_decode(strtr($value, '-_', '+/'), true),
             true,
             flags: \JSON_THROW_ON_ERROR,
-        );
+        ));
+    }
+
+    /** @return array<array-key, mixed> */
+    private static function place(mixed $place): array
+    {
         \assert(\is_array($place), 'issue() encodes the array a place provider answered.');
 
         return $place;

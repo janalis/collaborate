@@ -267,12 +267,15 @@ abstract class AppKernel extends Kernel
     /** The CKEditor release the pages load, part of every rich-text field's schema. */
     private static function ckeditorVersion(): string
     {
-        $package = json_decode(
+        return self::version(json_decode(
             (string) file_get_contents(self::repository() . '/node_modules/ckeditor5/package.json'),
             true,
             flags: \JSON_THROW_ON_ERROR,
-        );
+        ));
+    }
 
+    private static function version(mixed $package): string
+    {
         return \is_array($package) && \is_string($package['version'] ?? null) ? $package['version'] : '0.0.0';
     }
 }

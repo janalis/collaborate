@@ -120,13 +120,12 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         $checker = $this->createStub(DraftAccessCheckerInterface::class);
         $checker->method('canEdit')->willReturnCallback(fn(): bool => $this->canEdit);
         $urls = $this->createStub(UrlGeneratorInterface::class);
-        $urls->method('generate')->willReturnCallback(static function (string $route, array $parameters): string {
-            $action = $parameters['action'] ?? null;
-
-            return 'collaborate_draft' === $route && \is_string($action)
-                ? '/admin/collaborate/' . $action
-                : '/elsewhere';
-        });
+        $urls->method('generate')->willReturnCallback(static fn(
+            string $route,
+            array $parameters,
+        ): string => 'collaborate_draft' === $route && \is_string($parameters['action'] ?? null)
+            ? '/admin/collaborate/' . $parameters['action']
+            : '/elsewhere');
         $csrf = $this->createStub(CsrfTokenManagerInterface::class);
         $csrf->method('getToken')->willReturnCallback(static fn(string $id): CsrfToken => new CsrfToken(
             $id,
@@ -222,13 +221,21 @@ final class CollaborateFormExtensionTest extends TypeTestCase
     /** @return array{grant: string, url: string, csrf: string, invitation: string, editUrl: string, isNew: bool, messages: array<string, string>, config: array<string, int>} */
     private function configuration(FormView $view): array
     {
-        $attributes = (array) $view->vars['attr'];
+        $attributes = self::vars($view, 'attr');
 
         /** @var array{grant: string, url: string, csrf: string, invitation: string, editUrl: string, isNew: bool, messages: array<string, string>, config: array<string, int>} $configuration */
         $configuration = json_decode((string) $attributes['data-collaborate'], true, flags: \JSON_THROW_ON_ERROR);
         self::assertIsArray($configuration);
 
         return $configuration;
+    }
+
+    /** @return array<array-key, mixed> A view's attributes: Symfony defaults them to an array. */
+    private static function vars(FormView $view, string $name): array
+    {
+        self::assertIsArray($view->vars[$name]);
+
+        return $view->vars[$name];
     }
 
     /** @return SignedScope */
@@ -337,7 +344,7 @@ final class CollaborateFormExtensionTest extends TypeTestCase
             'ckeditor5-49.1.0:collaborate-2:text:full',
             $scope['fields']['en:Article[title]']['schema'] ?? null,
         );
-        self::assertSame('Article[body]', $scope['fields']['en:Article[body]']['formName']);
+        self::assertSame('Article[body]', $scope['fields']['en:Article[body]']['formName'] ?? null);
         self::assertSame(
             ['type' => 'value', 'initial' => 'wysiwyg', 'formName' => 'Article[body][__mode__]'],
             $scope['fields']['en:Article[body][__mode__]'],
@@ -453,9 +460,7 @@ final class CollaborateFormExtensionTest extends TypeTestCase
 
         $view = $this->form()->createView();
 
-        $attributes = $view->vars['attr'];
-        self::assertIsArray($attributes);
-        self::assertArrayNotHasKey('data-collaborate', $attributes);
+        self::assertArrayNotHasKey('data-collaborate', self::vars($view, 'attr'));
         self::assertStringNotContainsString('draft=', (string) $view->vars['action']);
     }
 
@@ -502,7 +507,7 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         $view = $form->createView();
         self::assertSame(
             'Article[children]',
-            ((array) $view->children['children']->vars['row_attr'])['data-collaborate-collection'],
+            self::vars($view->children['children'], 'row_attr')['data-collaborate-collection'],
         );
         $scope = $this->scope($view);
         self::assertSame(
@@ -566,20 +571,20 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         ])->add('children', CollectionType::class, ['entry_type' => FormType::class])->getForm()->createView();
         self::assertSame(
             'Article[children]',
-            ((array) $build()->children['children']->vars['row_attr'])['data-collaborate-collection'] ?? null,
+            self::vars($build()->children['children'], 'row_attr')['data-collaborate-collection'] ?? null,
         );
         // No draft, no collection controller: its rows stay as rendered.
         $this->page->page = null;
-        self::assertArrayNotHasKey(
-            'data-collaborate-collection',
-            (array) $build()->children['children']->vars['row_attr'],
-        );
+        self::assertArrayNotHasKey('data-collaborate-collection', self::vars(
+            $build()->children['children'],
+            'row_attr',
+        ));
         $this->page->page = PageContext::NEW;
         $this->granted = false;
-        self::assertArrayNotHasKey(
-            'data-collaborate-collection',
-            (array) $build()->children['children']->vars['row_attr'],
-        );
+        self::assertArrayNotHasKey('data-collaborate-collection', self::vars(
+            $build()->children['children'],
+            'row_attr',
+        ));
     }
 
     /** @return iterable<string, array{string}> */
@@ -758,7 +763,7 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         $view = $builder->getForm()->createView();
 
         $collection = $view->children['group']->children['children'];
-        self::assertArrayNotHasKey('data-collaborate-collection', (array) $collection->vars['row_attr']);
+        self::assertArrayNotHasKey('data-collaborate-collection', self::vars($collection, 'row_attr'));
         // Nor is a collection inside its entries or its prototype.
         $fields = $this->scope($view)['fields'];
         self::assertSame([], array_filter(array_keys($fields), static fn(string $key): bool => str_contains(
@@ -769,7 +774,7 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         self::assertCount(1, $collection->children);
         self::assertSame(
             'Article[categories]',
-            ((array) $view->children['categories']->vars['row_attr'])['data-collaborate-collection'] ?? null,
+            self::vars($view->children['categories'], 'row_attr')['data-collaborate-collection'] ?? null,
         );
     }
 
@@ -784,7 +789,7 @@ final class CollaborateFormExtensionTest extends TypeTestCase
             'property_path' => 'roles',
         ])->getForm()->createView();
 
-        self::assertArrayNotHasKey('data-collaborate-collection', (array) $view->children['api_key']->vars['row_attr']);
+        self::assertArrayNotHasKey('data-collaborate-collection', self::vars($view->children['api_key'], 'row_attr'));
         self::assertSame([], $this->scope($view)['fields']);
     }
 
@@ -806,8 +811,10 @@ final class CollaborateFormExtensionTest extends TypeTestCase
 
         self::assertSame(
             'Article[children][i42][children]',
-            ((array) $view->createView()->children['children']->children['i42']->children['children']->vars['row_attr'])['data-collaborate-collection']
-            ?? null,
+            self::vars(
+                $view->createView()->children['children']->children['i42']->children['children'],
+                'row_attr',
+            )['data-collaborate-collection'] ?? null,
         );
     }
 
@@ -818,17 +825,17 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         self::assertSame('Submitted', $this->article->title);
         $this->page->page = null;
         $view = $this->form()->createView();
-        self::assertArrayNotHasKey('data-collaborate', (array) $view->vars['attr']);
+        self::assertArrayNotHasKey('data-collaborate', self::vars($view, 'attr'));
         $this->page->page = PageContext::EDIT;
         $this->canEdit = false;
-        self::assertArrayNotHasKey('data-collaborate', (array) $this->form()->createView()->vars['attr']);
+        self::assertArrayNotHasKey('data-collaborate', self::vars($this->form()->createView(), 'attr'));
         $this->canEdit = true;
         $this->granted = false;
-        self::assertArrayNotHasKey('data-collaborate', (array) $this->form()->createView()->vars['attr']);
+        self::assertArrayNotHasKey('data-collaborate', self::vars($this->form()->createView(), 'attr'));
         $this->granted = true;
         // A user the collaborator provider cannot name shares no draft either.
         $this->user = new TestUser();
-        self::assertArrayNotHasKey('data-collaborate', (array) $this->form()->createView()->vars['attr']);
+        self::assertArrayNotHasKey('data-collaborate', self::vars($this->form()->createView(), 'attr'));
         self::assertContains(FormType::class, iterator_to_array(CollaborateFormExtension::getExtendedTypes()));
     }
 
@@ -853,11 +860,8 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         $view = $form->createView();
 
         self::assertTrue($form->get('children')->has('0'));
-        self::assertArrayNotHasKey('data-collaborate', (array) $view->vars['attr']);
-        self::assertArrayNotHasKey(
-            'data-collaborate-collection',
-            (array) $view->children['children']->vars['row_attr'],
-        );
+        self::assertArrayNotHasKey('data-collaborate', self::vars($view, 'attr'));
+        self::assertArrayNotHasKey('data-collaborate-collection', self::vars($view->children['children'], 'row_attr'));
     }
 
     /** @return iterable<string, array{string, string, bool}> */
@@ -924,9 +928,9 @@ final class CollaborateFormExtensionTest extends TypeTestCase
             self::assertMatchesRegularExpression('/^[a-zA-Z0-9_-]{1,80}$/D', (string) $key);
         }
         $scope = $this->scope($form->createView());
-        $membership = $scope['fields']['Record[items][@' . $keys[0] . ']']['initial'];
-        self::assertIsArray($membership);
-        self::assertSame($first->id, $membership['recordId']);
+        $membership = $scope['fields']['Record[items][@' . $keys[0] . ']'];
+        self::assertIsArray($membership['initial']);
+        self::assertSame($first->id, $membership['initial']['recordId']);
         $record->items = [$second, $first];
         self::assertSame(array_reverse($keys), array_keys($build()->get('items')->all()));
         $form->submit(['items' => [$keys[0] => [], $keys[1] => []]]);
@@ -1241,7 +1245,7 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         ])->add('roles', CollectionType::class, ['entry_type' => TextType::class])->getForm();
         self::assertTrue($form->get('roles')->has('0'));
         // The page shares the form of its own record only.
-        self::assertArrayNotHasKey('data-collaborate', (array) $form->createView()->vars['attr']);
+        self::assertArrayNotHasKey('data-collaborate', self::vars($form->createView(), 'attr'));
         $record = new \stdClass();
         $record->items = null;
         $this->page->entity = $record;
@@ -1251,6 +1255,13 @@ final class CollaborateFormExtensionTest extends TypeTestCase
             ->getForm();
         self::assertCount(0, $form->get('items'));
         $form->createView();
+        // Entries held by neither an array nor a Doctrine collection keep the keys Symfony gives them.
+        $record->items = new \ArrayObject(['a']);
+        $form = $this->factory
+            ->createNamedBuilder('Record', FormType::class, $record)
+            ->add('items', CollectionType::class, ['entry_type' => HiddenType::class, 'allow_add' => true])
+            ->getForm();
+        self::assertSame(['0'], array_map(\strval(...), array_keys($form->get('items')->all())));
         $record->items = [];
         $form = $this->factory
             ->createNamedBuilder('Record', FormType::class, $record)
@@ -1383,7 +1394,7 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         );
         $this->rebuild();
 
-        return \array_key_exists('data-collaborate', (array) $this->form()->createView()->vars['attr']);
+        return \array_key_exists('data-collaborate', self::vars($this->form()->createView(), 'attr'));
     }
 
     public function testAFormIsSharedWhileItsGrantFitsARequestBesideAnUpdateAndAnEnvelope(): void
@@ -1618,7 +1629,7 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         $builder->get('pair')->addViewTransformer(
             new CallbackTransformer(
                 static fn(mixed $value): mixed => $value,
-                static fn(mixed $value): array => array_map(strtoupper(...), (array) $value),
+                static fn(array $value): array => array_map(strtoupper(...), $value),
             ),
         );
         $form = $builder->getForm();
@@ -1728,8 +1739,8 @@ final class CollaborateFormExtensionTest extends TypeTestCase
 
         $view = $builder->getForm()->createView();
 
-        self::assertArrayHasKey('data-collaborate', (array) $view->vars['attr']);
-        self::assertArrayNotHasKey('data-collaborate', (array) $view->children['details']->vars['attr']);
+        self::assertArrayHasKey('data-collaborate', self::vars($view, 'attr'));
+        self::assertArrayNotHasKey('data-collaborate', self::vars($view->children['details'], 'attr'));
     }
 
     public function testANewFormKeepsTheQueryOfItsAction(): void

@@ -147,11 +147,7 @@ final class EasyAdminApplicationTest extends CollaborationTestCase
         self::assertTrue(class_exists(Tag::class) && class_exists(Article::class) && class_exists(Category::class));
 
         // The index page lists the new title, for the refresh to show.
-        self::assertSelectorTextContains(
-            'body',
-            'Listed and renamed',
-            (string) $this->client->followRedirect()->html(),
-        );
+        self::assertSelectorTextContains('body', 'Listed and renamed', $this->client->followRedirect()->html());
     }
 
     public function testAPageOutsideAnEditFormSharesNoDraft(): void

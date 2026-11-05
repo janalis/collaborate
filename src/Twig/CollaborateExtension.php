@@ -157,15 +157,11 @@ final class CollaborateExtension extends AbstractExtension
     private function hostConfig(): array
     {
         $config = [];
-        foreach ($this->host as $name => $value) {
-            if ($value === self::DEFAULT_HOST[$name]) {
+        foreach (array_keys($this->host) as $name) {
+            if ($this->host[$name] === self::DEFAULT_HOST[$name]) {
                 continue;
             }
-            $config[$name] = match ($name) {
-                'idle' => (\is_int($value) ? $value : 0) * 1000,
-                'popups' => $this->popups($value),
-                default => $value,
-            };
+            $config[$name] = $this->hostOption($name, $this->host[$name]);
         }
         if ([] === $config) {
             return [];
@@ -175,12 +171,23 @@ final class CollaborateExtension extends AbstractExtension
         return $config;
     }
 
+    /** A host option as the scripts read it. */
+    private function hostOption(string $name, mixed $value): mixed
+    {
+        return match ($name) {
+            'idle' => (\is_int($value) ? $value : 0) * 1000,
+            'popups' => $this->popups($value),
+            default => $value,
+        };
+    }
+
     /** @return array<string, array{where: string, line: string}> */
     private function popups(mixed $popups): array
     {
         $translated = [];
-        foreach (\is_array($popups) ? $popups : [] as $kind => $messages) {
-            $messages = \is_array($messages) ? $messages : [];
+        $popups = \is_array($popups) ? $popups : [];
+        foreach (array_keys($popups) as $kind) {
+            $messages = \is_array($popups[$kind]) ? $popups[$kind] : [];
             // @infection-ignore-all: a popup kind is a name starting with a letter, never an integer key.
             $translated[(string) $kind] = [
                 'where' => $this->trans(

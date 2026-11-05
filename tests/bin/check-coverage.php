@@ -14,21 +14,27 @@ if (!is_file($file) || !$document->load($file)) {
 }
 $xpath = new DOMXPath($document);
 
-/** @return list<DOMElement> */
-$elements = static function (string $expression, ?DOMNode $context = null) use ($xpath): array {
-    $nodes = $xpath->query($expression, $context);
+/** @return list<DOMElement> the elements of a query's result, none when it failed */
+$found = static function (mixed $nodes): array {
     if (!$nodes instanceof DOMNodeList) {
         return [];
     }
     $elements = [];
     foreach ($nodes as $node) {
-        if ($node instanceof DOMElement) {
-            $elements[] = $node;
+        if (!$node instanceof DOMElement) {
+            continue;
         }
+
+        $elements[] = $node;
     }
 
     return $elements;
 };
+/** @return list<DOMElement> */
+$elements = static fn(string $expression, ?DOMNode $context = null): array => $found($xpath->query(
+    $expression,
+    $context,
+));
 $metrics = $elements('/coverage/project/metrics')[0] ?? null;
 if (!$metrics instanceof DOMElement) {
     fwrite(STDERR, "The Clover report at {$file} has no project metrics.\n");

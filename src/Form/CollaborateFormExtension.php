@@ -21,6 +21,7 @@ use Psr\Log\NullLogger;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\AssetMapper\ImportMap\ImportMapConfigReader;
 use Symfony\Component\Form\AbstractTypeExtension;
+use Symfony\Component\Form\DataTransformerInterface;
 use Symfony\Component\Form\Extension\Core\Type\FormType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\Form\FormEvent;
@@ -31,6 +32,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\PropertyAccess\PropertyAccess;
+use Symfony\Component\PropertyAccess\PropertyPathInterface;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
@@ -190,8 +192,8 @@ final class CollaborateFormExtension extends AbstractTypeExtension
                 if (null === $record || $form->getRoot()->getConfig()->getData() !== $record['entity']) {
                     return;
                 }
-                $data = $event->getData();
-                if (!\is_array($data) && !$data instanceof Collection) {
+                $data = self::entries($event->getData());
+                if (null === $data) {
                     return;
                 }
                 $aliases = $this->aliases($record);
@@ -203,15 +205,15 @@ final class CollaborateFormExtension extends AbstractTypeExtension
                     $listKeys = [];
                 }
                 $keyed = [];
-                foreach ($data as $key => $item) {
-                    $recordId = $this->recordId($item);
+                foreach ($data as $key => $_) {
+                    $recordId = $this->recordId($data[$key]);
                     $stable = null !== $recordId
                         ? $aliases[$path][$recordId] ?? $this->memberKey($recordId)
                         : $listKeys[$key] ?? (string) $key;
                     if (ctype_digit($stable)) {
                         $stable = 'p' . $stable;
                     }
-                    $keyed[$stable] = $item;
+                    $keyed[$stable] = $data[$key];
                 }
                 if (\is_array($data) && array_is_list($data)) {
                     $this->lists[$form] = $path;
@@ -224,8 +226,8 @@ final class CollaborateFormExtension extends AbstractTypeExtension
             FormEvents::PRE_SUBMIT,
             function (FormEvent $event): void {
                 $form = $event->getForm();
-                $data = $event->getData();
-                if (!$this->isCollection($form) || !\is_array($data)) {
+                $data = self::arrayOrNull($event->getData());
+                if (!$this->isCollection($form) || null === $data) {
                     return;
                 }
                 // ResizeFormListener has resolved the stable keys. Keep its child
@@ -246,8 +248,8 @@ final class CollaborateFormExtension extends AbstractTypeExtension
             FormEvents::SUBMIT,
             function (FormEvent $event): void {
                 $form = $event->getForm();
-                $data = $event->getData();
-                if (!isset($this->lists[$form]) || !\is_array($data)) {
+                $data = self::arrayOrNull($event->getData());
+                if (!isset($this->lists[$form]) || null === $data) {
                     return;
                 }
                 // The stable keys name the form's children only: a plain array goes back to the record as a list,
@@ -497,8 +499,8 @@ final class CollaborateFormExtension extends AbstractTypeExtension
         if ($new) {
             $draft = $record['draft'];
             if (null === $draft || 1 !== preg_match('/^[a-f0-9]{32}$/D', $draft)) {
-                $drawn = $request->attributes->get('_collaborate_new_draft');
-                if (!\is_string($drawn)) {
+                $drawn = self::stringOrNull($request->attributes->get('_collaborate_new_draft'));
+                if (null === $drawn) {
                     $drawn = bin2hex(random_bytes(16));
                     $request->attributes->set('_collaborate_new_draft', $drawn);
                 }
@@ -519,16 +521,14 @@ final class CollaborateFormExtension extends AbstractTypeExtension
             'permission' => $permission,
             'new' => $new,
             'draft' => $draft,
-            'requestedAt' => $this->requestedAt($request),
+            'requestedAt' => self::requestedAt($request->server->get('REQUEST_TIME_FLOAT')),
             'fields' => $this->fields($form, $new),
         ];
     }
 
     /** When the page's request started: a grant's conflicts compare the draft with the record it read then. */
-    private function requestedAt(Request $request): float
+    private static function requestedAt(mixed $time): float
     {
-        $time = $request->server->get('REQUEST_TIME_FLOAT');
-
         return is_numeric($time) ? (float) $time : microtime(true);
     }
 
@@ -545,7 +545,7 @@ final class CollaborateFormExtension extends AbstractTypeExtension
             $types = $this->types($child);
             $path = $name . '[' . $child->getName() . ']';
             if (\in_array('collection', $types, true)) {
-                $prototype = $config->getAttribute('prototype');
+                $prototype = self::formOrNull($config->getAttribute('prototype'));
                 // Entries store their order in a position child; without one, the record reloads in
                 // database order whatever order was submitted.
                 $ordered =
@@ -595,67 +595,55 @@ final class CollaborateFormExtension extends AbstractTypeExtension
         if ($this->uneditable($types)) {
             return [];
         }
-        $fields = [];
         if ($config->getOption('multiple', false)) {
             $path .= '[]';
         }
-        $value = $child->getViewData();
-        $owner = $form?->getData();
-        $propertyPath = $child->getPropertyPath();
-        if ($fresh && null !== $form && (\is_object($owner) || \is_array($owner)) && null !== $propertyPath) {
-            // Compound children address the parent's transformed view data.
-            foreach ($form->getConfig()->getModelTransformers() as $transformer) {
-                $owner = $transformer->transform($owner);
-            }
-            foreach ($form->getConfig()->getViewTransformers() as $transformer) {
-                $owner = $transformer->transform($owner);
-            }
-            /** @var array<array-key, mixed>|object $owner A compound form holds an object or an array. */
-            if (isset($this->lists[$form]) && \is_array($owner) && array_is_list($owner)) {
-                // SUBMIT stored the entries as a list; the stable keys name the children only, which hold
-                // the entries it was built from.
-                $owner = array_map(static fn(FormInterface $entry): mixed => $entry->getData(), $form->all());
-            }
-            // EasyAdmin maps an association itself to its inner autocomplete control; [autocomplete] is not a
-            // property of the selected entity.
-            $value = $form->getConfig()->getDataMapper() instanceof CrudAutocompleteType
-                ? $owner
-                : PropertyAccess::createPropertyAccessor()->getValue($owner, $propertyPath);
-            foreach ($config->getModelTransformers() as $transformer) {
-                $value = $transformer->transform($value);
-            }
-            foreach ($config->getViewTransformers() as $transformer) {
-                $value = $transformer->transform($value);
-            }
-        }
+
+        return $this->describeValue(
+            $child,
+            $path,
+            $new,
+            $form,
+            $fresh,
+            $types,
+            $this->viewValue($child, $form, $fresh),
+        );
+    }
+
+    /**
+     * @param list<string> $types
+     *
+     * @return array<string, SchemaField>
+     */
+    private function describeValue(
+        FormInterface $child,
+        string $path,
+        bool $new,
+        ?FormInterface $form,
+        bool $fresh,
+        array $types,
+        mixed $value,
+    ): array {
         if (!\is_scalar($value) && null !== $value && !\is_array($value)) {
             return [];
         }
+        $config = $child->getConfig();
+        $fields = [];
         $text = [] !== array_intersect($types, self::TEXT);
         $key = $path;
-        $owner = $form?->getData();
-        $ownerClass = \is_object($owner) ? $owner::class : $form?->getConfig()->getDataClass();
+        $ownerClass = self::ownerClass($form?->getData(), $form);
+        $elsewhere = false;
         if (null !== $ownerClass && class_exists($ownerClass)) {
             $key = $this->keys->key($ownerClass, $child->getName(), $path, $new);
-            if ($fresh && $this->keys->savedElsewhere($ownerClass, $child->getName(), $new)) {
-                $value = $child->getViewData();
-            }
+            $elsewhere = $fresh && $this->keys->savedElsewhere($ownerClass, $child->getName(), $new);
         }
         $kind = $text ? 'text' : 'value';
-        // A text control shows a numeric property as a string; the post-save path reads the property itself.
-        if ($text && (\is_int($value) || \is_float($value))) {
-            $value = (string) $value;
-        }
-        if ($text && \is_string($value)) {
-            // A text control's value reads LF; the draft models what the control shows.
-            $value = str_replace(["\r\n", "\r"], "\n", $value);
-        }
         if ([] !== array_intersect($types, $this->richText)) {
             $kind = 'rich';
         }
         $fields[$key] = [
             'type' => $kind,
-            'initial' => $value ?? '',
+            'initial' => self::initial($text, $elsewhere ? $child->getViewData() : $value),
             'formName' => $path,
         ];
         if (\in_array($kind, ['text', 'rich'], true)) {
@@ -671,6 +659,91 @@ final class CollaborateFormExtension extends AbstractTypeExtension
         }
 
         return $fields;
+    }
+
+    /** The value a child's control shows: on a fresh form, read again from its owner's current data. */
+    private function viewValue(FormInterface $child, ?FormInterface $form, bool $fresh): mixed
+    {
+        $propertyPath = $child->getPropertyPath();
+
+        return $fresh && null !== $form && null !== $propertyPath
+            ? $this->freshValue($child, $form, $propertyPath, $form->getData())
+            : $child->getViewData();
+    }
+
+    private function freshValue(
+        FormInterface $child,
+        FormInterface $form,
+        PropertyPathInterface $propertyPath,
+        mixed $owner,
+    ): mixed {
+        if (!\is_object($owner) && !\is_array($owner)) {
+            return $child->getViewData();
+        }
+        $config = $form->getConfig();
+
+        // Compound children address the parent's transformed view data.
+        return $this->propertyValue(
+            $child,
+            $form,
+            $propertyPath,
+            self::transform([...$config->getModelTransformers(), ...$config->getViewTransformers()], $owner),
+        );
+    }
+
+    private function propertyValue(
+        FormInterface $child,
+        FormInterface $form,
+        PropertyPathInterface $propertyPath,
+        mixed $owner,
+    ): mixed {
+        /** @var array<array-key, mixed>|object $owner A compound form holds an object or an array. */
+        if (isset($this->lists[$form]) && \is_array($owner) && array_is_list($owner)) {
+            // SUBMIT stored the entries as a list; the stable keys name the children only, which hold
+            // the entries it was built from.
+            $owner = array_map(static fn(FormInterface $entry): mixed => $entry->getData(), $form->all());
+        }
+        $config = $child->getConfig();
+
+        // EasyAdmin maps an association itself to its inner autocomplete control; [autocomplete] is not a
+        // property of the selected entity.
+        return self::transform(
+            [...$config->getModelTransformers(), ...$config->getViewTransformers()],
+            $form->getConfig()->getDataMapper() instanceof CrudAutocompleteType
+                ? $owner
+                : PropertyAccess::createPropertyAccessor()->getValue($owner, $propertyPath),
+        );
+    }
+
+    /** @param list<DataTransformerInterface> $transformers */
+    private static function transform(array $transformers, mixed $value): mixed
+    {
+        return array_reduce(
+            $transformers,
+            static fn(mixed $value, DataTransformerInterface $transformer): mixed => $transformer->transform($value),
+            $value,
+        );
+    }
+
+    /** @return string|null The class of a form's data, or the class it declares. */
+    private static function ownerClass(mixed $owner, ?FormInterface $form): ?string
+    {
+        return \is_object($owner) ? $owner::class : $form?->getConfig()->getDataClass();
+    }
+
+    /** A field's initial value, as its control shows it. */
+    private static function initial(bool $text, mixed $value): mixed
+    {
+        // A text control shows a numeric property as a string; the post-save path reads the property itself.
+        if ($text && (\is_int($value) || \is_float($value))) {
+            return (string) $value;
+        }
+        if ($text && \is_string($value)) {
+            // A text control's value reads LF; the draft models what the control shows.
+            return str_replace(["\r\n", "\r"], "\n", $value);
+        }
+
+        return $value ?? '';
     }
 
     /** Operations recorded by one CKEditor release do not replay into another: the pinned version is part of the schema. */
@@ -732,9 +805,35 @@ final class CollaborateFormExtension extends AbstractTypeExtension
         if (!\is_object($item)) {
             return null;
         }
-        $id = $this->identifier->value($item) ?? get_object_vars($item)['id'] ?? null;
 
+        return self::idString($this->identifier->value($item) ?? get_object_vars($item)['id'] ?? null);
+    }
+
+    private static function idString(mixed $id): ?string
+    {
         return \is_int($id) || \is_string($id) || $id instanceof \Stringable ? (string) $id : null;
+    }
+
+    /** @return array<array-key, mixed>|Collection<array-key, mixed>|null A collection form's data, when it holds entries. */
+    private static function entries(mixed $data): array|Collection|null
+    {
+        return \is_array($data) || $data instanceof Collection ? $data : null;
+    }
+
+    /** @return array<array-key, mixed>|null */
+    private static function arrayOrNull(mixed $value): ?array
+    {
+        return \is_array($value) ? $value : null;
+    }
+
+    private static function stringOrNull(mixed $value): ?string
+    {
+        return \is_string($value) ? $value : null;
+    }
+
+    private static function formOrNull(mixed $value): ?FormInterface
+    {
+        return $value instanceof FormInterface ? $value : null;
     }
 
     private function memberKey(string $id): string

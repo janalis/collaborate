@@ -154,9 +154,9 @@ final class HostApplicationTest extends ApplicationTestCase
     {
         $layer = self::layer($this->open('/admin/library/music'));
         $session = $this->post($layer['session'], $layer['csrf'], ['grant' => $layer['grant']]);
-        self::assertIsArray($session['topics']);
-        [$topic] = $session['topics'];
-        self::assertIsString($topic);
+        $topics = Arrays::array($session['topics']);
+        self::assertIsString($topics[0] ?? null);
+        $topic = $topics[0];
         $popup = ['kind' => 'share', 'key' => 'music-2'];
         self::assertIsString($layer['events']);
         $this->post(

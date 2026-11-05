@@ -204,9 +204,9 @@ final class ChangeCollectorMetadataTest extends TestCase
     private function strings(array $values): array
     {
         $strings = [];
-        foreach ($values as $value) {
-            self::assertIsString($value);
-            $strings[] = $value;
+        foreach (array_keys($values) as $key) {
+            self::assertIsString($values[$key]);
+            $strings[] = $values[$key];
         }
 
         return $strings;

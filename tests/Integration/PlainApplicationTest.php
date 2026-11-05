@@ -185,12 +185,11 @@ final class PlainApplicationTest extends CollaborationTestCase
                 'input[name$="[name]"][disabled]',
             )->each(static fn(Crawler $input): string => (string) $input->attr('value')),
         );
-        $configuration = json_decode(
+        $configuration = Arrays::array(json_decode(
             (string) $page->filter('form')->attr('data-collaborate'),
             true,
             flags: \JSON_THROW_ON_ERROR,
-        );
-        self::assertIsArray($configuration);
+        ));
         self::assertIsString($configuration['grant'] ?? null);
         $schema = self::schema($configuration['grant']);
         self::assertArrayHasKey('article[title]', $schema);

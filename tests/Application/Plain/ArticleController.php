@@ -88,11 +88,10 @@ final readonly class ArticleController
     {
         /** @var array<string, mixed> $attributes */
         $attributes = $view->vars['attr'];
-        $configuration = $attributes['data-collaborate'] ?? null;
 
         return new JsonResponse([
-            'configuration' => \is_string($configuration)
-                ? json_decode($configuration, true, flags: \JSON_THROW_ON_ERROR)
+            'configuration' => \is_string($attributes['data-collaborate'] ?? null)
+                ? json_decode($attributes['data-collaborate'], true, flags: \JSON_THROW_ON_ERROR)
                 : null,
             'tokens' => $this->tokens($view),
         ], headers: ['Cache-Control' => 'no-store', 'Vary' => 'X-Collaborate-Refresh']);

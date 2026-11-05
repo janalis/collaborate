@@ -71,8 +71,8 @@ final readonly class UpdatesSubscriber implements EventSubscriberInterface
     private function drafts(Request $request): array
     {
         $updates = [];
-        $draft = $request->attributes->get('_collaborate_committed');
-        if (\is_string($draft)) {
+        $draft = self::stringOrNull($request->attributes->get('_collaborate_committed'));
+        if (null !== $draft) {
             $updates[] = new Update(
                 $this->access->topic($draft),
                 json_encode(['channel' => 'draft', 'draft' => $draft, 'kind' => 'saved'], \JSON_THROW_ON_ERROR),
@@ -83,7 +83,7 @@ final readonly class UpdatesSubscriber implements EventSubscriberInterface
         // the draft saved through its own form has just recorded it.
         $records = array_diff(
             array_unique($this->strings($request->attributes->all('_collaborate_records_changed'))),
-            \is_string($draft) ? [$draft] : [],
+            null !== $draft ? [$draft] : [],
         );
         // array_chunk() lists each chunk again.
         foreach (array_chunk($records, max(1, $this->chunk)) as $chunk) {
@@ -106,12 +106,19 @@ final readonly class UpdatesSubscriber implements EventSubscriberInterface
     private function strings(array $values): array
     {
         $strings = [];
-        foreach ($values as $value) {
-            if (\is_string($value)) {
-                $strings[] = $value;
+        foreach (array_keys($values) as $key) {
+            if (!\is_string($values[$key])) {
+                continue;
             }
+
+            $strings[] = $values[$key];
         }
 
         return $strings;
+    }
+
+    private static function stringOrNull(mixed $value): ?string
+    {
+        return \is_string($value) ? $value : null;
     }
 }

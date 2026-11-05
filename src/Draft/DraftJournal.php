@@ -273,12 +273,12 @@ class DraftJournal implements ResetInterface
         if ($size > $this->maxUpdateBytes) {
             throw new HttpException(413, 'Collaborate update is too large.');
         }
-        $field = $event['field'] ?? null;
-        $definition = \is_string($field) && !FieldDefinitions::prototype($field)
+        $field = self::stringOrNull($event['field'] ?? null);
+        $definition = null !== $field && !FieldDefinitions::prototype($field)
             ? new FieldDefinitions($allowed)->definition($field)
             : null;
         if (
-            !\is_string($field)
+            null === $field
             || null === $definition
             || !\is_string($event['id'] ?? null)
             || !\is_int($event['generation'] ?? null)
@@ -415,8 +415,8 @@ class DraftJournal implements ResetInterface
         if ($generation !== $draft['generation'] || $revision !== $draft['revision']) {
             throw new ConflictHttpException('The shared draft changed. Synchronize before saving.');
         }
-        foreach ($current as $name => $value) {
-            if (isset($draft['fields'][$name]) && DraftValues::differs($draft['fields'][$name], $value)) {
+        foreach (array_keys($current) as $name) {
+            if (isset($draft['fields'][$name]) && DraftValues::differs($draft['fields'][$name], $current[$name])) {
                 throw new ConflictHttpException(
                     'The saved record changed outside this draft. Reconcile before saving.',
                 );
@@ -441,15 +441,15 @@ class DraftJournal implements ResetInterface
         $draft['savedBy'] = null === $actor
             ? null
             : ['userId' => $actor['userId'], 'label' => mb_substr($actor['label'], 0, $this->labelLength)];
-        foreach ($values as $name => $value) {
+        foreach (array_keys($values) as $name) {
             if (!isset($draft['fields'][$name])) {
                 continue;
             }
 
             $field = &$draft['fields'][$name];
-            if ('text' === $field['type'] && \is_string($value) && $field['value'] !== $value) {
+            if ('text' === $field['type'] && \is_string($values[$name]) && $field['value'] !== $values[$name]) {
                 $version = $field['version'] ?? ('' === $field['initial'] ? 1 : 2);
-                $operations = $this->text->diff((string) $field['value'], $value, $version);
+                $operations = $this->text->diff((string) $field['value'], $values[$name], $version);
                 $result = $this->text->apply((string) $field['value'], $field['graveyardLength'] ?? 0, $operations);
                 $field['initialVersion'] ??= $version;
                 $field['version'] = $version + \count($operations);
@@ -467,11 +467,11 @@ class DraftJournal implements ResetInterface
                 ]);
             } elseif (
                 'value' === $field['type']
-                && !DraftValues::same($field['value'], $value)
+                && !DraftValues::same($field['value'], $values[$name])
                 && !$this->mode($name)
             ) {
                 $version = $field['version'] ?? 0;
-                $field['value'] = $value;
+                $field['value'] = $values[$name];
                 $field['version'] = $version + 1;
                 $this->record($id, [
                     'id' => $this->batchId(),
@@ -481,31 +481,31 @@ class DraftJournal implements ResetInterface
                     'revision' => ++$draft['revision'],
                     'userId' => 0,
                     'label' => $this->systemLabel,
-                    'value' => $value,
+                    'value' => $values[$name],
                 ]);
             }
             unset($field);
-            $draft['fields'][$name]['saved'] = $value;
+            $draft['fields'][$name]['saved'] = $values[$name];
             $draft['fields'][$name]['savedVersion'] = $draft['fields'][$name]['version'];
             $draft['fields'][$name]['savedAt'] = microtime(true);
         }
         $removed = $this->removedEntries($draft);
-        foreach ($draft['fields'] as $name => &$field) {
-            if ('member' === $field['type'] && !\array_key_exists($name, $values)) {
+        foreach ($draft['fields'] as $name => &$state) {
+            if ('member' === $state['type'] && !\array_key_exists($name, $values)) {
                 $position = strrpos($name, '[@');
                 if (
                     false !== $position
                     && \array_key_exists(substr($name, 0, $position) . '[__collection__]', $values)
                 ) {
-                    $field['saved'] = ['alive' => false, 'order' => 0, 'recordId' => null];
-                    $field['savedVersion'] = $field['version'];
+                    $state['saved'] = ['alive' => false, 'order' => 0, 'recordId' => null];
+                    $state['savedVersion'] = $state['version'];
                 }
             }
-            if ($this->removed($removed, $field['formName'] ?? $name)) {
-                $field['savedVersion'] = $field['version'];
+            if ($this->removed($removed, $state['formName'] ?? $name)) {
+                $state['savedVersion'] = $state['version'];
             }
         }
-        unset($field);
+        unset($state);
         $this->settle($draft);
         $draft['bytes'] = $this->size($id);
         $this->write($id, $draft);
@@ -556,10 +556,10 @@ class DraftJournal implements ResetInterface
                 $definitions,
                 $requestedAt,
             );
-            foreach ($conflicts as $name => $value) {
+            foreach (array_keys($conflicts) as $name) {
                 // @infection-ignore-all: any negative version marks the field unsaved, since no version is negative.
                 $draft['fields'][$name]['savedVersion'] = -1;
-                $draft['fields'][$name]['saved'] = $value;
+                $draft['fields'][$name]['saved'] = $conflicts[$name];
                 $draft['fields'][$name]['savedAt'] = microtime(true);
             }
             // The kept draft now differs from the record: purge() must see it unsaved. The record was
@@ -1027,6 +1027,11 @@ class DraftJournal implements ResetInterface
         ]);
     }
 
+    private static function stringOrNull(mixed $value): ?string
+    {
+        return \is_string($value) ? $value : null;
+    }
+
     /** A batch as the journal stores it, and counts it: UTF-8 bytes, not \uXXXX escapes. */
     private function encode(mixed $batch): string
     {
@@ -1043,10 +1048,8 @@ class DraftJournal implements ResetInterface
         if (false === $payload) {
             return null;
         }
-        /** @var Batch $batch */
-        $batch = json_decode((string) $payload, true, flags: \JSON_THROW_ON_ERROR);
-
-        return $batch;
+        /** @var Batch */
+        return json_decode((string) $payload, true, flags: \JSON_THROW_ON_ERROR);
     }
 
     /** The batches after `since`, and the generations compactions replaced when the last one falls after `since`
@@ -1089,10 +1092,8 @@ class DraftJournal implements ResetInterface
         if (false === $payload) {
             return [];
         }
-        /** @var list<int> $generations */
-        $generations = json_decode((string) $payload, true, flags: \JSON_THROW_ON_ERROR);
-
-        return $generations;
+        /** @var list<int> */
+        return json_decode((string) $payload, true, flags: \JSON_THROW_ON_ERROR);
     }
 
     private function size(string $id): int

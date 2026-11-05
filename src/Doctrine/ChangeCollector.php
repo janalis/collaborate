@@ -74,11 +74,7 @@ final class ChangeCollector
         }
         foreach ($uow->getScheduledCollectionDeletions() as $collection) {
             $changed[] = $collection->getTypeClass()->getName();
-            foreach ($collection->getSnapshot() as $element) {
-                if (!\is_object($element)) {
-                    continue;
-                }
-
+            foreach (self::objects($collection->getSnapshot()) as $element) {
                 $records += array_fill_keys($this->records($em, $element), true);
             }
         }
@@ -117,11 +113,10 @@ final class ChangeCollector
                 if (!$association->isToOne()) {
                     continue;
                 }
-                foreach ([$metadata->getFieldValue($entity, $field), $changes[$field][0] ?? null] as $parent) {
-                    if (!\is_object($parent)) {
-                        continue;
-                    }
-
+                foreach (self::objects([
+                    $metadata->getFieldValue($entity, $field),
+                    $changes[$field][0] ?? null,
+                ]) as $parent) {
                     $records += array_fill_keys($this->records($em, $parent), true);
                 }
             }
@@ -159,13 +154,37 @@ final class ChangeCollector
             return [];
         }
         $identifier = $uow->getEntityIdentifier($entity);
-        $id = reset($identifier);
+        $id = self::idString(reset($identifier));
         // An edit page addresses single-column ids only.
-        if (!\is_int($id) && !\is_string($id) || 1 !== \count($identifier)) {
+        if (null === $id || 1 !== \count($identifier)) {
             return [];
         }
 
-        return $this->drafts($em->getClassMetadata($entity::class), (string) $id);
+        return $this->drafts($em->getClassMetadata($entity::class), $id);
+    }
+
+    /**
+     * @param array<array-key, mixed> $values
+     *
+     * @return list<object>
+     */
+    private static function objects(array $values): array
+    {
+        $objects = [];
+        foreach (array_keys($values) as $key) {
+            if (!\is_object($values[$key])) {
+                continue;
+            }
+
+            $objects[] = $values[$key];
+        }
+
+        return $objects;
+    }
+
+    private static function idString(mixed $id): ?string
+    {
+        return \is_int($id) || \is_string($id) ? (string) $id : null;
     }
 
     /** @param ClassMetadata<object> $metadata

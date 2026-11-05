@@ -283,7 +283,8 @@ final class UpdatesSubscriberTest extends TestCase
         $publisher = new HubPublisher($hub, $this->createStub(LoggerInterface::class));
         $request = Request::create('/admin/tag/1/edit');
         $records = array_map(static fn(int $id): string => $access->draftId(Tag::class, (string) $id), range(1, 6));
-        $request->attributes->set('_collaborate_records_changed', [...$records, $records[0], 42]);
+        // A value that names no draft is skipped, wherever it stands.
+        $request->attributes->set('_collaborate_records_changed', [42, ...$records, $records[0], 42]);
         $request->attributes->set('_collaborate_committed', $records[0]);
 
         new UpdatesSubscriber($access, new Topics(), $publisher, true, 3)->publish($this->response($request, 302));

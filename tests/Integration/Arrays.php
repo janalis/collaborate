@@ -16,12 +16,18 @@ final class Arrays
      */
     public static function field(array $state, string $name): array
     {
-        $fields = $state['fields'] ?? null;
-        Assert::assertIsArray($fields);
-        $field = $fields[$name] ?? null;
-        Assert::assertIsArray($field, \sprintf('The draft has no field "%s".', $name));
-
         /** @var array<string, mixed> */
-        return $field;
+        return self::array(
+            self::array($state['fields'] ?? null)[$name] ?? null,
+            \sprintf('The draft has no field "%s".', $name),
+        );
+    }
+
+    /** @return array<array-key, mixed> */
+    public static function array(mixed $value, string $message = ''): array
+    {
+        Assert::assertIsArray($value, $message);
+
+        return $value;
     }
 }

@@ -104,9 +104,9 @@ final class CollaborateBundle extends AbstractBundle
             'janalis_collaborate.hub',
             'mercure.hub.' . self::string(self::branch($config, 'hub'), 'name'),
         );
-        $places = self::branch($config, 'cursors')['places'] ?? null;
-        if (\is_string($places) && '' !== $places) {
-            $container->setAlias('janalis_collaborate.places', $places);
+        $cursors = self::branch($config, 'cursors');
+        if (\is_string($cursors['places'] ?? null) && '' !== $cursors['places']) {
+            $container->setAlias('janalis_collaborate.places', $cursors['places']);
         }
         // Without a configured limiter, its consumers receive null and do not limit.
         foreach (['cursors' => self::branch($config, 'cursors'), 'drafts' => $drafts] as $name => $branch) {

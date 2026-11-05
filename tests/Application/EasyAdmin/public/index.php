@@ -7,7 +7,8 @@ use Symfony\Component\HttpFoundation\Request;
 
 require dirname(__DIR__, 4) . '/vendor/autoload.php';
 
-$kernel = new EasyAdminKernel($_SERVER['APP_ENV'] ?? 'e2e', '1' === ($_SERVER['APP_DEBUG'] ?? '0'));
+$debug = filter_var($_SERVER['APP_DEBUG'] ?? false, \FILTER_VALIDATE_BOOL);
+$kernel = new EasyAdminKernel($_SERVER['APP_ENV'] ?? 'e2e', $debug);
 $request = Request::createFromGlobals();
 $response = $kernel->handle($request);
 $response->send();

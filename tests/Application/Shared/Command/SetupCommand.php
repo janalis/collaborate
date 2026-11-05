@@ -24,10 +24,7 @@ final class SetupCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         Database::reset($this->em);
-        $output->writeln(\sprintf(
-            'Database "%s" is ready.',
-            (string) ($this->em->getConnection()->getParams()['dbname'] ?? ''),
-        ));
+        $output->writeln(\sprintf('Database "%s" is ready.', $this->em->getConnection()->getParams()['dbname'] ?? ''));
 
         return Command::SUCCESS;
     }

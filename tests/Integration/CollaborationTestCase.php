@@ -84,8 +84,7 @@ abstract class CollaborationTestCase extends ApplicationTestCase
         self::assertSame(15, $session['userId']);
         self::assertSame([], $session['resend']);
         self::assertSame([1], $session['denied']);
-        $topics = $session['topics'];
-        self::assertIsArray($topics);
+        $topics = Arrays::array($session['topics']);
         self::assertCount(3, $topics);
         self::assertStringStartsWith('urn:collaborate:cursors:', (string) $topics[0]);
         self::assertSame('urn:collaborate:updates', $topics[1]);
@@ -304,10 +303,10 @@ abstract class CollaborationTestCase extends ApplicationTestCase
     /** @param array{grant: string, ...} $configuration */
     protected static function draftId(array $configuration): string
     {
-        $id = self::scope($configuration['grant'])['id'] ?? null;
-        self::assertIsString($id);
+        $scope = self::scope($configuration['grant']);
+        self::assertIsString($scope['id'] ?? null);
 
-        return $id;
+        return $scope['id'];
     }
 
     /** @param array{grant: string, ...} $configuration */
@@ -326,11 +325,8 @@ abstract class CollaborationTestCase extends ApplicationTestCase
     /** @return array<string, mixed> */
     protected static function schema(string $grant): array
     {
-        $fields = self::scope($grant)['fields'] ?? null;
-        self::assertIsArray($fields);
-
         /** @var array<string, mixed> */
-        return $fields;
+        return Arrays::array(self::scope($grant)['fields'] ?? null);
     }
 
     /** @return array<string, mixed> */

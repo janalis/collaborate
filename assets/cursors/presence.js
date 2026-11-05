@@ -279,7 +279,8 @@ export function createPresence(
       item.removeAttribute('role');
       item.removeAttribute('aria-label');
     }
-    toggle.replaceChildren(...stack);
+    // The chips apart, as they are drawn: text run together would read as one word (`ÉB` for É and B).
+    toggle.replaceChildren(...stack.flatMap((item, index) => (index ? [' ', item] : [item])));
     const names = present.map(([, user]) => user.label).join(', ');
     toggle.title = names;
     name(toggle);

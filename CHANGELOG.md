@@ -5,6 +5,12 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- The chips of the presence menu's button are apart in its text, as they are
+  drawn: run together, the initials read as one word (`ÉB`), which the
+  button's name (`É B: …`) did not hold.
+
 ## [0.2.2] - 2026-11-05
 
 ### Fixed

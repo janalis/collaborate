@@ -1,4 +1,10 @@
-import { createPresence, distinctColor, initialOf, NARROW_SHOWN } from '../../../assets/cursors/presence.js';
+import {
+  createPresence,
+  distinctColor,
+  initialOf,
+  NARROW_QUERY,
+  NARROW_SHOWN,
+} from '../../../assets/cursors/presence.js';
 
 const COLORS = ['blue', 'indigo', 'violet', 'purple', 'pink', 'red', 'orange', 'amber'];
 const messages = { showPointers: 'Pointers', idle: 'away' };
@@ -35,7 +41,10 @@ beforeEach(() => {
   };
   presence.bind(hooks);
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 test('the initial of a name is its first character as a reader sees one', () => {
   expect(initialOf('élise')).toBe('É');
@@ -65,7 +74,9 @@ test('the peers are the button of a menu that lists them with where they are', (
   const button = toggle();
   expect(button.getAttribute('aria-haspopup')).toBe('menu');
   expect(button.getAttribute('popovertarget')).toBe(menu().id);
-  expect(button.getAttribute('aria-label')).toBe('élise, bob');
+  // Named after what it shows, then who: a wide window shows both initials.
+  expect(button.getAttribute('aria-label')).toBe('É B: élise, bob');
+  expect(button.title).toBe('élise, bob');
   expect([...button.children].map((item) => item.textContent)).toEqual(['É', 'B', '+1']);
   // The first peer shows on a narrow window, the others are counted there.
   expect(button.children[0].className).toBe('collaborate-presence__user');
@@ -260,4 +271,44 @@ test('past the avatars the menu shows, the others are counted on a wide window t
     ['+4', 'collaborate-presence__more collaborate-presence--narrow'],
     ['+2', 'collaborate-presence__more collaborate-presence--wide'],
   ]);
+});
+
+test("the menu's button is named after the stack its window shows, and again when the window changes", () => {
+  const listeners = new Set();
+  const query = {
+    matches: true,
+    addEventListener: vi.fn((_type, listener) => listeners.add(listener)),
+    removeEventListener: vi.fn((_type, listener) => listeners.delete(listener)),
+  };
+  const matchMedia = vi.fn(() => query);
+  vi.stubGlobal('matchMedia', matchMedia);
+  presence = createPresence(undefined, 3, { presence: 'menu' });
+  expect(matchMedia).toHaveBeenCalledWith(NARROW_QUERY);
+  expect(NARROW_QUERY).toBe('(max-width: 575.98px)');
+  presence.see(peer(1, { label: 'élise' }), 0);
+  presence.see(peer(2, { label: 'bob' }), 0);
+  presence.see(peer(3, { label: 'carl', avatar: '/three.png' }), 0);
+  // Narrow: the first peer, the others counted.
+  expect(toggle().getAttribute('aria-label')).toBe('É +2: élise, bob, carl');
+  query.matches = false;
+  for (const listener of listeners) listener();
+  // Wide: the initials, a picture showing none.
+  expect(toggle().getAttribute('aria-label')).toBe('É B: élise, bob, carl');
+  presence.dispose();
+  expect(query.removeEventListener).toHaveBeenCalledWith('change', expect.any(Function));
+  expect(listeners.size).toBe(0);
+});
+
+test('a button showing pictures alone is named after the peers, and a container without one is passed', () => {
+  presence.see(peer(1, { label: 'élise', avatar: '/one.png' }), 0);
+  expect(toggle().getAttribute('aria-label')).toBe('élise');
+  document.body.insertAdjacentHTML('beforeend', '<div data-collaborate-presence hidden></div>');
+  const listeners = new Set();
+  vi.stubGlobal('matchMedia', () => ({
+    matches: false,
+    addEventListener: (_type, listener) => listeners.add(listener),
+    removeEventListener: () => {},
+  }));
+  presence = createPresence(undefined, 3, { presence: 'menu' });
+  for (const listener of listeners) expect(() => listener()).not.toThrow();
 });

@@ -17,7 +17,7 @@ test('re-exports the draft session lookup and the row initializer registry', asy
 }, 30_000);
 
 test('starts cursors and updates on the layer, through the fetch captured before any host wrapper', async () => {
-  vi.stubGlobal('matchMedia', () => ({ matches: false }));
+  vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }));
   vi.stubGlobal(
     'ResizeObserver',
     class {

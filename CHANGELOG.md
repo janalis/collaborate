@@ -5,6 +5,13 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- The button of `presence: menu` is named after what it shows (the initials,
+  the count of the others, for the stack the window shows) then the peers'
+  names, where it was named after the names alone: speech control finds it by
+  the text it reads (WCAG 2.5.3 Label in Name, which axe-core 4.14 checks).
+
 ## [0.2.1] - 2026-11-05
 
 ### Changed

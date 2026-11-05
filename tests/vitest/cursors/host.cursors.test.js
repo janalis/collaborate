@@ -84,7 +84,7 @@ beforeEach(() => {
   Object.defineProperty(document, 'hidden', { configurable: true, value: false });
   document.elementFromPoint = vi.fn(() => document.querySelector('tr[data-key="a"] td'));
   vi.stubGlobal('CSS', { escape: (value) => value });
-  vi.stubGlobal('matchMedia', () => ({ matches: false }));
+  vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }));
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -613,7 +613,7 @@ test('a page without a secure context shares nothing, and leaves the layer to st
   expect(begin()).toBeNull();
   vi.unstubAllGlobals();
   vi.stubGlobal('CSS', { escape: (value) => value });
-  vi.stubGlobal('matchMedia', () => ({ matches: false }));
+  vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }));
   vi.stubGlobal(
     'ResizeObserver',
     class {

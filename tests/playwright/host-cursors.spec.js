@@ -69,8 +69,8 @@ test.describe('a host library', () => {
 
   test('the readers of a folder see each other, and a pointer on a record in the other view', async () => {
     await connected(alice.page, bob.page);
-    await expect(toggle(alice.page)).toHaveAttribute('aria-label', 'Bob');
-    await expect(toggle(bob.page)).toHaveAttribute('aria-label', 'Alice');
+    await expect(toggle(alice.page)).toHaveAttribute('aria-label', 'B: Bob');
+    await expect(toggle(bob.page)).toHaveAttribute('aria-label', 'A: Alice');
     // Bob points at the name of a tile; Alice, in the list, sees it on the row of the same record.
     const cursor = cursorOf(alice.page);
     await pointAt(record(bob.page, 'music-2').locator('.name'), cursor, record(alice.page, 'music-2'));
@@ -92,7 +92,7 @@ test.describe('a host library', () => {
     const films = await reader(browser, baseURL, 'dave', '/admin/library/films');
     try {
       await connected(alice.page, home.page, films.page);
-      await expect(toggle(alice.page)).toHaveAttribute('aria-label', 'Bob, Carol');
+      await expect(toggle(alice.page)).toHaveAttribute('aria-label', 'B C: Bob, Carol');
       await expect(films.page.locator('[data-collaborate-presence]')).toBeHidden();
     } finally {
       await home.context.close();
@@ -102,12 +102,12 @@ test.describe('a host library', () => {
 
   test('a reader who loads another folder in place of the listing leaves this one, and comes back', async () => {
     await connected(alice.page, bob.page);
-    await expect(toggle(alice.page)).toHaveAttribute('aria-label', 'Bob');
+    await expect(toggle(alice.page)).toHaveAttribute('aria-label', 'B: Bob');
     await bob.page.getByRole('link', { name: 'films' }).click();
     await expect(bob.page.locator('.listing')).toHaveAttribute('data-folder', 'films');
     await expect(alice.page.locator('[data-collaborate-presence]')).toBeHidden();
     await bob.page.getByRole('link', { name: 'music' }).click();
-    await expect(toggle(alice.page)).toHaveAttribute('aria-label', 'Bob');
+    await expect(toggle(alice.page)).toHaveAttribute('aria-label', 'B: Bob');
   });
 
   test('the readers of a popup of a record see each other in it and type, above the open dialog', async () => {
@@ -178,7 +178,7 @@ test.describe('a host library', () => {
     await pointers.click();
     await expect(layer(alice.page)).toHaveAttribute('data-hidden', 'true');
     await expect(cursor).toBeHidden();
-    await expect(toggle(alice.page)).toHaveAttribute('aria-label', 'Bob');
+    await expect(toggle(alice.page)).toHaveAttribute('aria-label', 'B: Bob');
     // The other tab of the browser follows.
     await expect(layer(second)).toHaveAttribute('data-hidden', 'true');
     await openMenu(alice.page);
@@ -189,7 +189,7 @@ test.describe('a host library', () => {
 
   test('a folder revoked stops its pages from sharing', async ({ request }) => {
     await connected(alice.page, bob.page);
-    await expect(toggle(bob.page)).toHaveAttribute('aria-label', 'Alice');
+    await expect(toggle(bob.page)).toHaveAttribute('aria-label', 'A: Alice');
     await request.post('/e2e/folders/music/revoke', { data: { revoked: true } });
     // The next event of either page is refused, and the server refuses the page's session it asks again for.
     const refused = (page) =>

@@ -78,6 +78,8 @@ test('the peers are the button of a menu that lists them with where they are', (
   expect(button.getAttribute('aria-label')).toBe('É B: élise, bob');
   expect(button.title).toBe('élise, bob');
   expect([...button.children].map((item) => item.textContent)).toEqual(['É', 'B', '+1']);
+  // Apart, as they are drawn: the visible text is the name's first words.
+  expect(button.textContent).toBe('É B +1');
   // The first peer shows on a narrow window, the others are counted there.
   expect(button.children[0].className).toBe('collaborate-presence__user');
   expect(button.children[1].className).toContain('collaborate-presence--wide');

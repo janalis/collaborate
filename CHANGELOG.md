@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-11-05
+
 ### Changed
 
 - The state bar offers **Save** while the draft holds unsaved changes. It
@@ -187,7 +189,8 @@ versions follow [Semantic Versioning](https://semver.org/).
   `FormContextInterface` (which record a page edits).
 - English and French translations.
 
-[Unreleased]: https://github.com/janalis/collaborate/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/janalis/collaborate/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/janalis/collaborate/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/janalis/collaborate/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/janalis/collaborate/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/janalis/collaborate/compare/v0.2.0...v0.2.1

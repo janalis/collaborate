@@ -239,4 +239,6 @@ that has Gedmo's `#[Translatable]` attribute keeps one draft state per
 locale (the request's locale), so pages of two locales share the record's
 draft without sharing that field. New records are created in the kernel's
 default locale. A saved Gedmo translation row (an `AbstractTranslation`
-entity) counts as a change of the record it translates.
+entity) counts as a change of the record it translates. A save in any locale
+checkpoints what each field holds once the record is persisted, so a value
+the save derives itself (a slug, say) does not read as a conflict.

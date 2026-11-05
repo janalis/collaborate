@@ -23,6 +23,19 @@ versions follow [Semantic Versioning](https://semver.org/).
   `discard` and `confirmDiscard*`; hosts that override these strings need
   the new source keys.
 
+### Fixed
+
+- A save in a non-default locale checkpoints the value each translated field
+  holds once the record is persisted, as for every other field, where it
+  checkpointed the submitted value. When the save stores a value of its own
+  (a slug its listener derives from the new name), the draft and the record
+  now agree instead of showing a conflict on the next page.
+
+### Deprecated
+
+- `FieldKeyResolverInterface::savedElsewhere()` is no longer called; it is
+  removed in 0.3.
+
 ## [0.2.3] - 2026-11-05
 
 ### Fixed

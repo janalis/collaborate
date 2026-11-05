@@ -1299,7 +1299,7 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         self::assertSame('PERSISTED', $snapshot()['en:Article[title]']);
     }
 
-    public function testSavedFrenchSnapshotKeepsTheTranslatedValueWhenGedmoRestoresTheEntity(): void
+    public function testSavedFrenchSnapshotCheckpointsWhatTheRecordHoldsNotWhatWasSubmitted(): void
     {
         $this->page->page = PageContext::EDIT;
         $this->request->setLocale('fr');
@@ -1312,11 +1312,12 @@ final class CollaborateFormExtensionTest extends TypeTestCase
                 $request->attributes->set('_collaborate_save', true);
             });
         $form->submit(['title' => 'Titre traduit']);
-        // Gedmo restores the pre-edit entity property when flushing a translation.
-        $this->article->title = 'Title';
+        // The save stores a value of its own (a listener deriving it, say): Gedmo leaves on the property what it
+        // wrote to the French translation row, and the draft checkpoints that, so the record and the draft agree.
+        $this->article->title = 'Titre dérivé';
         /** @var callable(): array<string, mixed> $snapshot */
         $snapshot = $this->request->attributes->get('_collaborate_snapshot');
-        self::assertSame('Titre traduit', $snapshot()['fr:Article[title]']);
+        self::assertSame('Titre dérivé', $snapshot()['fr:Article[title]']);
     }
 
     public function testNonSerializableMappedValuesAreExcludedFromTheGrant(): void

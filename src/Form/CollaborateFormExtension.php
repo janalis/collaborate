@@ -599,15 +599,7 @@ final class CollaborateFormExtension extends AbstractTypeExtension
             $path .= '[]';
         }
 
-        return $this->describeValue(
-            $child,
-            $path,
-            $new,
-            $form,
-            $fresh,
-            $types,
-            $this->viewValue($child, $form, $fresh),
-        );
+        return $this->describeValue($child, $path, $new, $form, $types, $this->viewValue($child, $form, $fresh));
     }
 
     /**
@@ -620,7 +612,6 @@ final class CollaborateFormExtension extends AbstractTypeExtension
         string $path,
         bool $new,
         ?FormInterface $form,
-        bool $fresh,
         array $types,
         mixed $value,
     ): array {
@@ -632,10 +623,8 @@ final class CollaborateFormExtension extends AbstractTypeExtension
         $text = [] !== array_intersect($types, self::TEXT);
         $key = $path;
         $ownerClass = self::ownerClass($form?->getData(), $form);
-        $elsewhere = false;
         if (null !== $ownerClass && class_exists($ownerClass)) {
             $key = $this->keys->key($ownerClass, $child->getName(), $path, $new);
-            $elsewhere = $fresh && $this->keys->savedElsewhere($ownerClass, $child->getName(), $new);
         }
         $kind = $text ? 'text' : 'value';
         if ([] !== array_intersect($types, $this->richText)) {
@@ -643,7 +632,9 @@ final class CollaborateFormExtension extends AbstractTypeExtension
         }
         $fields[$key] = [
             'type' => $kind,
-            'initial' => self::initial($text, $elsewhere ? $child->getViewData() : $value),
+            // After a save, the property the record holds, translated ones included: what the server
+            // saved, which can differ from what was submitted (a slug it derives, say).
+            'initial' => self::initial($text, $value),
             'formName' => $path,
         ];
         if (\in_array($kind, ['text', 'rich'], true)) {

@@ -13,9 +13,11 @@ test.describe('discarding a shared draft', () => {
     await alice.synchronized();
 
     await alice.discardButton.click();
-    await expect(alice.dialog.getByRole('heading')).toHaveText('Discard the shared draft?');
-    await expect(alice.dialog).toContainText('Everyone editing this record loses its unsaved changes.');
-    await expect(alice.dialog.locator('[data-collaborate-confirm-accept]')).toHaveText('Discard');
+    await expect(alice.dialog.getByRole('heading')).toHaveText('Discard unsaved changes?');
+    await expect(alice.dialog).toContainText(
+      'The unsaved changes are erased: yours and those of everyone editing this record. To keep them, cancel and click Save.'
+    );
+    await expect(alice.dialog.locator('[data-collaborate-confirm-accept]')).toHaveText('Erase changes');
     await alice.decide(false);
     await expectState(alice, 'draft');
 

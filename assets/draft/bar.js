@@ -4,23 +4,25 @@ import Modal from 'bootstrap/js/src/modal.js';
 
 /**
  * How each draft state shows: its alert variant, its icon (none: a spinner), whether a screen reader hears it,
- * and whether Discard can succeed from it.
+ * whether Save is offered from it (the draft holds changes the record does not, and saving can go ahead) and
+ * whether Discard can succeed from it. An action a state does not offer is hidden, not just disabled: the only
+ * button of a bar saying "unsaved changes" must never be the one that erases them.
  */
 export const STATES = {
-  connecting: { variant: 'secondary', icon: null, announce: true, discard: false },
-  saved: { variant: 'success', icon: 'fa-circle-check', announce: true, discard: true },
-  draft: { variant: 'info', icon: 'fa-pen', announce: true, discard: true },
-  pending: { variant: 'info', icon: null, announce: false, discard: true },
-  offline: { variant: 'warning', icon: 'fa-plug', announce: true, discard: true },
-  changed: { variant: 'warning', icon: 'fa-rotate', announce: true, discard: true },
-  conflict: { variant: 'warning', icon: 'fa-code-compare', announce: true, discard: true },
-  discarded: { variant: 'warning', icon: 'fa-rotate-left', announce: true, discard: false },
-  created: { variant: 'success', icon: 'fa-circle-check', announce: true, discard: false },
-  failed: { variant: 'danger', icon: 'fa-triangle-exclamation', announce: true, discard: false },
-  full: { variant: 'danger', icon: 'fa-database', announce: true, discard: true },
-  denied: { variant: 'danger', icon: 'fa-lock', announce: true, discard: false },
-  incompatible: { variant: 'danger', icon: 'fa-triangle-exclamation', announce: true, discard: false },
-  unavailable: { variant: 'secondary', icon: 'fa-link-slash', announce: true, discard: false },
+  connecting: { variant: 'secondary', icon: null, announce: true, save: false, discard: false },
+  saved: { variant: 'success', icon: 'fa-circle-check', announce: true, save: false, discard: false },
+  draft: { variant: 'info', icon: 'fa-pen', announce: true, save: true, discard: true },
+  pending: { variant: 'info', icon: null, announce: false, save: true, discard: true },
+  offline: { variant: 'warning', icon: 'fa-plug', announce: true, save: true, discard: true },
+  changed: { variant: 'warning', icon: 'fa-rotate', announce: true, save: true, discard: true },
+  conflict: { variant: 'warning', icon: 'fa-code-compare', announce: true, save: false, discard: true },
+  discarded: { variant: 'warning', icon: 'fa-rotate-left', announce: true, save: false, discard: false },
+  created: { variant: 'success', icon: 'fa-circle-check', announce: true, save: false, discard: false },
+  failed: { variant: 'danger', icon: 'fa-triangle-exclamation', announce: true, save: false, discard: false },
+  full: { variant: 'danger', icon: 'fa-database', announce: true, save: false, discard: true },
+  denied: { variant: 'danger', icon: 'fa-lock', announce: true, save: false, discard: false },
+  incompatible: { variant: 'danger', icon: 'fa-triangle-exclamation', announce: true, save: false, discard: false },
+  unavailable: { variant: 'secondary', icon: 'fa-link-slash', announce: true, save: false, discard: false },
 };
 
 const element = (tag, className = '', text = '') => {
@@ -32,7 +34,7 @@ const element = (tag, className = '', text = '') => {
 
 /** The form's collaboration bar: its state on the left, its actions on the right. */
 export class CollaborateBar {
-  constructor(messages, onDiscard) {
+  constructor(messages, onDiscard, onSave = null) {
     this.messages = messages;
     this.element = element('div', 'collaborate-bar alert d-flex flex-wrap align-items-center gap-2 py-2 mb-3');
     this.element.dataset.collaborateBar = '';
@@ -45,11 +47,17 @@ export class CollaborateBar {
     this.announcer.setAttribute('role', 'status');
     this.announcer.dataset.collaborateAnnouncer = '';
     this.actions = element('span', 'collaborate-bar__actions ms-auto d-flex flex-wrap gap-2');
-    this.discard = element('button', 'btn btn-sm btn-secondary text-danger', messages.discard);
+    // Save is the bar's main action; Discard, which erases, comes after it and looks secondary.
+    this.save = element('button', 'btn btn-sm btn-primary', messages.save);
+    this.save.type = 'button';
+    this.save.dataset.collaborateSave = '';
+    if (onSave) this.save.addEventListener('click', onSave);
+    this.discard = element('button', 'btn btn-sm btn-link link-danger', messages.discard);
     this.discard.type = 'button';
     this.discard.dataset.collaborateDiscard = '';
     this.discard.addEventListener('click', onDiscard);
-    this.actions.append(this.discard);
+    this.actions.append(this.save, this.discard);
+    this.canSave = Boolean(onSave);
     this.element.append(this.icon, this.text, this.announcer, this.actions);
     this.key = null;
     this.busy = false;
@@ -75,14 +83,18 @@ export class CollaborateBar {
     this.announcer.textContent = text;
   }
 
-  /** Discard waits for its own request, and stays off in the states it cannot succeed from. */
+  /** Each action waits for the request it started, and is hidden in the states that do not offer it. */
   setBusy(busy) {
     this.busy = busy;
     this.gate();
   }
 
   gate() {
-    this.discard.disabled = this.busy || !STATES[this.key]?.discard;
+    const state = STATES[this.key];
+    this.discard.hidden = !state?.discard;
+    this.discard.disabled = this.busy || !state?.discard;
+    this.save.hidden = !this.canSave || !state?.save;
+    this.save.disabled = this.busy || this.save.hidden;
   }
 
   /** A dismissible line under the state, for what happened before this page loaded. */
@@ -127,7 +139,7 @@ export class CollaborateBar {
         label.textContent = this.messages.copyInvitation;
       }, 2000);
     });
-    this.discard.before(button);
+    this.save.before(button);
     return button;
   }
 
@@ -151,7 +163,7 @@ export class CollaborateBar {
     const link = element('a', 'btn btn-sm btn-primary', this.messages.openRecord);
     link.href = href;
     link.dataset.collaborateOpenRecord = '';
-    this.discard.before(link);
+    this.save.before(link);
     return link;
   }
 }

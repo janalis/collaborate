@@ -5,6 +5,24 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- The state bar offers **Save** while the draft holds unsaved changes. It
+  submits the form through its usual path, with the button that keeps the
+  editor on the page: one marked `data-collaborate-submitter`, else
+  EasyAdmin's `saveAndContinue`, else its `saveAndReturn`, else the first. Before this, the bar's only
+  button was Discard, and editors working alone took it for the way to deal
+  with "unsaved changes", which erased their work.
+- **Discard changes** (formerly *Discard shared draft*) comes after Save and
+  is styled as a secondary link. It is hidden, not just disabled, in the
+  states it cannot act from, the saved state included. Its dialog says that
+  the changes are erased and that Save keeps them.
+- The messages say what the editor can do: "All changes saved.", "Unsaved
+  changes, kept automatically. Click Save to record them.". The new
+  translation keys are `save`, and the reworded `saved`, `savedBy`, `draft`,
+  `discard` and `confirmDiscard*`; hosts that override these strings need
+  the new source keys.
+
 ## [0.2.3] - 2026-11-05
 
 ### Fixed

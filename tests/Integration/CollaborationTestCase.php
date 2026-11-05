@@ -37,7 +37,7 @@ abstract class CollaborationTestCase extends ApplicationTestCase
         self::assertSame('/admin/collaborate/__action__', $configuration['url']);
         self::assertFalse($configuration['isNew']);
         self::assertNull($configuration['invitation']);
-        self::assertSame('Shared draft saved by %name%.', $configuration['messages']['savedBy']);
+        self::assertSame('All changes saved by %name%.', $configuration['messages']['savedBy']);
         self::assertSame(
             ['replayConnected' => 30_000, 'replayDisconnected' => 5_000, 'joinRetry' => 12_000, 'labelLength' => 255],
             $configuration['config'],

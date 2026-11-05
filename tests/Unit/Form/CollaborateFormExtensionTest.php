@@ -358,8 +358,8 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         // The bar's states, its dialogs and the notices name who did what with a %name% placeholder.
         self::assertSame(array_keys(CollaborateFormExtension::MESSAGES), array_keys($messages));
         // Each in the page's language, from the collaborate domain.
-        self::assertSame('[Shared draft saved by %name%.]', $messages['savedBy']);
-        self::assertSame('[Discard the shared draft?]', $messages['confirmDiscardTitle']);
+        self::assertSame('[All changes saved by %name%.]', $messages['savedBy']);
+        self::assertSame('[Discard unsaved changes?]', $messages['confirmDiscardTitle']);
         self::assertSame('[Use the saved record?]', $messages['confirmSavedTitle']);
         self::assertSame('[Copy invitation link]', $messages['copyInvitation']);
         self::assertArrayNotHasKey('confirmDiscard', $messages);

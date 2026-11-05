@@ -91,7 +91,7 @@ test.describe('the limits of a shared draft', () => {
     });
     await alice.saveButton.click();
     await join.held;
-    await expect(bob.bar).toHaveText('Shared draft saved by Alice.');
+    await expect(bob.bar).toHaveText('All changes saved by Alice.');
     await join.release();
     await alice.joined();
     await rejoined;
@@ -128,7 +128,7 @@ test.describe('the limits of a shared draft', () => {
     await alice.saveButton.click();
     await alice.joined();
     await replays.held;
-    await expect(bob.bar).not.toHaveText('Shared draft saved by Alice.');
+    await expect(bob.bar).not.toHaveText('All changes saved by Alice.');
     await replays.release();
     await rejoined;
     await bob.joined();

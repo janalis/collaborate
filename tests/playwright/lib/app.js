@@ -57,6 +57,10 @@ export class Editor {
     return this.page.locator('[data-collaborate-notice]');
   }
 
+  get barSaveButton() {
+    return this.page.locator('[data-collaborate-save]');
+  }
+
   get discardButton() {
     return this.page.locator('[data-collaborate-discard]');
   }
@@ -177,7 +181,11 @@ export class Editor {
   }
 
   get saveButton() {
-    return this.page.getByRole('button', { name: /^(Save|Save changes|Create)$/ }).first();
+    // The form's own button, not the bar's Save that stands for it.
+    return this.page
+      .getByRole('button', { name: /^(Save|Save changes|Create)$/ })
+      .and(this.page.locator(':not([data-collaborate-save])'))
+      .first();
   }
 
   /** Submits the form with the page's main save button (EasyAdmin's sit outside the form) and waits for the page it leads to. */
@@ -205,6 +213,7 @@ export class Editor {
     const posted = this.page.waitForRequest((request) => request.method() === 'POST' && request.isNavigationRequest());
     await this.page
       .getByRole('button', { name: this.easyAdmin ? 'Save and continue editing' : 'Save', exact: true })
+      .and(this.page.locator(':not([data-collaborate-save])'))
       .click();
     await posted;
     await this.page.waitForLoadState();

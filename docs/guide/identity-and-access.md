@@ -22,7 +22,7 @@ interface CollaboratorProviderInterface
 | Method | Returns |
 |---|---|
 | `id()` | A stable positive integer, or `null` when the user cannot collaborate (not persisted yet, say). It also picks the user's color (`colors[id % count]`). |
-| `label()` | Plain text shown on the user's cursor, presence tooltip and draft notices ("Shared draft saved by …"). |
+| `label()` | Plain text shown on the user's cursor, presence tooltip and draft notices ("All changes saved by …"). |
 | `avatarUrl()` | A same-origin image URL for the header avatars, or `null` for the user's initial on their color. Browsers drop a URL from another origin. |
 | `authorization()` | Everything that admits the user: roles, group roles, per-entity permissions… Grants carry a hash of it, so a grant issued before any of it changed is refused. |
 

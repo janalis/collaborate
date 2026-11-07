@@ -5,6 +5,25 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **A push shows in the page only while it has the focus.** The service
+  worker posts it to the page of the application that has the focus, and
+  shows a system notification whenever none has it, open pages hidden or
+  behind another window included (before, any open page took it). The bell
+  of a page without the focus no longer says a notification on a device web
+  push reaches; it still counts it: the service worker tells every open page
+  to ask for its list again, when it shows a push and when a click on one
+  reads it, whatever the hub told them.
+- `notifications.web_push.skip_online` is off by default: on, it would push
+  nothing to a user whose page is open but not looked at.
+
+### Fixed
+
+- Turning web push on for the first time subscribes through the active
+  service worker: a worker registered moments before was still installing,
+  and the switch stayed off although the subscription was made.
+
 ## [0.3.1] - 2026-11-07
 
 ### Security

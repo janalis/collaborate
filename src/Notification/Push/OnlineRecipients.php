@@ -26,7 +26,7 @@ final readonly class OnlineRecipients
         private Topics $topics,
         private LoggerInterface $logger,
         private ?HttpClientInterface $client = null,
-        private bool $enabled = true,
+        private bool $enabled = false,
     ) {}
 
     public function isOnline(int $recipient): bool

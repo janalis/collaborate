@@ -32,10 +32,11 @@ function scope({
   return self;
 }
 
-function page(url, { visibilityState = 'hidden', navigate = null } = {}) {
+function page(url, { visibilityState = 'hidden', focused = false, navigate = null } = {}) {
   return {
     url,
     visibilityState,
+    focused,
     postMessage: vi.fn(),
     focus: vi.fn(async function focus() {
       return this;
@@ -92,23 +93,28 @@ test('shows a push as a notification of the system while no page of the origin i
   });
 });
 
-test('tells the open pages, and shows nothing while one of them is open, hidden or not', async () => {
+test('shows a push in the page that has the focus, and by the system otherwise', async () => {
   const self = await load(scope());
-  self.windows = [page('https://app.example/a'), page('https://app.example/b', { visibilityState: 'visible' })];
+  const behind = page('https://app.example/a', { visibilityState: 'visible' });
+  const looked = page('https://app.example/b', { visibilityState: 'visible', focused: true });
+  self.windows = [behind, looked];
   await self.dispatch('push', push({ id: 7, body: 'Comment', url: '/files/7' }));
+  expect(looked.postMessage).toHaveBeenCalledWith({
+    type: 'collaborate:notification',
+    id: 7,
+    body: 'Comment',
+    url: '/files/7',
+  });
+  // The page behind asks for its list again, without a toast.
+  expect(behind.postMessage).toHaveBeenCalledWith({ type: 'collaborate:notifications-changed' });
+  expect(self.registration.showNotification).not.toHaveBeenCalled();
+  // Open, visible or hidden, but without the focus: the system shows it, and every page counts it.
+  self.windows = [page('https://app.example/a'), page('https://app.example/c', { visibilityState: 'visible' })];
+  await self.dispatch('push', push({ id: 8, title: 'Eight', body: 'B' }));
   for (const client of self.windows)
-    expect(client.postMessage).toHaveBeenCalledWith({
-      type: 'collaborate:notification',
-      id: 7,
-      body: 'Comment',
-      url: '/files/7',
-    });
-  expect(self.registration.showNotification).not.toHaveBeenCalled();
-  // Hidden, a page is still open: it is told, and the system shows nothing.
-  self.windows = [page('https://app.example/a')];
-  await self.dispatch('push', push({ id: 8 }));
-  expect(self.windows[0].postMessage).toHaveBeenCalledOnce();
-  expect(self.registration.showNotification).not.toHaveBeenCalled();
+    expect(client.postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'collaborate:notifications-changed' });
+  expect(self.registration.showNotification).toHaveBeenCalledOnce();
+  expect(self.registration.showNotification).toHaveBeenCalledWith('Eight', expect.objectContaining({ body: 'B' }));
 });
 
 test('says what the server says of a push without a payload, or with one it cannot read', async () => {
@@ -151,6 +157,12 @@ describe('a click', () => {
       body: new URLSearchParams({ id: '7' }),
     });
     expect(focused).toBe(self.windows[1]);
+    // Read, it is counted so at once by every page left open, after the server knows.
+    for (const client of self.windows)
+      expect(client.postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'collaborate:notifications-changed' });
+    expect(self.fetch.mock.invocationCallOrder[0]).toBeLessThan(
+      self.windows[0].postMessage.mock.invocationCallOrder[0]
+    );
   });
 
   test('takes a page of the origin there, the next one when one cannot be, a new one otherwise', async () => {

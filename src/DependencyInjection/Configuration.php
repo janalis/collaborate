@@ -660,9 +660,9 @@ final class Configuration
             ->end()
             ->booleanNode('skip_online')
             ->info(
-                'Push nothing to a user whose page holds the stream of their notifications (the subscriptions API of the hub).',
+                'Push nothing to a user whose page holds the stream of their notifications (the subscriptions API of the hub), even a page that has not the focus; off, the service worker decides, in the page only while one has the focus.',
             )
-            ->defaultTrue()
+            ->defaultFalse()
             ->end()
             ->arrayNode('endpoint_hosts')
             ->info(

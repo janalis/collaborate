@@ -2,11 +2,11 @@
 // setting `self.collaborateNotifications = {read, title, body, icon}` (the url that reads a notification, and
 // what a push without a payload says).
 //
-// A push said while a page of the origin is open, visible or not, is no system notification: each open page is
-// posted it, and its bell tells the host (bell.js), which shows it in the page. Only once every page of the
-// application is closed does the system show it. The server pushes nothing to a reader whose page holds the
-// stream of their notifications (OnlineRecipients), so a push a page drops is rare: a hidden page whose stream
-// a browser cut.
+// A push said while a page of the origin has the focus is shown in that page: it is posted it, and its bell
+// tells the host (bell.js), which shows a toast. Otherwise -- every page closed, hidden, or behind another
+// window -- the system shows it. Every other open page is told to ask for its list again, without a toast: its
+// bell counts the notification at once, whatever the hub told it. A notification is never shown twice: in the
+// page while its reader looks at it, else by the system.
 //
 // It imports nothing and exports nothing, so that it also loads as a module (its tests import it, with a
 // stubbed `self`): what a worker scope has it reads through `self`, the standard constructors (URL) aside.
@@ -48,14 +48,14 @@ function payloadOf(event) {
 async function received(event) {
   const notification = payloadOf(event);
   const open = await windows();
+  const focused = open.filter((client) => client.focused);
   for (const client of open)
-    client.postMessage({
-      type: 'collaborate:notification',
-      id: notification.id,
-      body: notification.body,
-      url: notification.url,
-    });
-  if (open.length > 0) return;
+    client.postMessage(
+      client.focused
+        ? { type: 'collaborate:notification', id: notification.id, body: notification.body, url: notification.url }
+        : { type: 'collaborate:notifications-changed' }
+    );
+  if (focused.length > 0) return;
   await self.registration.showNotification(notification.title, {
     body: notification.body,
     icon: notification.icon,
@@ -80,6 +80,8 @@ async function clicked(data) {
   }
   const target = new URL(data.url || '/', self.location.origin).href;
   const open = await windows();
+  // The pages left open count it read at once, whatever the hub told them.
+  for (const client of open) client.postMessage({ type: 'collaborate:notifications-changed' });
   const there = open.find((client) => client.url === target);
   if (there) return there.focus();
   for (const client of open) {

@@ -5,6 +5,13 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- With `cursors.silent_alone`, a reader who moved while alone tells where
+  they are as soon as a first peer answers their hello: their pointer,
+  caret or field showed only with their next move or heartbeat, up to five
+  seconds later.
+
 ## [0.3.3] - 2026-11-07
 
 ### Changed

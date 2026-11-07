@@ -454,6 +454,7 @@ export function initCursors(
       (!sameAnchor(previous?.anchor ?? null, event.anchor ?? null) ||
         !sameCaret(previous?.caret ?? null, event.caret ?? null));
     const marked = markedAs(event.userId);
+    const alone = !presence.users.size;
     // Presence outlives the pointer: only a departure, or expiry, takes a tab off the page.
     if (event.kind === 'leave') presence.leave(event.userId, event.clientId);
     else
@@ -471,6 +472,10 @@ export function initCursors(
       publish('reply');
       return;
     }
+    // A reader alone kept its pointer to itself (`silentAlone`): the first peer it hears from, by an answer
+    // to its hello rather than by a hello it answers, learns where it is now.
+    if (silentAlone && alone && presence.users.size && (anchor || caret || field || popup || lastPointer))
+      publish('state');
     // Only movement may steal ownership from another tab. Its hide/heartbeat cannot erase the active tab.
     if (previous && previous.clientId !== event.clientId && event.kind !== 'move') return;
     if (previous && previous.timestamp > event.timestamp) return;

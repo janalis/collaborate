@@ -178,7 +178,9 @@ and joins the next.
 ### Fewer requests
 
 - `silent_alone` sends nothing while the reader is alone; a lost hello is
-  sent again, and peers who stop hearing each other say hello again.
+  sent again, and peers who stop hearing each other say hello again. A
+  reader who moved while alone tells where they are once a first peer
+  answers.
 - Past three peers, a tab sends less often, down to four times the throttle.
 - `share_stream`: over HTTP/1.1 a browser opens six connections to a site,
   all tabs together, and each stream holds one. One tab shares its cursor at

@@ -362,6 +362,11 @@ export function initBell(
   // The service worker was pushed a notification while this page is open: the page says it, the hub may not.
   function pushed(event) {
     const data = event.data;
+    // A page without the focus is told to count what the system shows: its list again, without a word.
+    if (data?.type === 'collaborate:notifications-changed') {
+      hear();
+      return;
+    }
     if (data?.type !== 'collaborate:notification') return;
     hear();
     if (data.id !== undefined && data.id !== null)

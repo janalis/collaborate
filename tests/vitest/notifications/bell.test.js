@@ -678,6 +678,8 @@ describe('the hub and the service worker', () => {
     const message = (data) => serviceWorker.dispatchEvent(Object.assign(new Event('message'), { data }));
     message({ type: 'other' });
     message(null);
+    // Counted while another page or the system says it: the list again, without a word.
+    message({ type: 'collaborate:notifications-changed' });
     message({ type: 'collaborate:notification', id: 7, body: 'Seven', url: '/seven' });
     message({ type: 'collaborate:notification', id: 7, body: 'Seven', url: '/seven' });
     message({ type: 'collaborate:notification', id: 8, body: { html: true } });
@@ -689,6 +691,10 @@ describe('the hub and the service worker', () => {
     ]);
     await vi.advanceTimersByTimeAsync(REFRESH_DELAY);
     expect(fetcher).toHaveBeenCalledOnce();
+    expect(told).toHaveLength(2);
+    message({ type: 'collaborate:notifications-changed' });
+    await vi.advanceTimersByTimeAsync(REFRESH_DELAY);
+    expect(fetcher).toHaveBeenCalledTimes(2);
     expect(told).toHaveLength(2);
   });
 

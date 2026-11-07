@@ -105,13 +105,14 @@ test('shows a push in the page that has the focus, and by the system otherwise',
     body: 'Comment',
     url: '/files/7',
   });
-  // The page behind hears of it through the hub, without a toast.
-  expect(behind.postMessage).not.toHaveBeenCalled();
+  // The page behind asks for its list again, without a toast.
+  expect(behind.postMessage).toHaveBeenCalledWith({ type: 'collaborate:notifications-changed' });
   expect(self.registration.showNotification).not.toHaveBeenCalled();
-  // Open, visible or hidden, but without the focus: the system shows it, and no page is posted it.
+  // Open, visible or hidden, but without the focus: the system shows it, and every page counts it.
   self.windows = [page('https://app.example/a'), page('https://app.example/c', { visibilityState: 'visible' })];
   await self.dispatch('push', push({ id: 8, title: 'Eight', body: 'B' }));
-  for (const client of self.windows) expect(client.postMessage).not.toHaveBeenCalled();
+  for (const client of self.windows)
+    expect(client.postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'collaborate:notifications-changed' });
   expect(self.registration.showNotification).toHaveBeenCalledOnce();
   expect(self.registration.showNotification).toHaveBeenCalledWith('Eight', expect.objectContaining({ body: 'B' }));
 });
@@ -156,6 +157,12 @@ describe('a click', () => {
       body: new URLSearchParams({ id: '7' }),
     });
     expect(focused).toBe(self.windows[1]);
+    // Read, it is counted so at once by every page left open, after the server knows.
+    for (const client of self.windows)
+      expect(client.postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'collaborate:notifications-changed' });
+    expect(self.fetch.mock.invocationCallOrder[0]).toBeLessThan(
+      self.windows[0].postMessage.mock.invocationCallOrder[0]
+    );
   });
 
   test('takes a page of the origin there, the next one when one cannot be, a new one otherwise', async () => {

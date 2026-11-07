@@ -4,9 +4,9 @@
 //
 // A push said while a page of the origin has the focus is shown in that page: it is posted it, and its bell
 // tells the host (bell.js), which shows a toast. Otherwise -- every page closed, hidden, or behind another
-// window -- the system shows it, and the pages left open hear of it through the hub, their bells counting it
-// without a toast. A notification is never shown twice: in the page while its reader looks at it, else by the
-// system.
+// window -- the system shows it. Every other open page is told to ask for its list again, without a toast: its
+// bell counts the notification at once, whatever the hub told it. A notification is never shown twice: in the
+// page while its reader looks at it, else by the system.
 //
 // It imports nothing and exports nothing, so that it also loads as a module (its tests import it, with a
 // stubbed `self`): what a worker scope has it reads through `self`, the standard constructors (URL) aside.
@@ -47,14 +47,14 @@ function payloadOf(event) {
 
 async function received(event) {
   const notification = payloadOf(event);
-  const focused = (await windows()).filter((client) => client.focused);
-  for (const client of focused)
-    client.postMessage({
-      type: 'collaborate:notification',
-      id: notification.id,
-      body: notification.body,
-      url: notification.url,
-    });
+  const open = await windows();
+  const focused = open.filter((client) => client.focused);
+  for (const client of open)
+    client.postMessage(
+      client.focused
+        ? { type: 'collaborate:notification', id: notification.id, body: notification.body, url: notification.url }
+        : { type: 'collaborate:notifications-changed' }
+    );
   if (focused.length > 0) return;
   await self.registration.showNotification(notification.title, {
     body: notification.body,
@@ -80,6 +80,8 @@ async function clicked(data) {
   }
   const target = new URL(data.url || '/', self.location.origin).href;
   const open = await windows();
+  // The pages left open count it read at once, whatever the hub told them.
+  for (const client of open) client.postMessage({ type: 'collaborate:notifications-changed' });
   const there = open.find((client) => client.url === target);
   if (there) return there.focus();
   for (const client of open) {

@@ -12,7 +12,9 @@ versions follow [Semantic Versioning](https://semver.org/).
   shows a system notification whenever none has it, open pages hidden or
   behind another window included (before, any open page took it). The bell
   of a page without the focus no longer says a notification on a device web
-  push reaches; it still counts it.
+  push reaches; it still counts it: the service worker tells every open page
+  to ask for its list again, when it shows a push and when a click on one
+  reads it, whatever the hub told them.
 - `notifications.web_push.skip_online` is off by default: on, it would push
   nothing to a user whose page is open but not looked at.
 

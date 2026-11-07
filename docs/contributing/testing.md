@@ -250,6 +250,12 @@ The host options (`host` project, `host-cursors › a host library › …`):
 | Show pointers, in every tab of the browser | `a reader hides the pointers of the others in every tab, and keeps seeing who they are` |
 | A place revoked refused at the next request (`PlaceProviderInterface::canEnter()`) | `a folder revoked stops its pages from sharing` |
 
+And `host-cursors › a newcomer to a host library › …`:
+
+| Feature (guide) | Scenario |
+|---|---|
+| A reader who moved while alone told the first peer who answers, before their next heartbeat (`silent_alone`) | `who points before the reader already there answers is seen once she answers` |
+
 Not shown in a browser, and covered by the PHPUnit and Vitest suites
 instead:
 

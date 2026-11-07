@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-11-07
+
 ### Fixed
 
 - With `cursors.silent_alone`, a reader who moved while alone tells where
@@ -277,7 +279,8 @@ versions follow [Semantic Versioning](https://semver.org/).
   `FormContextInterface` (which record a page edits).
 - English and French translations.
 
-[Unreleased]: https://github.com/janalis/collaborate/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/janalis/collaborate/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/janalis/collaborate/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/janalis/collaborate/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/janalis/collaborate/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/janalis/collaborate/compare/v0.3.0...v0.3.1

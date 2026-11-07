@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-11-07
+
 ### Changed
 
 - Web push runs on `minishlink/web-push` 11, over Symfony's HTTP client
@@ -268,7 +270,8 @@ versions follow [Semantic Versioning](https://semver.org/).
   `FormContextInterface` (which record a page edits).
 - English and French translations.
 
-[Unreleased]: https://github.com/janalis/collaborate/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/janalis/collaborate/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/janalis/collaborate/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/janalis/collaborate/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/janalis/collaborate/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/janalis/collaborate/compare/v0.2.4...v0.3.0

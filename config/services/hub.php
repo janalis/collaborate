@@ -38,6 +38,7 @@ return static function (ContainerConfigurator $container): void {
         param('collaborate.role'),
         service('janalis_collaborate.limiter.cursors')->nullOnInvalid(),
         service('janalis_collaborate.places')->nullOnInvalid(),
+        service('janalis_collaborate.notifications.access')->nullOnInvalid(),
     ]);
 
     $services
@@ -50,6 +51,7 @@ return static function (ContainerConfigurator $container): void {
             param('collaborate.updates.enabled'),
             param('collaborate.hub.max_drafts'),
             param('collaborate.hub.subscription_ttl'),
+            service('janalis_collaborate.notifications.access')->nullOnInvalid(),
         ])
         ->tag('controller.service_arguments');
 
@@ -92,6 +94,7 @@ return static function (ContainerConfigurator $container): void {
                 'silentAlone' => param('collaborate.cursors.silent_alone'),
             ],
             service('translator')->nullOnInvalid(),
+            service('janalis_collaborate.notifications.access')->nullOnInvalid(),
         ])
         ->tag('twig.extension');
 };

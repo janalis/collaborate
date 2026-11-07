@@ -9,9 +9,12 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\Console\ConsoleEvents;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\Mercure\HubInterface;
 use Symfony\Component\Mercure\Update;
+use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
+use Symfony\Component\Messenger\Event\WorkerMessageHandledEvent;
 
 #[CoversClass(HubPublisher::class)]
 final class HubPublisherTest extends TestCase
@@ -36,7 +39,15 @@ final class HubPublisherTest extends TestCase
         $logger = $this->createMock(LoggerInterface::class);
         $logger->expects($this->once())->method('warning')->with('second failed');
         $publisher = new HubPublisher($hub, $logger);
-        self::assertSame([KernelEvents::TERMINATE => 'publish'], HubPublisher::getSubscribedEvents());
+        self::assertSame(
+            [
+                KernelEvents::TERMINATE => 'publish',
+                ConsoleEvents::TERMINATE => 'publish',
+                WorkerMessageHandledEvent::class => 'publish',
+                WorkerMessageFailedEvent::class => 'publish',
+            ],
+            HubPublisher::getSubscribedEvents(),
+        );
 
         $publisher->defer($first, 'first failed');
         $publisher->defer($second, 'second failed');

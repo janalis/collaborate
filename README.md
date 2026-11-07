@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Live collaboration for Symfony admin pages.</strong><br>
-  Shared form drafts · presence and cursors · saved-view refresh · over Mercure, no Node service
+  Shared form drafts · presence and cursors · saved-view refresh · notifications · over Mercure, no Node service
 </p>
 
 <p align="center">
@@ -40,6 +40,8 @@ the same admin page at once:
   their color.
 - **Saved-view refresh.** Lists and detail pages reload when a save
   elsewhere changes what they show.
+- **Notifications.** A bell on every page, topics each user subscribes to,
+  Messenger delivery, and web push when no page of the application is open.
 
 It runs on PHP and a [Mercure](https://mercure.rocks) hub (FrankenPHP's
 built-in hub works). Draft content lives in MariaDB or MySQL; the hub only

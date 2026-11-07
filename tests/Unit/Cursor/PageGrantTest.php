@@ -59,7 +59,10 @@ final class PageGrantTest extends TestCase
         $pages = new PageGrant('secret', new Topics('urn:test:'), 60);
         $grant = self::issued($pages->issue($this->request('en', []), 1, 100));
         self::assertSame('160', explode('.', $grant)[1]);
-        self::assertMatchesRegularExpression('/^urn:test:cursors:[a-f0-9]{64}$/', $pages->topic($grant, 1, 159));
+        self::assertMatchesRegularExpression(
+            '/^urn:test:cursors:[a-f0-9]{64}$/',
+            (string) $pages->topic($grant, 1, 159),
+        );
         $this->expectException(AccessDeniedHttpException::class);
         $pages->topic($grant, 1, 160);
     }
@@ -69,13 +72,13 @@ final class PageGrantTest extends TestCase
         $pages = $this->pages();
         $grant = self::issued($pages->issue($this->request('en', []), 1, 100));
         self::assertSame('36100', explode('.', $grant)[1]);
-        self::assertStringStartsWith('urn:collaborate:cursors:', $pages->topic($grant, 1, 36_099));
+        self::assertStringStartsWith('urn:collaborate:cursors:', (string) $pages->topic($grant, 1, 36_099));
     }
 
     public function testEveryParameterOfTheViewSeparatesRooms(): void
     {
         $pages = $this->pages();
-        $room = static fn(Request $request): string => $pages->topic(
+        $room = static fn(Request $request): string => (string) $pages->topic(
             self::issued($pages->issue($request, 1, 100)),
             1,
             100,

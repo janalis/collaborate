@@ -83,6 +83,21 @@ platform fails with a clear error on the first draft request.
 You can skip this step if you only want cursors and presence: the tables
 are used by shared drafts alone, which are off by default.
 
+[Notifications](./notifications) add three tables, mapped only while
+`notifications.enabled` is on:
+
+| Table | Holds |
+|---|---|
+| `collaborate_notification` | One row per notification: its recipient, topic, type, parameters, url, and when it was written and read. |
+| `collaborate_notification_preference` | The topics a user chose to leave or keep. |
+| `collaborate_push_subscription` | One row per browser asked to be pushed to. |
+
+Their routes are a file of their own, imported under the prefix you want them at:
+
+```php
+$routes->import('@CollaborateBundle/config/routes/notifications.php');
+```
+
 ## 4. Schedule the purge
 
 Every visit of a new-record page opens a draft, so the tables only stay

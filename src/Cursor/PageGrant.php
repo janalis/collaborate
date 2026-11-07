@@ -18,6 +18,12 @@ use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
  */
 final readonly class PageGrant
 {
+    /**
+     * The room of a bare grant, which no HMAC answers: a page in no room, admitted to the hub for the
+     * notifications of its user alone.
+     */
+    private const string BARE = '0000000000000000000000000000000000000000000000000000000000000000';
+
     /** @param list<string> $ignoredParameters route and query parameters that do not separate rooms */
     public function __construct(
         #[\SensitiveParameter]
@@ -68,8 +74,35 @@ final readonly class PageGrant
         ]);
     }
 
-    /** @param array<array-key, string> $authorization */
-    public function topic(string $grant, int $userId, int $now, array $authorization = []): string
+    /**
+     * A grant naming no room: a page the place provider puts in no place, or a user who may not collaborate,
+     * whose stream carries their notifications alone.
+     *
+     * @param array<array-key, string> $authorization
+     */
+    public function issueBare(int $userId, int $now, array $authorization = []): string
+    {
+        $parts = [$userId, $now + $this->lifetime, Grant::authorizationHash($authorization), self::BARE];
+        if (null !== $this->places) {
+            // Where a place grant carries its place: none.
+            $parts[] = '';
+        }
+
+        return $this->sign($parts);
+    }
+
+    /** Whether a grant, verified or not, names no room. */
+    public static function isBare(string $grant): bool
+    {
+        return self::BARE === (explode('.', $grant)[3] ?? null);
+    }
+
+    /**
+     * @param array<array-key, string> $authorization
+     *
+     * @return string|null null for a bare grant
+     */
+    public function topic(string $grant, int $userId, int $now, array $authorization = []): ?string
     {
         return $this->verify($grant, $userId, $now, $authorization)['topic'];
     }
@@ -79,7 +112,7 @@ final readonly class PageGrant
      *
      * @param array<array-key, string> $authorization
      *
-     * @return array{topic: string, place: array<array-key, mixed>|null}
+     * @return array{topic: string|null, place: array<array-key, mixed>|null} no topic nor place for a bare grant
      */
     public function verify(string $grant, int $userId, int $now, array $authorization = []): array
     {
@@ -98,6 +131,10 @@ final readonly class PageGrant
             )
         ) {
             throw new AccessDeniedHttpException('Invalid cursor page grant.');
+        }
+
+        if (self::BARE === $parts[3]) {
+            return ['topic' => null, 'place' => null];
         }
 
         return [

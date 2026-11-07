@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Library{% endblock %}</title>
+    <link rel="stylesheet" href="{{ asset('build/host.css') }}">
+    {{ importmap('app') }}
+</head>
+<body>
+<header id="toolbar">
+    <strong>Library</strong>
+    {{ collaborate_notifications() }}
+    <span data-signed-in>{{ app.user }}</span>
+</header>
+<main>{% block body %}{% endblock %}</main>
+{{ collaborate_layer() }}
+</body>
+</html>

@@ -20,6 +20,8 @@
 		mercure {
 			name {args[2]}-{args[3]}
 			transport local
+			# The subscriptions API: who listens to their notifications is pushed nothing (web_push.skip_online).
+			subscriptions
 			issuer collaborate-{args[2]} {
 				publisher {
 					jwt {$MERCURE_JWT_SECRET:!ChangeThisMercureHubJWTSecretKey!} HS256

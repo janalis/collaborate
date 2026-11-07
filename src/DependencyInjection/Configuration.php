@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Janalis\Collaborate\DependencyInjection;
 
 use Janalis\Collaborate\CollaborateBundle;
+use Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
 
 /**
@@ -18,6 +19,9 @@ final class Configuration
 {
     /** A region or popup kind, or an attribute name. */
     private const string NAME = '/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/D';
+
+    /** A topic or notification type: what a database column of 64 characters holds. */
+    private const string KEY = '/^[a-z][a-z0-9]*(?:[_-][a-z0-9]+)*$/D';
 
     public static function define(DefinitionConfigurator $definition): void
     {
@@ -412,6 +416,7 @@ final class Configuration
             ->end()
             ->end()
             ->end()
+            ->append(self::notifications())
             ->arrayNode('updates')
             ->info('Saved-list and saved-detail refresh; follows drafts.enabled unless set.')
             ->addDefaultsIfNotSet()
@@ -447,5 +452,270 @@ final class Configuration
             ->end()
             ->end()
             ->end();
+    }
+
+    /** The `notifications` branch: the bell, its topics and types, Messenger and web push. */
+    private static function notifications(): ArrayNodeDefinition
+    {
+        $node = new ArrayNodeDefinition('notifications');
+        $node
+            ->info(
+                'Notifications: the bell of every page, the page of them all, the topics a user subscribes to, web push.',
+            )
+            ->canBeEnabled()
+            ->validate()
+            ->ifTrue(static fn(array $branch): bool => [] !== self::unknownTopics($branch))
+            ->then(static function (array $branch): never {
+                throw new \InvalidArgumentException(\sprintf('Every notification type names a configured topic: %s.', implode(
+                    ', ',
+                    self::unknownTopics($branch),
+                )));
+            })
+            ->end()
+            ->children()
+            ->scalarNode('role')
+            ->info('Role a user needs to be notified, see the bell and subscribe; null for collaborate.role.')
+            ->defaultNull()
+            ->end()
+            ->append(self::topics())
+            ->append(self::types())
+            ->integerNode('latest')
+            ->info('Notifications the bell lists.')
+            ->defaultValue(20)
+            ->min(1)
+            ->end()
+            ->integerNode('page_size')
+            ->info('Notifications the page lists at a time.')
+            ->defaultValue(30)
+            ->min(1)
+            ->end()
+            ->integerNode('max_count')
+            ->info('Count above which the bell shows N+.')
+            ->defaultValue(99)
+            ->min(1)
+            ->end()
+            ->scalarNode('layout')
+            ->info(
+                'Template the bundle\'s pages of the notifications and of the topics extend, filling its `body` block.',
+            )
+            ->defaultValue('base.html.twig')
+            ->end()
+            ->scalarNode('page_template')
+            ->info(
+                'Template of the page of all notifications; the host\'s own includes @JanalisCollaborate/notifications/_page.html.twig where its layout wants it.',
+            )
+            ->defaultValue('@JanalisCollaborate/notifications/page.html.twig')
+            ->end()
+            ->scalarNode('topics_template')
+            ->info(
+                'Template of the page of the topics; the host\'s own includes @JanalisCollaborate/notifications/_topics.html.twig.',
+            )
+            ->defaultValue('@JanalisCollaborate/notifications/topics.html.twig')
+            ->end()
+            ->scalarNode('locales')
+            ->info(
+                'Service id of a Janalis\\Collaborate\\Notification\\RecipientLocaleProviderInterface: the language a push is written in.',
+            )
+            ->defaultNull()
+            ->end()
+            ->scalarNode('stream_guard')
+            ->info(
+                'Service id of a Janalis\\Collaborate\\Notification\\StreamGuardInterface: whether the pages may hear of their notifications over the hub.',
+            )
+            ->defaultNull()
+            ->end()
+            ->scalarNode('bus')
+            ->info('Messenger bus service id: notify() then dispatches a message per recipient rather than writing.')
+            ->defaultNull()
+            ->end()
+            ->append(self::webPush())
+            ->end();
+
+        return $node;
+    }
+
+    private static function topics(): ArrayNodeDefinition
+    {
+        $node = self::named('topics', 'What a user subscribes to, name => its label and default.');
+        $node
+            ->arrayPrototype()
+            ->children()
+            ->scalarNode('label')
+            ->isRequired()
+            ->cannotBeEmpty()
+            ->end()
+            ->scalarNode('description')
+            ->defaultNull()
+            ->end()
+            ->booleanNode('default')
+            ->info('Whether a user who never chose is subscribed.')
+            ->defaultTrue()
+            ->end()
+            ->booleanNode('mandatory')
+            ->info('Whether a user may not unsubscribe.')
+            ->defaultFalse()
+            ->end()
+            ->scalarNode('domain')
+            ->info('Translation domain of the label and description.')
+            ->defaultValue('messages')
+            ->end()
+            ->end()
+            ->end();
+
+        return $node;
+    }
+
+    private static function types(): ArrayNodeDefinition
+    {
+        $node = self::named('types', 'What a notification says, name => its topic, sentence, label and icon.');
+        $node
+            ->arrayPrototype()
+            ->children()
+            ->scalarNode('topic')
+            ->isRequired()
+            ->cannotBeEmpty()
+            ->end()
+            ->scalarNode('sentence')
+            ->info('Translation key whose placeholders the parameters of a notification fill (a % is written %%).')
+            ->isRequired()
+            ->cannotBeEmpty()
+            ->end()
+            ->scalarNode('label')
+            ->info('Name the page of the notifications filters the type by.')
+            ->defaultNull()
+            ->end()
+            ->scalarNode('icon')
+            ->info('Classes of the icon a notification is shown with, or null.')
+            ->defaultNull()
+            ->end()
+            ->scalarNode('domain')
+            ->info('Translation domain of the sentence and label.')
+            ->defaultValue('messages')
+            ->end()
+            ->end()
+            ->end();
+
+        return $node;
+    }
+
+    private static function webPush(): ArrayNodeDefinition
+    {
+        $node = new ArrayNodeDefinition('web_push');
+        $node
+            ->info('Web push: a system notification when no page of the application is open.')
+            ->canBeEnabled()
+            ->validate()
+            ->ifTrue(
+                static fn(array $push): bool => (
+                    true === $push['enabled']
+                    && (
+                        !\is_string($push['public_key'] ?? null)
+                        || '' === $push['public_key']
+                        || !\is_string($push['private_key'] ?? null)
+                        || '' === $push['private_key']
+                        || !\is_string($push['subject'] ?? null)
+                        || '' === $push['subject']
+                    )
+                ),
+            )
+            ->thenInvalid('Web push needs a VAPID public key, private key and subject (collaborate:push:setup): %s')
+            ->end()
+            ->children()
+            ->scalarNode('public_key')
+            ->info('VAPID public key, base64url.')
+            ->defaultNull()
+            ->end()
+            ->scalarNode('private_key')
+            ->info('VAPID private key, base64url.')
+            ->defaultNull()
+            ->end()
+            ->scalarNode('subject')
+            ->info('VAPID subject: a mailto: or https: URL push services may contact.')
+            ->defaultNull()
+            ->end()
+            ->integerNode('ttl')
+            ->info('Seconds a push service keeps a push for an offline browser.')
+            ->defaultValue(86_400)
+            ->min(0)
+            ->end()
+            ->enumNode('urgency')
+            ->values(['very-low', 'low', 'normal', 'high'])
+            ->defaultValue('normal')
+            ->end()
+            ->scalarNode('icon')
+            ->info('URL of the icon of the system notification, or null.')
+            ->defaultNull()
+            ->end()
+            ->scalarNode('title')
+            ->info('Title of the system notification, a key of the collaborate domain.')
+            ->defaultValue('New notification')
+            ->end()
+            ->enumNode('payload')
+            ->info(
+                'full: the sentence, translated in the language of its reader, encrypted to the browser; none: an empty push, a generic sentence.',
+            )
+            ->values(['full', 'none'])
+            ->defaultValue('full')
+            ->end()
+            ->booleanNode('skip_online')
+            ->info(
+                'Push nothing to a user whose page holds the stream of their notifications (the subscriptions API of the hub).',
+            )
+            ->defaultTrue()
+            ->end()
+            ->scalarNode('service_worker')
+            ->info(
+                'URL of the host\'s own service worker, which importScripts() the bundle\'s; null for the bundle\'s.',
+            )
+            ->defaultNull()
+            ->end()
+            ->end();
+
+        return $node;
+    }
+
+    /** A map whose keys are lowercase words joined by "-" or "_", kept as they are written. */
+    private static function named(string $name, string $info): ArrayNodeDefinition
+    {
+        $node = new ArrayNodeDefinition($name);
+        $node
+            ->info($info)
+            ->useAttributeAsKey('name')
+            ->normalizeKeys(false)
+            ->performNoDeepMerging()
+            ->validate()
+            ->ifTrue(
+                static fn(array $map): bool => (
+                    [] !== array_filter(
+                        array_keys($map),
+                        static fn(int|string $key): bool => (
+                            \strlen((string) $key) > 64
+                            || !preg_match(self::KEY, (string) $key)
+                        ),
+                    )
+                ),
+            )
+            ->thenInvalid(\ucfirst($name) . ' are lowercase words joined by "-" or "_", at most 64 characters: %s')
+            ->end();
+
+        return $node;
+    }
+
+    /**
+     * @param array<array-key, mixed> $branch
+     *
+     * @return list<array-key> the types whose topic is not configured: names a `named()` map validated as words
+     */
+    private static function unknownTopics(array $branch): array
+    {
+        $topics = \is_array($branch['topics'] ?? null) ? array_keys($branch['topics']) : [];
+        $types = \is_array($branch['types'] ?? null) ? $branch['types'] : [];
+        // A type holds its topic once processed (`isRequired()`); one of another kind than a name is no topic.
+        $unknown = array_filter(
+            $types,
+            static fn(mixed $type): bool => !\in_array(\is_array($type) ? $type['topic'] : null, $topics, true),
+        );
+
+        return array_keys($unknown);
     }
 }

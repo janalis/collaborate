@@ -5,6 +5,37 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Notifications**, off until `notifications` is configured
+  ([guide](https://janalis.github.io/collaborate/guide/notifications)):
+  - a bell (`collaborate_notifications()`), a page of all notifications and
+    a page of the topics a user subscribes to, with their scripts
+    (`notifications/bell.js`, `page.js`, `topics.js`) and styles
+    (`scss/_notifications.scss`);
+  - `Notifier::notify()` / `notifyAll()`, which tell the pages of their reader
+    over the stream they already hold;
+  - topics: unsubscribed, a user is told nothing of a topic, and a
+    mandatory one cannot be left;
+  - Messenger: with `notifications.bus`, a message per recipient written once
+    whatever its deliveries, and a message per push;
+  - web push: a system notification only when no page of the application is
+    open, written in the language of its reader, and `collaborate:push:setup`,
+    which makes the VAPID keys and writes them into `.env.local` or the
+    secrets vault (`--check` checks them).
+- A **bare page grant**, which a page in no place, or a user who may be
+  notified but not collaborate, is given while notifications are on: its
+  stream carries their notifications alone. A
+  `notifications.stream_guard` (`StreamGuardInterface`) withholds it where
+  the host has no hub to stream on.
+
+### Changed
+
+- What a console command or a Messenger worker defers to the hub is
+  published once the command or the message is done.
+- `PageGrant::topic()` and `Admission::$topic` may be `null` (a bare grant);
+  cursor events refuse such a grant.
+
 ## [0.2.4] - 2026-11-05
 
 ### Changed

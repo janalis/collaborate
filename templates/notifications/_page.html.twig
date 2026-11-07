@@ -1,0 +1,32 @@
+{#
+    The page of all notifications, which the host's template includes where its layout wants it (or
+    page.html.twig does, in the `body` of notifications.layout): its filters, its actions and its rows,
+    handled by notifications/page.js.
+#}
+{% set settings = collaborate_notifications_settings() %}
+{% set unread_filter = unread_only ? {'unread': 1} : {} %}
+{% set topic_filter = topic ? {'topic': topic} : {} %}
+<div class="collaborate-notifications-page" data-collaborate-notifications-page="{{ settings|json_encode }}">
+    {# tabindex: where notifications/page.js sends the keys when what they were on is gone #}
+    <h1 class="collaborate-notifications-page__title" tabindex="-1">{{ 'Notifications'|trans({}, 'collaborate') }}</h1>
+    <div class="collaborate-notifications-page__toolbar">
+        <nav class="collaborate-notifications-page__filters" aria-label="{{ 'Filter'|trans({}, 'collaborate') }}">
+            {% set all = not unread_only and type is null and topic is null %}
+            <a class="collaborate-notifications__filter"{% if all %} aria-current="true"{% endif %} href="{{ path('collaborate_notifications_page') }}">{{ 'All'|trans({}, 'collaborate') }}</a>
+            <a class="collaborate-notifications__filter"{% if unread_only %} aria-current="true"{% endif %} href="{{ path('collaborate_notifications_page', {'unread': 1}|merge(type ? {'type': type} : {})|merge(topic_filter)) }}">{{ 'Unread'|trans({}, 'collaborate') }}</a>
+            {% for name, label in collaborate_notification_types() %}
+                <a class="collaborate-notifications__filter"{% if name == type %} aria-current="true"{% endif %} href="{{ path('collaborate_notifications_page', unread_filter|merge({'type': name})) }}">{{ label }}</a>
+            {% endfor %}
+        </nav>
+        <div class="collaborate-notifications-page__actions">
+            <button type="button" class="collaborate-notifications__button" data-action="readAll">{{ 'Mark all as read'|trans({}, 'collaborate') }}</button>
+            <button type="button" class="collaborate-notifications__button" data-action="unreadAll">{{ 'Mark all as unread'|trans({}, 'collaborate') }}</button>
+            <button type="button" class="collaborate-notifications__button collaborate-notifications__button--danger" data-action="clearAll" data-confirm="{{ 'Clear every notification? They cannot be brought back.'|trans({}, 'collaborate') }}">{{ 'Clear all'|trans({}, 'collaborate') }}</button>
+            <a class="collaborate-notifications__button" href="{{ path('collaborate_notification_topics') }}">{{ 'Topics'|trans({}, 'collaborate') }}</a>
+        </div>
+    </div>
+    <ul class="collaborate-notification-list" data-src="{{ src }}">
+        {{ include('@JanalisCollaborate/notifications/_rows.html.twig') }}
+    </ul>
+    <p class="collaborate-notifications__empty"{% if notifications is not empty %} hidden{% endif %}>{{ 'No notification'|trans({}, 'collaborate') }}</p>
+</div>

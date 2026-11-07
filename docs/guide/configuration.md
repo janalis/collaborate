@@ -224,6 +224,42 @@ The saved-list and saved-detail refresh ([Saved-view refresh](./saved-views)).
 | `ignored_fields` | `[updatedAt]` | Changed fields that alone never announce an update. |
 | `chunk` | `100` (min 1) | Drafts named per notice to the edit pages of other changed records. |
 
+## `notifications`
+
+The bell, the page of all notifications, their topics and web push
+([Notifications](./notifications)). Off by default; a branch written without
+`enabled` turns them on.
+
+| Option | Default | Meaning |
+|---|---|---|
+| `enabled` | `false` | Turn notifications on: their tables are mapped, their routes answer. |
+| `role` | `null` | Role a user needs to be notified and see the bell; `null` follows `role`. |
+| `topics` | `{}` | Name => `label`, `description` (`null`), `default` (`true`: subscribed until they choose), `mandatory` (`false`) and `domain` (`messages`) of what a user subscribes to. Names are lowercase words joined by `-` or `_`, 64 characters at most. |
+| `types` | `{}` | Name => `topic` (a configured one), `sentence` (a translation key, a `%` written `%%`), `label` (`null`: no filter of the page), `icon` (`null`) and `domain` (`messages`). |
+| `latest` | `20` (min 1) | Notifications the bell lists. |
+| `page_size` | `30` (min 1) | Notifications the page lists at a time. |
+| `max_count` | `99` (min 1) | Count above which the bell shows `99+`. |
+| `layout` | `base.html.twig` | Template the bundle's pages extend, filling its `body` block. |
+| `page_template` / `topics_template` | the bundle's | A host template of the page of all notifications or of the topics, which includes `@JanalisCollaborate/notifications/_page.html.twig` or `_topics.html.twig`. |
+| `locales` | `null` | Service id of a `Janalis\Collaborate\Notification\RecipientLocaleProviderInterface`: the language a push is written in. |
+| `stream_guard` | `null` | Service id of a `Janalis\Collaborate\Notification\StreamGuardInterface`: no bare grant while it says the pages cannot stream. |
+| `bus` | `null` | Messenger bus id: `notify()` dispatches a message per recipient instead of writing. |
+
+### `notifications.web_push`
+
+| Option | Default | Meaning |
+|---|---|---|
+| `enabled` | `false` | System notifications when no page is open. Needs the three below (`collaborate:push:setup`). |
+| `public_key` / `private_key` | `null` | The VAPID pair, base64url. |
+| `subject` | `null` | A `mailto:` or `https:` URL push services may contact. |
+| `ttl` | `86400` (min 0) | Seconds a push service keeps a push for an offline browser. |
+| `urgency` | `normal` | `very-low`, `low`, `normal` or `high`. |
+| `icon` | `null` | URL of the icon of a system notification. |
+| `title` | `New notification` | Its title, a key of the `collaborate` domain. |
+| `payload` | `full` | `full`: the sentence, translated and encrypted; `none`: an empty push and a generic sentence. |
+| `skip_online` | `true` | Push nothing to a user whose page holds their stream (the subscriptions API of the hub). |
+| `service_worker` | `null` | URL of the host's own service worker, which `importScripts()` the bundle's. |
+
 ## Rate limiters
 
 Both limiters take a factory from `framework.rate_limiter`:

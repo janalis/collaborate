@@ -8,6 +8,7 @@ use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Cursor\PageGrant;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
+use Janalis\Collaborate\Notification\NotificationAccess;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -87,6 +88,7 @@ final class CollaborateExtension extends AbstractExtension
         array $layer = [],
         array $host = [],
         private readonly ?TranslatorInterface $translator = null,
+        private readonly ?NotificationAccess $notifications = null,
     ) {
         $this->layer = $layer + self::DEFAULT_LAYER;
         $this->host = array_intersect_key($host, self::DEFAULT_HOST) + self::DEFAULT_HOST;
@@ -105,6 +107,21 @@ final class CollaborateExtension extends AbstractExtension
                 'needs_environment' => true,
                 'is_safe' => ['html'],
             ]),
+            // Notifications: their runtime is made only when a template calls one.
+            new TwigFunction(
+                'collaborate_notifications',
+                [NotificationRuntime::class, 'bell'],
+                [
+                    'needs_environment' => true,
+                    'is_safe' => ['html'],
+                ],
+            ),
+            new TwigFunction('collaborate_notification_text', [NotificationRuntime::class, 'text']),
+            new TwigFunction('collaborate_notification_icon', [NotificationRuntime::class, 'icon']),
+            new TwigFunction('collaborate_notification_types', [NotificationRuntime::class, 'types']),
+            new TwigFunction('collaborate_notification_topics', [NotificationRuntime::class, 'topics']),
+            new TwigFunction('collaborate_notifications_settings', [NotificationRuntime::class, 'settings']),
+            new TwigFunction('collaborate_notifications_layout', [NotificationRuntime::class, 'layout']),
         ];
     }
 
@@ -114,16 +131,28 @@ final class CollaborateExtension extends AbstractExtension
         return $this->drafts->enabled;
     }
 
-    /** The page grant of the current page, or null when the signed-in user may not collaborate on it. */
+    /**
+     * The page grant of the current page, or null when the signed-in user may not collaborate on it. A page
+     * in no place, or a user who may not collaborate, still gets a bare grant when notifications are on: its
+     * stream carries the notifications of its user alone.
+     */
     public function grant(): ?string
     {
         $collaborator = $this->collaborator();
-        if (null === $collaborator) {
+        if (null !== $collaborator) {
+            [$request, $user, $id] = $collaborator;
+            $grant = $this->pages->issue($request, $id, time(), $this->collaborators->authorization($user));
+            if (null !== $grant) {
+                return $grant;
+            }
+        }
+        $recipient = $this->notifications?->streams() ? $this->notifications->recipient() : null;
+        $user = $this->security->getUser();
+        if (null === $recipient || null === $user) {
             return null;
         }
-        [$request, $user, $id] = $collaborator;
 
-        return $this->pages->issue($request, $id, time(), $this->collaborators->authorization($user));
+        return $this->pages->issueBare($recipient, time(), $this->collaborators->authorization($user));
     }
 
     public function layer(Environment $twig): string
@@ -133,10 +162,13 @@ final class CollaborateExtension extends AbstractExtension
             return '';
         }
 
+        // A bare grant names no room: no cursors nor saved views on its page.
+        $bare = PageGrant::isBare($grant);
+
         return $twig->render('@JanalisCollaborate/layer.html.twig', [
             'grant' => $grant,
-            'cursors' => $this->layer['cursors'],
-            'updates' => $this->layer['updates'],
+            'cursors' => $this->layer['cursors'] && !$bare,
+            'updates' => $this->layer['updates'] && !$bare,
             'config' =>
                 [
                     'throttle' => $this->layer['throttle'],

@@ -40,7 +40,7 @@ final class HubGuardTest extends HubTestCase
         self::assertInstanceOf(Admission::class, $admission);
         self::assertSame($this->user, $admission->user);
         self::assertSame(15, $admission->userId);
-        self::assertMatchesRegularExpression('/^urn:collaborate:cursors:[a-f0-9]{64}$/', $admission->topic);
+        self::assertMatchesRegularExpression('/^urn:collaborate:cursors:[a-f0-9]{64}$/', (string) $admission->topic);
         self::assertSame('hello', $admission->data['kind'] ?? null);
         self::assertTrue($this->session?->isStarted());
     }

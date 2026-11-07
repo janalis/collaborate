@@ -251,6 +251,7 @@ abstract class AppKernel extends Kernel
     private function configureRoutes(RoutingConfigurator $routes): void
     {
         $routes->import(self::repository() . '/config/routes.php')->prefix('/admin');
+        $routes->import(self::repository() . '/config/routes/notifications.php')->prefix('/admin');
         $routes->add('login', '/login')->controller(LoginController::class)->methods(['GET', 'POST']);
         $routes->add('logout', '/logout')->methods(['GET']);
         if ('test' !== $this->environment) {

@@ -1,0 +1,29 @@
+{#
+    The menu of the bell: the number not read (which may be more than it lists), the latest ones, the
+    switch of web push on this device (notifications/bell.js shows it where the browser has one), then
+    the ways to the page of them all and to the topics.
+#}
+<div class="collaborate-notifications__header" role="presentation" data-unread-count="{{ unread }}"{% if total is defined %} data-total-count="{{ total }}"{% endif %}>
+    <span>{{ 'Notifications'|trans({}, 'collaborate') }}</span>
+    {% if unread > 0 %}
+        <button type="button" class="collaborate-notifications__read-all" role="menuitem">{{ 'Mark all as read'|trans({}, 'collaborate') }}</button>
+    {% endif %}
+</div>
+{% for notification in notifications %}
+    {# one that leads nowhere is still an item the keys reach: a button, which reads it #}
+    {% set tag = notification.url is not null ? 'a' : 'button' %}
+    {% set icon = collaborate_notification_icon(notification) %}
+    <{{ tag }} class="collaborate-notification" role="menuitem" data-id="{{ notification.id }}" data-unread="{{ notification.unread ? 'true' : 'false' }}"{% if notification.url is not null %} href="{{ notification.url }}"{% else %} type="button"{% endif %}>
+        {% if icon %}<span class="collaborate-notification__icon {{ icon }}" aria-hidden="true"></span>{% endif %}
+        <span class="collaborate-notification__unread"><span class="collaborate-visually-hidden">{{ 'Not read yet:'|trans({}, 'collaborate') }} </span></span>
+        <span class="collaborate-notification__text">{{ collaborate_notification_text(notification) }}</span>
+        <time class="collaborate-notification__date" datetime="{{ notification.createdAt|date('c') }}">{{ notification.createdAt|date('Y-m-d H:i') }}</time>
+    </{{ tag }}>
+{% else %}
+    <p class="collaborate-notifications__empty" role="presentation">{{ 'No notification'|trans({}, 'collaborate') }}</p>
+{% endfor %}
+<hr class="collaborate-notifications__divider" role="presentation">
+<button type="button" class="collaborate-notifications__push" role="menuitemcheckbox" aria-checked="false" hidden>{{ 'Notify me on this device'|trans({}, 'collaborate') }}</button>
+<p class="collaborate-notifications__push-denied" role="presentation" hidden>{{ 'This browser blocks the notifications of this site: allow them in its settings.'|trans({}, 'collaborate') }}</p>
+<a class="collaborate-notifications__all" role="menuitem" href="{{ path('collaborate_notifications_page') }}">{{ 'See all notifications'|trans({}, 'collaborate') }}</a>
+<a class="collaborate-notifications__topics" role="menuitem" href="{{ path('collaborate_notification_topics') }}">{{ 'Choose what I am notified of'|trans({}, 'collaborate') }}</a>

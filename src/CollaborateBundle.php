@@ -9,11 +9,13 @@ use Gedmo\Translatable\Translatable;
 use Janalis\Collaborate\Access\DraftAccessCheckerInterface;
 use Janalis\Collaborate\DependencyInjection\Configuration;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
+use Janalis\Collaborate\Notification\NotificationAccess;
 use Symfony\Component\AssetMapper\AssetMapperInterface;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
  * Shared drafts, presence and cursors for admin pages, carried by one Mercure stream per page.
@@ -88,6 +90,10 @@ final class CollaborateBundle extends AbstractBundle
         // The raw value: an env-driven `drafts.enabled` is a placeholder here, resolved when the container runs.
         $updates['enabled'] ??= $drafts['enabled'];
         $config['updates'] = $updates;
+        $notifications = self::branch($config, 'notifications');
+        // Notifications are told to whoever collaborates unless they name a role of their own.
+        $notifications['role'] ??= $config['role'] ?? null;
+        $config['notifications'] = $notifications;
 
         // A `%` the configuration holds reaches the extension escaped still (the `%name%` of a popup's sentence is
         // written `%%name%%`): the parameter resolves it once the container is compiled.
@@ -119,6 +125,10 @@ final class CollaborateBundle extends AbstractBundle
         // Always registered: the cursor events route answers 404 when cursors are disabled.
         $configurator->import(__DIR__ . '/../config/services/cursors.php');
         $configurator->import(__DIR__ . '/../config/services/drafts.php');
+        $configurator->import(__DIR__ . '/../config/services/notifications.php');
+        if (true === $notifications['enabled']) {
+            $this->loadNotifications($notifications, $configurator, $container);
+        }
         // Registered, not only installed: EasyAdmin may be a dependency of another package.
         $bundles = $container->hasParameter('kernel.bundles') ? $container->getParameter('kernel.bundles') : [];
         if (\is_array($bundles) && \in_array(EasyAdminBundle::class, $bundles, true)) {
@@ -126,6 +136,35 @@ final class CollaborateBundle extends AbstractBundle
         }
         if (interface_exists(Translatable::class)) {
             $configurator->import(__DIR__ . '/../config/services/gedmo.php');
+        }
+    }
+
+    /** @param array<array-key, mixed> $notifications */
+    private function loadNotifications(
+        array $notifications,
+        ContainerConfigurator $configurator,
+        ContainerBuilder $container,
+    ): void {
+        // What the hub, the grants and the layer ask of notifications: nothing of them runs while they are off.
+        $container->setAlias('janalis_collaborate.notifications.access', NotificationAccess::class);
+        foreach (['bus', 'locales', 'stream_guard'] as $option) {
+            if (!\is_string($notifications[$option] ?? null) || '' === $notifications[$option]) {
+                continue;
+            }
+            $container->setAlias('janalis_collaborate.notifications.' . $option, $notifications[$option]);
+        }
+        $push = self::branch($notifications, 'web_push');
+        // An env-driven flag is a placeholder here: its services are registered, and they read it at runtime.
+        $push['enabled'] = false !== $push['enabled'];
+        $messenger = interface_exists(MessageBusInterface::class);
+        if (true === $push['enabled']) {
+            $configurator->import(__DIR__ . '/../config/services/notifications_push.php');
+        }
+        if ($messenger) {
+            $configurator->import(__DIR__ . '/../config/services/notifications_messenger.php');
+            if (true === $push['enabled']) {
+                $configurator->import(__DIR__ . '/../config/services/notifications_push_messenger.php');
+            }
         }
     }
 
@@ -139,17 +178,53 @@ final class CollaborateBundle extends AbstractBundle
         $configurator->extension('twig', ['paths' => [__DIR__ . '/../templates' => 'JanalisCollaborate']]);
         $configurator->extension('doctrine', [
             'orm' => [
-                'mappings' => [
-                    'JanalisCollaborate' => [
-                        'type' => 'attribute',
-                        'is_bundle' => false,
-                        'dir' => __DIR__ . '/Entity',
-                        'prefix' => 'Janalis\Collaborate\Entity',
-                        'alias' => 'JanalisCollaborate',
-                    ],
-                ],
+                'mappings' =>
+                    [
+                        'JanalisCollaborate' => [
+                            'type' => 'attribute',
+                            'is_bundle' => false,
+                            'dir' => __DIR__ . '/Entity',
+                            'prefix' => 'Janalis\Collaborate\Entity',
+                            'alias' => 'JanalisCollaborate',
+                        ],
+                    ]
+                        + (
+                            self::notificationsEnabled($container)
+                                ? [
+                                    // Mapped only when notifications are on: a host without them has no tables of theirs to create.
+                                    'JanalisCollaborateNotifications' => [
+                                        'type' => 'attribute',
+                                        'is_bundle' => false,
+                                        'dir' => __DIR__ . '/Notification/Entity',
+                                        'prefix' => 'Janalis\Collaborate\Notification\Entity',
+                                        'alias' => 'JanalisCollaborateNotifications',
+                                    ],
+                                ] : []
+                        ),
             ],
         ]);
+    }
+
+    /**
+     * Whether the configurations turn notifications on, as the processed tree will (`canBeEnabled()`: a branch
+     * given without `enabled` is on), read before they are processed: the mapping is prepended.
+     */
+    private static function notificationsEnabled(ContainerBuilder $container): bool
+    {
+        $enabled = false;
+        foreach ($container->getExtensionConfig('collaborate') as $config) {
+            if (!\array_key_exists('notifications', $config)) {
+                continue;
+            }
+            $enabled = match (true) {
+                \is_array($config['notifications']) => !\array_key_exists('enabled', $config['notifications'])
+                    || true === $config['notifications']['enabled'],
+                \is_bool($config['notifications']) => $config['notifications'],
+                default => true,
+            };
+        }
+
+        return $enabled;
     }
 
     /**

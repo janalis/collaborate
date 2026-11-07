@@ -29,9 +29,17 @@ use Janalis\Collaborate\Hub\HubPublisher;
 use Janalis\Collaborate\Hub\RenewSubscriber;
 use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Notification\NotificationAccess;
+use Janalis\Collaborate\Notification\NotificationCatalog;
+use Janalis\Collaborate\Notification\NotificationRepository;
+use Janalis\Collaborate\Notification\Push\OnlineRecipients;
+use Janalis\Collaborate\Notification\Push\PushDispatcher;
+use Janalis\Collaborate\Notification\Push\PushPayload;
+use Janalis\Collaborate\Notification\Push\PushSubscriptions;
 use Janalis\Collaborate\Tests\Application\Host\HostKernel;
 use Janalis\Collaborate\Tests\Application\Host\HostPlaces;
 use Janalis\Collaborate\Twig\CollaborateExtension;
+use Janalis\Collaborate\Twig\NotificationRuntime;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\DomCrawler\Crawler;
@@ -67,6 +75,16 @@ use Symfony\Component\DomCrawler\Crawler;
 #[UsesClass(FieldDefinitions::class)]
 #[UsesClass(DraftSave::class)]
 #[UsesClass(UpdatesSubscriber::class)]
+#[UsesClass(NotificationAccess::class)]
+#[UsesClass(NotificationCatalog::class)]
+#[UsesClass(NotificationRepository::class)]
+#[UsesClass(OnlineRecipients::class)]
+#[UsesClass(PushDispatcher::class)]
+#[UsesClass(PushPayload::class)]
+#[UsesClass(PushSubscriptions::class)]
+#[UsesClass(NotificationRuntime::class)]
+#[UsesClass(\Janalis\Collaborate\Notification\Notifier::class)]
+#[UsesClass(\Janalis\Collaborate\Notification\Preferences::class)]
 final class HostApplicationTest extends ApplicationTestCase
 {
     private const array EVENT = [
@@ -103,6 +121,14 @@ final class HostApplicationTest extends ApplicationTestCase
         parent::setUp();
         $this->places()->revoke('music', false);
         $this->signIn('alice');
+    }
+
+    #[\Override]
+    protected function tearDown(): void
+    {
+        // The folder revoked is a file the other applications of the host read: none is left revoked.
+        $this->places()->revoke('music', false);
+        parent::tearDown();
     }
 
     public function testTheLayerCarriesAPlaceGrantAndTheHostsOptions(): void

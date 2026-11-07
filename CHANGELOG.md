@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-07
+
 ### Security
 
 - **Web push posts only to push services.** A signed-in user could save any
@@ -234,7 +236,8 @@ versions follow [Semantic Versioning](https://semver.org/).
   `FormContextInterface` (which record a page edits).
 - English and French translations.
 
-[Unreleased]: https://github.com/janalis/collaborate/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/janalis/collaborate/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/janalis/collaborate/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/janalis/collaborate/compare/v0.2.4...v0.3.0
 [0.2.4]: https://github.com/janalis/collaborate/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/janalis/collaborate/compare/v0.2.2...v0.2.3

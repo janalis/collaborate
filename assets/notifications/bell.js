@@ -223,10 +223,14 @@ export function initBell(
     );
   }
 
-  /** Tells the host of a notification, once whatever told the page of it. */
+  /**
+   * Tells the host of a notification, once whatever told the page of it. A page without the focus says nothing
+   * on a device web push reaches: the system shows it there, and a toast nobody looks at would show it twice.
+   */
   function announce(id, text, url) {
     if (announced.has(id)) return;
     announced.add(id);
+    if (subscription !== null && !document.hasFocus()) return;
     document.dispatchEvent(new CustomEvent('collaborate:notification', { detail: { id, text, url } }));
   }
 
@@ -410,7 +414,12 @@ export function initBell(
     return attach(await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushKey }));
   }
 
-  const register = () => serviceWorker.register(push.worker, { scope: '/' });
+  // Subscribed through the worker once it is active: a worker just registered is still installing the first time,
+  // and a push service refuses a subscription without an active one.
+  const register = async () => {
+    await serviceWorker.register(push.worker, { scope: '/' });
+    return serviceWorker.ready;
+  };
 
   async function startPush() {
     renderPush();

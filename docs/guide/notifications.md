@@ -184,15 +184,17 @@ collaborate:
 `collaborate:push:setup --check` checks the configured pair and subject,
 and exits non-zero on a problem: a deployment calls it.
 
-**In a page or in the system, never both.** The service worker
-(`<prefix>/notifications/push/worker.js`, allowed to control the whole
-origin) posts a push to every open page of the application, visible or
-not, and shows a system notification only when none is open. The server
-pushes nothing to a user whose page holds the stream of their notifications
-(`skip_online`, which asks the subscriptions API of the hub: `subscriptions`
-on in the Mercure configuration); without the API, the push is sent and the
-worker still decides. A click on a system notification marks it read and
-opens where it leads.
+**In the page its reader looks at, else in the system.** The service
+worker (`<prefix>/notifications/push/worker.js`, allowed to control the
+whole origin) shows a push in the page of the application that has the
+focus (its bell tells the host, which shows a toast), and as a system
+notification whenever none has it: every page closed, hidden, or behind
+another window. The pages left open count it through the hub without
+saying it, so it is never shown twice. A click on a system notification
+marks it read and opens where it leads. `skip_online` (off) pushes nothing
+to a user whose page holds the stream of their notifications, focused or
+not, asking the subscriptions API of the hub (`subscriptions` on in the
+Mercure configuration).
 
 What a push says is the sentence of the notification, translated in the
 language of its reader (a

@@ -70,7 +70,7 @@ final class NotificationsConfigurationTest extends TestCase
                     'icon' => null,
                     'title' => 'New notification',
                     'payload' => 'full',
-                    'skip_online' => true,
+                    'skip_online' => false,
                     'endpoint_hosts' => PushEndpoints::HOSTS,
                     'service_worker' => null,
                 ],

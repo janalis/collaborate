@@ -747,7 +747,11 @@ describe('web push', () => {
       subscribe: vi.fn(async (options) => subscription(options.applicationServerKey)),
     };
     const registration = { pushManager };
-    const serviceWorker = Object.assign(new EventTarget(), { register: vi.fn(async () => registration) });
+    // Registered, a worker is still installing the first time: only the active registration (ready) subscribes.
+    const serviceWorker = Object.assign(new EventTarget(), {
+      register: vi.fn(async () => ({ installing: {} })),
+      ready: Promise.resolve(registration),
+    });
     navigator.serviceWorker = serviceWorker;
     vi.stubGlobal('PushManager', Object.assign(class {}, { supportedContentEncodings: encodings }));
     const Notification = Object.assign(class {}, {
@@ -778,6 +782,22 @@ describe('web push', () => {
   };
 
   const body = (fetcher, call) => JSON.parse(fetcher.mock.calls[call][1].body);
+
+  test('on a device web push reaches, a page without the focus tells the host of nothing: the system shows it', async () => {
+    const env = browser({ permission: 'granted', existing: [1, 2, 3] });
+    const { button } = await pushStart(env);
+    expect(button().getAttribute('aria-checked')).toBe('true');
+    const told = record('collaborate:notification');
+    const focus = vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    const message = (data) => env.serviceWorker.dispatchEvent(Object.assign(new Event('message'), { data }));
+    message({ type: 'collaborate:notification', id: 21, body: 'Behind', url: null });
+    expect(told).toEqual([]);
+    // Announced once all the same: it is not said when the page gets the focus back.
+    focus.mockReturnValue(true);
+    message({ type: 'collaborate:notification', id: 21, body: 'Behind', url: null });
+    message({ type: 'collaborate:notification', id: 22, body: 'Looked at', url: null });
+    expect(told).toEqual([{ id: '22', text: 'Looked at', url: null }]);
+  });
 
   test('stays hidden where web push is off', () => {
     const root = render([]);

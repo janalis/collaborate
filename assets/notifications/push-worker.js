@@ -2,11 +2,11 @@
 // setting `self.collaborateNotifications = {read, title, body, icon}` (the url that reads a notification, and
 // what a push without a payload says).
 //
-// A push said while a page of the origin is open, visible or not, is no system notification: each open page is
-// posted it, and its bell tells the host (bell.js), which shows it in the page. Only once every page of the
-// application is closed does the system show it. The server pushes nothing to a reader whose page holds the
-// stream of their notifications (OnlineRecipients), so a push a page drops is rare: a hidden page whose stream
-// a browser cut.
+// A push said while a page of the origin has the focus is shown in that page: it is posted it, and its bell
+// tells the host (bell.js), which shows a toast. Otherwise -- every page closed, hidden, or behind another
+// window -- the system shows it, and the pages left open hear of it through the hub, their bells counting it
+// without a toast. A notification is never shown twice: in the page while its reader looks at it, else by the
+// system.
 //
 // It imports nothing and exports nothing, so that it also loads as a module (its tests import it, with a
 // stubbed `self`): what a worker scope has it reads through `self`, the standard constructors (URL) aside.
@@ -47,15 +47,15 @@ function payloadOf(event) {
 
 async function received(event) {
   const notification = payloadOf(event);
-  const open = await windows();
-  for (const client of open)
+  const focused = (await windows()).filter((client) => client.focused);
+  for (const client of focused)
     client.postMessage({
       type: 'collaborate:notification',
       id: notification.id,
       body: notification.body,
       url: notification.url,
     });
-  if (open.length > 0) return;
+  if (focused.length > 0) return;
   await self.registration.showNotification(notification.title, {
     body: notification.body,
     icon: notification.icon,

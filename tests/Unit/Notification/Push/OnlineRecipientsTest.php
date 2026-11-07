@@ -45,9 +45,11 @@ final class OnlineRecipientsTest extends TestCase
         self::assertFalse(new OnlineRecipients($hub, new Topics(), $logger)->isOnline(1));
         $bare = $this->createStub(HubInterface::class);
         $bare->method('getFactory')->willReturn(null);
-        self::assertFalse(new OnlineRecipients($bare, new Topics(), $logger, $client)->isOnline(1));
+        self::assertFalse(new OnlineRecipients($bare, new Topics(), $logger, $client, true)->isOnline(1));
         self::assertCount(0, $asked);
-        self::assertTrue(new OnlineRecipients($hub, new Topics(), $logger, $client)->isOnline(1));
+        self::assertTrue(new OnlineRecipients($hub, new Topics(), $logger, $client, true)->isOnline(1));
+        // Off unless asked: the service worker decides.
+        self::assertFalse(new OnlineRecipients($hub, new Topics(), $logger, $client)->isOnline(1));
         self::assertCount(1, $asked);
     }
 
@@ -89,7 +91,13 @@ final class OnlineRecipientsTest extends TestCase
 
             return new MockResponse((string) array_shift($answers));
         });
-        $online = new OnlineRecipients($hub, new Topics('urn:t:'), $this->createStub(LoggerInterface::class), $client);
+        $online = new OnlineRecipients(
+            $hub,
+            new Topics('urn:t:'),
+            $this->createStub(LoggerInterface::class),
+            $client,
+            true,
+        );
         self::assertTrue($online->isOnline(5));
         self::assertSame('GET', $asked[0][0]);
         self::assertSame(
@@ -124,7 +132,7 @@ final class OnlineRecipientsTest extends TestCase
                 ),
             );
         $client = new MockHttpClient(new MockResponse('nope', ['http_code' => 500]));
-        self::assertFalse(new OnlineRecipients($hub, new Topics(), $logger, $client)->isOnline(1));
+        self::assertFalse(new OnlineRecipients($hub, new Topics(), $logger, $client, true)->isOnline(1));
     }
 
     public function testPushesAfterTheNoticesOfTheHubWhereverAnOperationEnds(): void

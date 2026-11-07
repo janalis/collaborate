@@ -71,6 +71,8 @@ class HostKernel extends AppKernel
             'public_key' => self::VAPID_PUBLIC_KEY,
             'private_key' => self::VAPID_PRIVATE_KEY,
             'subject' => 'mailto:tests@collaborate.invalid',
+            // Asked here, so that its tests ask the hub who listens.
+            'skip_online' => true,
         ],
     ];
 

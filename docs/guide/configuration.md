@@ -258,6 +258,7 @@ The bell, the page of all notifications, their topics and web push
 | `title` | `New notification` | Its title, a key of the `collaborate` domain. |
 | `payload` | `full` | `full`: the sentence, translated and encrypted; `none`: an empty push and a generic sentence. |
 | `skip_online` | `true` | Push nothing to a user whose page holds their stream (the subscriptions API of the hub). |
+| `endpoint_hosts` | FCM, Mozilla, Apple, WNS | Hosts (and their subdomains) a browser's push endpoint may be on: the server posts to every endpoint its users saved, so any other is refused. |
 | `service_worker` | `null` | URL of the host's own service worker, which `importScripts()` the bundle's. |
 
 ## Rate limiters

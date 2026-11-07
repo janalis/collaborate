@@ -5,6 +5,18 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+
+- **Web push posts only to push services.** A signed-in user could save any
+  https address as the endpoint of their browser, which the server then
+  requested at every notification: an internal service, the metadata of a
+  cloud instance. An endpoint is now refused unless it is on one of
+  `notifications.web_push.endpoint_hosts` (FCM, Mozilla's, Apple's and
+  WNS's push services by default) or under one of their domains, on the
+  default port, without credentials; a subscription saved earlier on
+  another host is forgotten instead of pushed to. The push client follows
+  no redirect and gives up after 10 seconds.
+
 ## [0.3.0] - 2026-11-07
 
 ### Added

@@ -9,6 +9,7 @@ use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\DependencyInjection\Configuration;
 use Janalis\Collaborate\Notification\Notifier;
 use Janalis\Collaborate\Notification\Push\PushDispatcher;
+use Janalis\Collaborate\Notification\Push\PushEndpoints;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -70,6 +71,7 @@ final class NotificationsConfigurationTest extends TestCase
                     'title' => 'New notification',
                     'payload' => 'full',
                     'skip_online' => true,
+                    'endpoint_hosts' => PushEndpoints::HOSTS,
                     'service_worker' => null,
                 ],
             ],

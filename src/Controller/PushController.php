@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Janalis\Collaborate\Controller;
 
 use Janalis\Collaborate\Notification\NotificationAccess;
+use Janalis\Collaborate\Notification\Push\PushEndpoints;
 use Janalis\Collaborate\Notification\Push\PushSubscriptions;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -40,6 +41,7 @@ final readonly class PushController
         private bool $enabled = false,
         private ?string $icon = null,
         private ?TranslatorInterface $translator = null,
+        private PushEndpoints $endpoints = new PushEndpoints(),
     ) {}
 
     /**
@@ -92,13 +94,8 @@ final readonly class PushController
         }
         $data = $request->toArray();
         $endpoint = self::string($data, 'endpoint');
-        if (
-            null === $endpoint
-            || \strlen($endpoint) > self::MAX_ENDPOINT
-            || !str_starts_with($endpoint, 'https://')
-            || false === filter_var($endpoint, \FILTER_VALIDATE_URL)
-        ) {
-            throw new BadRequestHttpException('A push subscription names the https endpoint of its push service.');
+        if (null === $endpoint || \strlen($endpoint) > self::MAX_ENDPOINT || !$this->endpoints->allows($endpoint)) {
+            throw new BadRequestHttpException('A push subscription names the https endpoint of a known push service.');
         }
         if ('unsubscribe' === $action) {
             $this->subscriptions->remove($recipient, $endpoint);

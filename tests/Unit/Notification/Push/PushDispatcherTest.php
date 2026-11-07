@@ -31,6 +31,7 @@ use Symfony\Component\Messenger\MessageBusInterface;
 #[UsesClass(OnlineRecipients::class)]
 #[UsesClass(PushPayload::class)]
 #[UsesClass(Topics::class)]
+#[UsesClass(\Janalis\Collaborate\Notification\Push\PushEndpoints::class)]
 final class PushDispatcherTest extends TestCase
 {
     public function testAnEnvironmentThatTurnedWebPushOffPushesNothing(): void
@@ -62,7 +63,14 @@ final class PushDispatcherTest extends TestCase
 
     public function testPushesAfterTheResponseTheReadersWhoHaveABrowser(): void
     {
-        $browser = new PushSubscription(2, 'https://push.test/2', 'key', 'auth', 'aes128gcm', new \DateTimeImmutable());
+        $browser = new PushSubscription(
+            2,
+            'https://fcm.googleapis.com/fcm/send/2',
+            'key',
+            'auth',
+            'aes128gcm',
+            new \DateTimeImmutable(),
+        );
         $subscriptions = $this->createMock(PushSubscriptions::class);
         $subscriptions
             ->expects($this->exactly(2))
@@ -84,6 +92,38 @@ final class PushDispatcherTest extends TestCase
             ),
         );
         $pushes->push(new Notification(1, 't', 'x', [], null, new \DateTimeImmutable()));
+        $pushes->push(new Notification(2, 't', 'x', [], null, new \DateTimeImmutable()));
+        $pushes->flush();
+    }
+
+    public function testAnEndpointOnAHostNoLongerAllowedIsForgottenAndNeverRequested(): void
+    {
+        // Saved before the hosts were checked: the address of a cloud instance's metadata.
+        $browser = new PushSubscription(
+            2,
+            'https://169.254.169.254/latest/meta-data/',
+            'key',
+            'auth',
+            'aes128gcm',
+            new \DateTimeImmutable(),
+        );
+        $subscriptions = $this->createMock(PushSubscriptions::class);
+        $subscriptions->expects($this->once())->method('of')->willReturn([$browser]);
+        $subscriptions->expects($this->once())->method('expire')->with($browser);
+        $subscriptions->expects($this->never())->method('used');
+        $sender = $this->createMock(PushSenderInterface::class);
+        $sender->expects($this->never())->method('send');
+        $pushes = new PushDispatcher(
+            $subscriptions,
+            new NotificationRepository($this->createStub(EntityManagerInterface::class)),
+            $sender,
+            new PushPayload(new NotificationCatalog()),
+            new OnlineRecipients(
+                $this->createStub(HubInterface::class),
+                new Topics(),
+                $this->createStub(LoggerInterface::class),
+            ),
+        );
         $pushes->push(new Notification(2, 't', 'x', [], null, new \DateTimeImmutable()));
         $pushes->flush();
     }

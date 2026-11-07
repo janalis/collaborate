@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Janalis\Collaborate\DependencyInjection;
 
 use Janalis\Collaborate\CollaborateBundle;
+use Janalis\Collaborate\Notification\Push\PushEndpoints;
 use Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
 
@@ -662,6 +663,16 @@ final class Configuration
                 'Push nothing to a user whose page holds the stream of their notifications (the subscriptions API of the hub).',
             )
             ->defaultTrue()
+            ->end()
+            ->arrayNode('endpoint_hosts')
+            ->info(
+                'Hosts (and their subdomains) a browser\'s push endpoint may be on: the server posts to every endpoint its users saved.',
+            )
+            ->scalarPrototype()
+            ->cannotBeEmpty()
+            ->end()
+            ->defaultValue(PushEndpoints::HOSTS)
+            ->requiresAtLeastOneElement()
             ->end()
             ->scalarNode('service_worker')
             ->info(

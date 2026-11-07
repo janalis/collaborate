@@ -57,14 +57,14 @@ final class NotificationSchemaTest extends TestCase
         self::assertFalse($notification->isUnread());
         $subscription = new PushSubscription(
             1,
-            'https://push.example/x',
+            'https://fcm.googleapis.com/fcm/send/x',
             'k',
             'a',
             'aes128gcm',
             new \DateTimeImmutable(),
         );
-        self::assertSame(hash('sha256', 'https://push.example/x'), $subscription->endpointHash);
-        self::assertSame(PushSubscription::hash('https://push.example/x'), $subscription->endpointHash);
+        self::assertSame(hash('sha256', 'https://fcm.googleapis.com/fcm/send/x'), $subscription->endpointHash);
+        self::assertSame(PushSubscription::hash('https://fcm.googleapis.com/fcm/send/x'), $subscription->endpointHash);
         $preference = new NotificationPreference(1, 'shares', false, new \DateTimeImmutable('2026-01-01'));
         self::assertSame([1, 'shares', false], [$preference->recipient, $preference->topic, $preference->subscribed]);
     }

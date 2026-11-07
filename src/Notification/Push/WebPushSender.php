@@ -69,8 +69,9 @@ final class WebPushSender implements PushSenderInterface, ResetInterface
                 'privateKey' => $this->privateKey,
             ]],
             ['TTL' => $this->ttl, 'urgency' => $this->urgency],
-            30,
-            $this->clientOptions,
+            10,
+            // A push service answers; it never sends the request elsewhere.
+            ['allow_redirects' => false] + $this->clientOptions,
         );
     }
 }

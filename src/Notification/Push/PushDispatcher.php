@@ -32,6 +32,7 @@ final class PushDispatcher implements EventSubscriberInterface, ResetInterface
         private readonly OnlineRecipients $online,
         private readonly ?MessageBusInterface $bus = null,
         private readonly bool $enabled = true,
+        private readonly PushEndpoints $endpoints = new PushEndpoints(),
     ) {}
 
     public static function getSubscribedEvents(): array
@@ -101,6 +102,12 @@ final class PushDispatcher implements EventSubscriberInterface, ResetInterface
 
     private function send(PushSubscription $subscription, ?string $payload): void
     {
+        // A subscription saved before its host was refused, or since the allowed hosts changed: never requested.
+        if (!$this->endpoints->allows($subscription->endpoint)) {
+            $this->subscriptions->expire($subscription);
+
+            return;
+        }
         match ($this->sender->send($subscription, $payload)) {
             PushResult::Sent => $this->subscriptions->used($subscription),
             PushResult::Expired => $this->subscriptions->expire($subscription),

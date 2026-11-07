@@ -33,13 +33,15 @@ final class WebPushSenderTest extends TestCase
         $sender = $this->sender([new Response(201)]);
         self::assertSame(PushResult::Sent, $sender->send(self::subscription(), '{"id":1}'));
         $request = $this->requests[0];
-        self::assertSame('https://push.example.test/send/1', (string) $request->getUri());
+        self::assertSame('https://fcm.googleapis.com/fcm/send/1', (string) $request->getUri());
         self::assertSame('600', $request->getHeaderLine('TTL'));
         self::assertSame('high', $request->getHeaderLine('Urgency'));
         self::assertSame('aes128gcm', $request->getHeaderLine('Content-Encoding'));
         self::assertStringStartsWith('vapid t=', $request->getHeaderLine('Authorization'));
         self::assertNotSame('{"id":1}', (string) $request->getBody());
-        self::assertSame(30, $this->options[0]['timeout'] ?? null);
+        self::assertSame(10, $this->options[0]['timeout'] ?? null);
+        // A push service answers; a redirect would send the push, and the server, elsewhere.
+        self::assertFalse($this->options[0]['allow_redirects'] ?? null);
     }
 
     public function testAPushLivesADayUnlessConfiguredOtherwise(): void
@@ -114,7 +116,7 @@ final class WebPushSenderTest extends TestCase
         // The keys of a browser: a P-256 point and 16 random bytes.
         return new PushSubscription(
             1,
-            'https://push.example.test/send/1',
+            'https://fcm.googleapis.com/fcm/send/1',
             Vapid::generate()['publicKey'],
             Vapid::encode(random_bytes(16)),
             'aes128gcm',

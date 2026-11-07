@@ -86,6 +86,7 @@ use Symfony\Component\Messenger\Worker;
 #[CoversClass(PushSubscriptions::class)]
 #[UsesClass(CollaborateExtension::class)]
 #[UsesClass(NotificationRuntime::class)]
+#[UsesClass(\Janalis\Collaborate\Notification\Push\PushEndpoints::class)]
 final class NotificationsMessengerTest extends NotificationsTestCase
 {
     protected static function kernel(): string

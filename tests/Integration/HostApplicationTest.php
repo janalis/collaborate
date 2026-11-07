@@ -85,6 +85,7 @@ use Symfony\Component\DomCrawler\Crawler;
 #[UsesClass(NotificationRuntime::class)]
 #[UsesClass(\Janalis\Collaborate\Notification\Notifier::class)]
 #[UsesClass(\Janalis\Collaborate\Notification\Preferences::class)]
+#[UsesClass(\Janalis\Collaborate\Notification\Push\PushEndpoints::class)]
 final class HostApplicationTest extends ApplicationTestCase
 {
     private const array EVENT = [

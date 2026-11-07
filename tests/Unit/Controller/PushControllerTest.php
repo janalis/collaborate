@@ -7,6 +7,7 @@ namespace Janalis\Collaborate\Tests\Unit\Controller;
 use Janalis\Collaborate\Controller\PushController;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Notification\NotificationAccess;
+use Janalis\Collaborate\Notification\Push\PushEndpoints;
 use Janalis\Collaborate\Notification\Push\PushSubscriptions;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -25,6 +26,7 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 
 #[CoversClass(PushController::class)]
 #[UsesClass(NotificationAccess::class)]
+#[\PHPUnit\Framework\Attributes\UsesClass(PushEndpoints::class)]
 final class PushControllerTest extends TestCase
 {
     private const string P256DH = 'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM';
@@ -105,7 +107,7 @@ final class PushControllerTest extends TestCase
     {
         // Its endpoint is longer than any, which is what it is refused for.
         $this->expectRefusal(
-            'A push subscription names the https endpoint of its push service.',
+            'A push subscription names the https endpoint of a known push service.',
             self::bodyOf(4 * 2048),
         );
     }
@@ -121,7 +123,7 @@ final class PushControllerTest extends TestCase
         self::assertSame(['subscribed' => false], json_decode((string) $response->getContent(), true));
         self::assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
         $this->expectRefusal(
-            'A push subscription names the https endpoint of its push service.',
+            'A push subscription names the https endpoint of a known push service.',
             (string) json_encode(['endpoint' => $endpoint . 'a']),
         );
     }
@@ -234,6 +236,7 @@ final class PushControllerTest extends TestCase
             true,
             $icon,
             $translator,
+            new PushEndpoints(['push.test']),
         );
     }
 

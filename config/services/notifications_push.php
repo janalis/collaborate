@@ -9,6 +9,7 @@ use Janalis\Collaborate\Notification\NotificationCatalog;
 use Janalis\Collaborate\Notification\NotificationRepository;
 use Janalis\Collaborate\Notification\Push\OnlineRecipients;
 use Janalis\Collaborate\Notification\Push\PushDispatcher;
+use Janalis\Collaborate\Notification\Push\PushEndpoints;
 use Janalis\Collaborate\Notification\Push\PushPayload;
 use Janalis\Collaborate\Notification\Push\PushSenderInterface;
 use Janalis\Collaborate\Notification\Push\PushSubscriptions;
@@ -57,6 +58,7 @@ return static function (ContainerConfigurator $container): void {
             service(OnlineRecipients::class),
             service('janalis_collaborate.notifications.bus')->nullOnInvalid(),
             param('collaborate.notifications.web_push.enabled'),
+            service(PushEndpoints::class),
         ])
         ->tag('kernel.event_subscriber')->tag('kernel.reset', ['method' => 'reset']);
 };

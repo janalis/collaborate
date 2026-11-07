@@ -87,6 +87,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(RenewSubscriber::class)]
 #[UsesClass(SecurityCollaboratorProvider::class)]
 #[UsesClass(\Janalis\Collaborate\Form\CollaborateFormExtension::class)]
+#[CoversClass(\Janalis\Collaborate\Notification\Push\PushEndpoints::class)]
 final class NotificationsApplicationTest extends NotificationsTestCase
 {
     public function testTheBellListsTheLatestNotificationsAndCountsTheUnreadOnes(): void
@@ -569,6 +570,10 @@ final class NotificationsApplicationTest extends NotificationsTestCase
         $this->signIn('alice');
         $token = $this->pushToken($this->open('/admin/library/music'));
         $invalid = [
+            // The server would post to what a user wrote: an internal address, another host.
+            ['endpoint' => 'https://169.254.169.254/latest/meta-data/', 'keys' => self::KEYS],
+            ['endpoint' => 'https://intranet.local/push', 'keys' => self::KEYS],
+            ['endpoint' => 'https://fcm.googleapis.com:8443/fcm/send/x', 'keys' => self::KEYS],
             ['endpoint' => 'http://push.example.test/x', 'keys' => self::KEYS],
             ['endpoint' => 'https://' . str_repeat('a', 2050), 'keys' => self::KEYS],
             ['endpoint' => 'https://', 'keys' => self::KEYS],
@@ -615,7 +620,7 @@ final class NotificationsApplicationTest extends NotificationsTestCase
         $this->signIn('reader');
         $token = $this->pushToken($this->open('/admin/library/music'));
         $this->subscribe($token);
-        $this->subscribe($token, 'https://push.example.test/send/reader-phone');
+        $this->subscribe($token, 'https://fcm.googleapis.com/fcm/send/reader-phone');
         $this->share(self::READER);
         self::assertSame([], $this->pushes()->sent);
         $this->terminate();
@@ -666,17 +671,17 @@ final class NotificationsApplicationTest extends NotificationsTestCase
         $this->signIn('alice');
         $token = $this->pushToken($this->open('/admin/library/music'));
         $this->subscribe($token);
-        $this->subscribe($token, 'https://push.example.test/send/alice-phone');
+        $this->subscribe($token, 'https://fcm.googleapis.com/fcm/send/alice-phone');
         $this->pushes()->answers = [
             self::ENDPOINT => PushResult::Expired,
-            'https://push.example.test/send/alice-phone' => PushResult::Failed,
+            'https://fcm.googleapis.com/fcm/send/alice-phone' => PushResult::Failed,
         ];
         $this->share(self::ALICE);
         $this->terminate();
         $this->em()->clear();
         $left = $this->em()->getRepository(PushSubscription::class)->findAll();
         self::assertCount(1, $left);
-        self::assertSame('https://push.example.test/send/alice-phone', $left[0]->endpoint);
+        self::assertSame('https://fcm.googleapis.com/fcm/send/alice-phone', $left[0]->endpoint);
         self::assertNull($left[0]->lastUsedAt);
         // Nobody subscribed, nothing is asked of the hub.
         $this->share(self::BOB);

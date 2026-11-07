@@ -25,7 +25,7 @@ abstract class NotificationsTestCase extends ApplicationTestCase
     protected const int READER = 17;
 
     /** A push endpoint, as a push service hands one to a browser. */
-    protected const string ENDPOINT = 'https://push.example.test/send/alice-laptop';
+    protected const string ENDPOINT = 'https://fcm.googleapis.com/fcm/send/alice-laptop';
 
     protected const array KEYS = [
         'p256dh' => 'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM',

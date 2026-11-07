@@ -16,6 +16,7 @@ use Janalis\Collaborate\Notification\NotificationRepository;
 use Janalis\Collaborate\Notification\Notifier;
 use Janalis\Collaborate\Notification\Preferences;
 use Janalis\Collaborate\Notification\Push\PushDispatcher;
+use Janalis\Collaborate\Notification\Push\PushEndpoints;
 use Janalis\Collaborate\Notification\Push\PushSubscriptions;
 use Janalis\Collaborate\Twig\NotificationRuntime;
 
@@ -85,6 +86,8 @@ return static function (ContainerConfigurator $container): void {
         ])
         ->tag('controller.service_arguments');
 
+    $services->set(PushEndpoints::class)->args([param('collaborate.notifications.web_push.endpoint_hosts')]);
+
     $services
         ->set(PushController::class)
         ->args([
@@ -96,6 +99,7 @@ return static function (ContainerConfigurator $container): void {
             param('collaborate.notifications.web_push.enabled'),
             param('collaborate.notifications.web_push.icon'),
             service('translator')->nullOnInvalid(),
+            service(PushEndpoints::class),
         ])
         ->tag('controller.service_arguments');
 

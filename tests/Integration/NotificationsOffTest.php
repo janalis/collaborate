@@ -35,6 +35,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(\Janalis\Collaborate\CollaborateBundle::class)]
 #[UsesClass(\Janalis\Collaborate\DependencyInjection\Configuration::class)]
 #[UsesClass(\Janalis\Collaborate\Form\CollaborateFormExtension::class)]
+#[UsesClass(\Janalis\Collaborate\Notification\Push\PushEndpoints::class)]
 final class NotificationsOffTest extends ApplicationTestCase
 {
     protected static function kernel(): string

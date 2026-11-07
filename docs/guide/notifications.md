@@ -212,3 +212,7 @@ empty push instead, and the worker says a generic sentence.
   browser, and refreshed when the keys change.
 - Subscribing needs the CSRF token of the page: a forged subscription would
   hand the notifications of its user to an endpoint of the forger's.
+- The server posts to the endpoint a browser hands it, so only an endpoint
+  of a push service is accepted (`endpoint_hosts`: Google's, Mozilla's,
+  Apple's and Microsoft's by default, their subdomains included), https on
+  the default port; a host behind a push service of its own adds its host.

@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Janalis\Collaborate\Tests\Unit\Notification\Push;
 
-use GuzzleHttp\Handler\MockHandler;
-use GuzzleHttp\HandlerStack;
-use GuzzleHttp\Psr7\Response;
 use Janalis\Collaborate\Notification\Entity\PushSubscription;
 use Janalis\Collaborate\Notification\Push\PushResult;
 use Janalis\Collaborate\Notification\Push\Vapid;
@@ -14,34 +11,34 @@ use Janalis\Collaborate\Notification\Push\WebPushSender;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
-use Psr\Http\Message\RequestInterface;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\MockResponse;
 
 #[CoversClass(WebPushSender::class)]
 #[UsesClass(PushSubscription::class)]
 #[UsesClass(Vapid::class)]
 final class WebPushSenderTest extends TestCase
 {
-    /** @var list<RequestInterface> */
+    /** @var list<array{method: string, url: string, options: array<array-key, mixed>}> */
     private array $requests = [];
-
-    /** @var list<array<array-key, mixed>> */
-    private array $options = [];
 
     public function testSignsAndEncryptsAPushToItsEndpoint(): void
     {
-        $sender = $this->sender([new Response(201)]);
+        $sender = $this->sender([201]);
         self::assertSame(PushResult::Sent, $sender->send(self::subscription(), '{"id":1}'));
         $request = $this->requests[0];
-        self::assertSame('https://fcm.googleapis.com/fcm/send/1', (string) $request->getUri());
-        self::assertSame('600', $request->getHeaderLine('TTL'));
-        self::assertSame('high', $request->getHeaderLine('Urgency'));
-        self::assertSame('aes128gcm', $request->getHeaderLine('Content-Encoding'));
-        self::assertStringStartsWith('vapid t=', $request->getHeaderLine('Authorization'));
-        self::assertNotSame('{"id":1}', (string) $request->getBody());
-        self::assertSame(10, $this->options[0]['timeout'] ?? null);
+        self::assertSame('POST', $request['method']);
+        self::assertSame('https://fcm.googleapis.com/fcm/send/1', $request['url']);
+        self::assertSame('600', $this->header(0, 'TTL'));
+        self::assertSame('high', $this->header(0, 'Urgency'));
+        self::assertSame('aes128gcm', $this->header(0, 'Content-Encoding'));
+        self::assertStringStartsWith('vapid t=', $this->header(0, 'Authorization'));
+        self::assertNotSame('', $this->body(0));
+        self::assertNotSame('{"id":1}', $this->body(0));
+        self::assertSame(10.0, $request['options']['timeout'] ?? null);
         // A push service answers; a redirect would send the push, and the server, elsewhere.
-        self::assertFalse($this->options[0]['allow_redirects'] ?? null);
+        self::assertSame(0, $request['options']['max_redirects'] ?? null);
     }
 
     public function testAPushLivesADayUnlessConfiguredOtherwise(): void
@@ -52,18 +49,18 @@ final class WebPushSenderTest extends TestCase
             $keys['privateKey'],
             'mailto:ops@example.org',
             $this->createStub(LoggerInterface::class),
-            clientOptions: ['handler' => $this->stack([new Response(201)])],
+            http: $this->http([201]),
         );
         self::assertSame(PushResult::Sent, $sender->send(self::subscription(), null));
-        self::assertSame('86400', $this->requests[0]->getHeaderLine('TTL'));
-        self::assertSame('normal', $this->requests[0]->getHeaderLine('Urgency'));
+        self::assertSame('86400', $this->header(0, 'TTL'));
+        self::assertSame('normal', $this->header(0, 'Urgency'));
     }
 
     public function testAnEmptyPushCarriesNoBody(): void
     {
-        $sender = $this->sender([new Response(201)]);
+        $sender = $this->sender([201]);
         self::assertSame(PushResult::Sent, $sender->send(self::subscription(), null));
-        self::assertSame('', (string) $this->requests[0]->getBody());
+        self::assertSame('', $this->body(0));
     }
 
     public function testAGoneBrowserIsExpiredAndARefusalLogged(): void
@@ -75,7 +72,7 @@ final class WebPushSenderTest extends TestCase
             ->with('A push service refused a notification.', self::callback(static fn(array $context): bool => \is_string(
                 $context['reason'] ?? null,
             )));
-        $sender = $this->sender([new Response(410), new Response(404), new Response(500)], $logger);
+        $sender = $this->sender([410, 404, 500], $logger);
         self::assertSame(PushResult::Expired, $sender->send(self::subscription(), null));
         self::assertSame(PushResult::Expired, $sender->send(self::subscription(), null));
         self::assertSame(PushResult::Failed, $sender->send(self::subscription(), null));
@@ -99,7 +96,7 @@ final class WebPushSenderTest extends TestCase
 
     public function testItsClientIsMadeAgainAfterAReset(): void
     {
-        $sender = $this->sender([new Response(201), new Response(201)]);
+        $sender = $this->sender([201, 201]);
         $sender->send(self::subscription(), null);
         $client = new \ReflectionProperty(WebPushSender::class, 'client');
         // @mago-expect analysis:mixed-assignment a property read by reflection is mixed
@@ -124,10 +121,9 @@ final class WebPushSenderTest extends TestCase
         );
     }
 
-    /** @param list<Response> $responses */
-    private function sender(array $responses, ?LoggerInterface $logger = null): WebPushSender
+    /** @param list<int> $statuses */
+    private function sender(array $statuses, ?LoggerInterface $logger = null): WebPushSender
     {
-        $stack = $this->stack($responses);
         $keys = Vapid::generate();
 
         return new WebPushSender(
@@ -137,23 +133,50 @@ final class WebPushSenderTest extends TestCase
             $logger ?? $this->createStub(LoggerInterface::class),
             600,
             'high',
-            ['handler' => $stack],
+            $this->http($statuses),
         );
     }
 
-    /** @param list<Response> $responses */
-    private function stack(array $responses): HandlerStack
+    /** @param list<int> $statuses */
+    private function http(array $statuses): MockHttpClient
     {
-        $stack = HandlerStack::create(new MockHandler($responses));
-        $stack->push(fn(callable $handler): callable => function (RequestInterface $request, array $options) use (
-            $handler,
-        ): mixed {
-            $this->requests[] = $request;
-            $this->options[] = $options;
+        return new MockHttpClient(function (string $method, string $url, array $options) use (
+            &$statuses,
+        ): MockResponse {
+            $this->requests[] = ['method' => $method, 'url' => $url, 'options' => $options];
 
-            return $handler($request, $options);
+            return new MockResponse('', ['http_code' => array_shift($statuses) ?? 500]);
         });
+    }
 
-        return $stack;
+    private function header(int $request, string $name): string
+    {
+        $headers = $this->requests[$request]['options']['normalized_headers'] ?? [];
+        self::assertIsArray($headers);
+        $lines = $headers[strtolower($name)] ?? [];
+        self::assertIsArray($lines);
+        $line = $lines[0] ?? '';
+        self::assertIsString($line);
+
+        return substr($line, \strlen($name) + 2);
+    }
+
+    private function body(int $request): string
+    {
+        // @mago-expect analysis:mixed-assignment the options of a request are mixed
+        $body = $this->requests[$request]['options']['body'] ?? '';
+        if (!$body instanceof \Closure) {
+            self::assertIsString($body);
+
+            return $body;
+        }
+        // The client reads a body it was given as a stream in chunks, an empty one ending at once.
+        $read = '';
+        while ('' !== ($chunk = $body(16_384))) {
+            self::assertIsString($chunk);
+            $read .= $chunk;
+        }
+
+        return $read;
     }
 }

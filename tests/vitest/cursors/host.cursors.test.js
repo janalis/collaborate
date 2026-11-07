@@ -224,6 +224,33 @@ test('a reader alone tells nothing but hello, and answers the hello of a peer wh
   expect(posted().at(-1).popup).toBeNull();
 });
 
+test('a reader alone who moved sends where it is once it hears from a first peer, and only then', async () => {
+  await start();
+  now = 1000;
+  pointer('pointermove');
+  await vi.advanceTimersByTimeAsync(200);
+  expect(posted().map((sent) => sent.kind)).toEqual(['hello']);
+  // The page already there answers the hello: the newcomer was pointing all along.
+  receive({ kind: 'move', anchor: null, caret: null });
+  now = 2000;
+  await vi.advanceTimersByTimeAsync(200);
+  expect(posted().map((sent) => sent.kind)).toEqual(['hello', 'move']);
+  expect(posted().at(-1).anchor.selector).toBe('tr[data-key="a"] > td:nth-of-type(1)');
+  // A second word from the same peer is no first peer: nothing more is sent.
+  receive({ kind: 'heartbeat', anchor: null, sequence: 2 });
+  now = 3000;
+  await vi.advanceTimersByTimeAsync(200);
+  expect(posted().map((sent) => sent.kind)).toEqual(['hello', 'move']);
+});
+
+test('a reader alone with nothing to show stays silent when a first peer answers', async () => {
+  await start();
+  receive({ kind: 'heartbeat', anchor: null, caret: null });
+  now = 1000;
+  await vi.advanceTimersByTimeAsync(200);
+  expect(posted().map((sent) => sent.kind)).toEqual(['hello']);
+});
+
 test('a lost hello is sent again behind the backoff; one refused for good is not', async () => {
   fetcher.mockImplementation(async (url) =>
     url === '/session'

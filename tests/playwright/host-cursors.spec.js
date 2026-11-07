@@ -202,3 +202,44 @@ test.describe('a host library', () => {
     await expect(alice.page.locator('[data-collaborate-presence]')).toBeHidden();
   });
 });
+
+test.describe('a newcomer to a host library', () => {
+  test('who points before the reader already there answers is seen once she answers', async ({
+    browser,
+    baseURL,
+    request,
+  }) => {
+    await request.post('/e2e/folders/music/revoke', { data: { revoked: false } });
+    const alice = await reader(browser, baseURL, 'alice');
+    let bob;
+    try {
+      await connected(alice.page);
+      // Alice's answer to the newcomer's hello is held until he has pointed and stopped.
+      const held = [];
+      await alice.page.route('**/cursors/events', (route) => {
+        held.push(route);
+      });
+      bob = await reader(browser, baseURL, 'bob');
+      const sent = [];
+      bob.page.on('request', (sending) => {
+        if (sending.url().endsWith('/cursors/events')) sent.push(sending.postDataJSON().kind);
+      });
+      await connected(bob.page);
+      await expect.poll(() => held.length).toBeGreaterThan(0);
+      const box = await record(bob.page, 'music-2').boundingBox();
+      await bob.page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.5, { steps: 2 });
+      // Alone as far as he knows (`silent_alone`), his pointer stays his own.
+      await expect(cursorOf(alice.page)).toHaveCount(0);
+      expect(sent).not.toContain('move');
+      for (const route of held.splice(0)) await route.continue();
+      await alice.page.unroute('**/cursors/events');
+      // Her answer reaches him: he tells where he is at once, without moving again — well before his next
+      // heartbeat (5 s), which would carry it too.
+      await expect(cursorOf(alice.page)).toBeVisible({ timeout: 2000 });
+      await expect(cursorOf(alice.page)).toHaveAttribute('data-region', 'listing');
+    } finally {
+      await alice.context.close();
+      await bob?.context.close();
+    }
+  });
+});

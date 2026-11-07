@@ -159,7 +159,7 @@ notification. The bell of a browser that can shows **Notify me on this
 device**, which asks the browser's permission only when it is clicked.
 
 ```sh
-composer require minishlink/web-push
+composer require minishlink/web-push:^11.0 nyholm/psr7
 php bin/console collaborate:push:setup --subject=mailto:ops@example.org
 ```
 

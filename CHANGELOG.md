@@ -5,6 +5,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Web push runs on `minishlink/web-push` 11, over Symfony's HTTP client
+  (PSR-18, through `Psr18Client`): Guzzle is no longer needed, and the
+  10-second timeout and the refusal of redirects are the client's options.
+  9.x passed `openssl_pkey_derive()` a key length PHP 8.5 deprecates, which
+  logged a deprecation at every push. The bundle conflicts with
+  `minishlink/web-push` below 11: a host moves with
+  `composer require minishlink/web-push:^11.0 nyholm/psr7` (or any other
+  PSR-17 implementation).
+
 ## [0.3.2] - 2026-11-07
 
 ### Changed

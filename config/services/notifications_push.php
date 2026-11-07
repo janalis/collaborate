@@ -27,6 +27,7 @@ return static function (ContainerConfigurator $container): void {
         service('logger'),
         param('collaborate.notifications.web_push.ttl'),
         param('collaborate.notifications.web_push.urgency'),
+        service('http_client')->nullOnInvalid(),
     ])->tag('kernel.reset', ['method' => 'reset'])->tag('monolog.logger', ['channel' => 'collaborate']);
     $services->alias(PushSenderInterface::class, WebPushSender::class);
 

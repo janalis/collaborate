@@ -319,6 +319,9 @@ final class NotificationsConfigurationTest extends TestCase
     public function testMapsTheNotificationsOnlyWhenTheyAreOn(array $configs, bool $mapped): void
     {
         $container = new ContainerBuilder();
+        // Symfony 7.4.0 reads the environment while loading a bundle extension.
+        $container->setParameter('kernel.environment', 'test');
+        $container->setParameter('kernel.build_dir', sys_get_temp_dir());
         $container->registerExtension(new FrameworkExtension());
         $container->registerExtension(new TwigExtension());
         $container->registerExtension(new DoctrineExtension());

@@ -8,7 +8,7 @@ versions follow [Semantic Versioning](https://semver.org/).
 ### Added
 
 - **Notifications**, off until `notifications` is configured
-  ([guide](docs/guide/notifications.md)):
+  ([guide](https://janalis.github.io/collaborate/guide/notifications)):
   - a bell (`collaborate_notifications()`), a page of all notifications and
     a page of the topics a user subscribes to, with their scripts
     (`notifications/bell.js`, `page.js`, `topics.js`) and styles

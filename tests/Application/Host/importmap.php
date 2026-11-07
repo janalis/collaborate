@@ -9,5 +9,8 @@ declare(strict_types=1);
 return [
     'app' => ['path' => './assets/app.js', 'entrypoint' => true],
     '@janalis/collaborate/cursors/cursors.js' => ['path' => '@janalis/collaborate/cursors/cursors.js'],
+    '@janalis/collaborate/notifications/bell.js' => ['path' => '@janalis/collaborate/notifications/bell.js'],
+    '@janalis/collaborate/notifications/page.js' => ['path' => '@janalis/collaborate/notifications/page.js'],
+    '@janalis/collaborate/notifications/topics.js' => ['path' => '@janalis/collaborate/notifications/topics.js'],
     '@microsoft/fetch-event-source' => ['path' => 'build/fetch-event-source/index.js'],
 ];

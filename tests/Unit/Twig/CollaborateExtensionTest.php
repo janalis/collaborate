@@ -12,10 +12,12 @@ use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
 use Janalis\Collaborate\Tests\Fixtures\TestUser;
 use Janalis\Collaborate\Twig\CollaborateExtension;
+use Janalis\Collaborate\Twig\NotificationRuntime;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Security\Core\User\InMemoryUser;
 use Symfony\Contracts\Translation\TranslatorInterface;
+use Twig\Node\Node;
 
 #[CoversClass(CollaborateExtension::class)]
 #[UsesClass(PageGrant::class)]
@@ -29,9 +31,40 @@ final class CollaborateExtensionTest extends ExtensionTestCase
     {
         $functions = $this->extension()->getFunctions();
         self::assertSame(
-            ['collaborate_grant', 'collaborate_enabled', 'collaborate_layer', 'collaborate_presence'],
+            [
+                'collaborate_grant',
+                'collaborate_enabled',
+                'collaborate_layer',
+                'collaborate_presence',
+                'collaborate_notifications',
+                'collaborate_notification_text',
+                'collaborate_notification_icon',
+                'collaborate_notification_types',
+                'collaborate_notification_topics',
+                'collaborate_notifications_settings',
+                'collaborate_notifications_layout',
+            ],
             array_map(static fn($function): string => $function->getName(), $functions),
         );
+        // The notifications are the runtime's: made only when a template calls one of them.
+        $notifications = \array_slice($functions, 4);
+        self::assertSame(
+            ['bell', 'text', 'icon', 'types', 'topics', 'settings', 'layout'],
+            array_map(static function ($function): string {
+                $callable = $function->getCallable();
+                self::assertIsArray($callable);
+                self::assertCount(2, $callable);
+                self::assertSame(NotificationRuntime::class, $callable[0]);
+
+                return $callable[1];
+            }, $notifications),
+        );
+        self::assertTrue($notifications[0]->needsEnvironment());
+        self::assertSame(['html'], $notifications[0]->getSafe(new Node()));
+        foreach (\array_slice($notifications, 1) as $function) {
+            self::assertFalse($function->needsEnvironment());
+            self::assertSame([], $function->getSafe(new Node()));
+        }
     }
 
     public function testIssuesAnAccountBoundGrantForTheMainRequest(): void
@@ -39,12 +72,10 @@ final class CollaborateExtensionTest extends ExtensionTestCase
         $user = new TestUser(7, 'alice', ['ROLE_ADMIN', 'ROLE_USER']);
         $grant = $this->extension($user)->grant();
         self::assertNotNull($grant);
-        self::assertStringStartsWith('urn:collaborate:cursors:', $this->pages->topic(
-            $grant,
-            7,
-            time(),
-            ['ROLE_USER', 'ROLE_ADMIN'],
-        ));
+        self::assertStringStartsWith(
+            'urn:collaborate:cursors:',
+            (string) $this->pages->topic($grant, 7, time(), ['ROLE_USER', 'ROLE_ADMIN']),
+        );
     }
 
     public function testChecksTheConfiguredRole(): void

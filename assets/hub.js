@@ -93,6 +93,8 @@ export class CollaborateHub {
         body: JSON.stringify({
           grant: this.layer.dataset.grant,
           updates: members.some((member) => member.channel === 'updates'),
+          // The user's own notifications topic is granted to a page that asks for it alone.
+          notifications: members.some((member) => member.channel === 'notifications'),
           drafts: drafts.map((member) => member.grant(full)),
         }),
       });

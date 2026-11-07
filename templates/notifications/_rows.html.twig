@@ -1,0 +1,28 @@
+{#
+    Rows of the page of all notifications, and what the older ones are answered as while the reader
+    scrolls: the rows, then a sentinel naming where the next ones are asked for. Both "read" and
+    "unread" are in every row, one of them hidden: notifications/page.js swaps them.
+#}
+{% for notification in notifications %}
+    {% set icon = collaborate_notification_icon(notification) %}
+    <li class="collaborate-notification-row" data-id="{{ notification.id }}" data-unread="{{ notification.unread ? 'true' : 'false' }}">
+        {% if icon %}<span class="collaborate-notification__icon {{ icon }}" aria-hidden="true"></span>{% endif %}
+        <span class="collaborate-notification__unread"><span class="collaborate-visually-hidden">{{ 'Not read yet:'|trans({}, 'collaborate') }} </span></span>
+        {% if notification.url is not null %}
+            <a class="collaborate-notification__text" href="{{ notification.url }}">{{ collaborate_notification_text(notification) }}</a>
+        {% else %}
+            <span class="collaborate-notification__text">{{ collaborate_notification_text(notification) }}</span>
+        {% endif %}
+        <time class="collaborate-notification__date" datetime="{{ notification.createdAt|date('c') }}">{{ notification.createdAt|date('Y-m-d H:i') }}</time>
+        <span class="collaborate-notification-row__actions">
+            <button type="button" class="collaborate-notifications__button" data-action="read"{% if not notification.unread %} hidden{% endif %}>{{ 'Mark as read'|trans({}, 'collaborate') }}</button>
+            <button type="button" class="collaborate-notifications__button" data-action="unread"{% if notification.unread %} hidden{% endif %}>{{ 'Mark as unread'|trans({}, 'collaborate') }}</button>
+            <button type="button" class="collaborate-notifications__button" data-action="clear" aria-label="{{ 'Clear'|trans({}, 'collaborate') }}"><span aria-hidden="true">×</span></button>
+        </span>
+    </li>
+{% endfor %}
+{% if next %}
+    <li class="collaborate-notification-more" data-next="{{ next }}">
+        <button type="button" class="collaborate-notifications__button">{{ 'Older notifications'|trans({}, 'collaborate') }}</button>
+    </li>
+{% endif %}

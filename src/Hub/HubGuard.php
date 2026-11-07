@@ -7,6 +7,7 @@ namespace Janalis\Collaborate\Hub;
 use Janalis\Collaborate\Cursor\PageGrant;
 use Janalis\Collaborate\Cursor\PlaceProviderInterface;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
+use Janalis\Collaborate\Notification\NotificationAccess;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -36,6 +37,7 @@ final readonly class HubGuard
         private string $role = 'ROLE_ADMIN',
         private ?RateLimiterFactoryInterface $limiter = null,
         private ?PlaceProviderInterface $places = null,
+        private ?NotificationAccess $notifications = null,
     ) {}
 
     /** @return Admission|JsonResponse the admitted request, or the 429 answer of a user over the rate limit */
@@ -43,7 +45,13 @@ final readonly class HubGuard
     {
         $user = $this->security->getUser();
         $userId = $user instanceof UserInterface ? $this->collaborators->id($user) : null;
-        if (!$user instanceof UserInterface || null === $userId || !$this->security->isGranted($this->role)) {
+        // A user who may not collaborate may still hold a bare grant, for their notifications.
+        $collaborator = $this->security->isGranted($this->role);
+        if (
+            !$user instanceof UserInterface
+            || null === $userId
+            || !$collaborator && null === $this->notifications?->recipient()
+        ) {
             throw new AccessDeniedException('Collaboration requires a signed-in collaborator.');
         }
         if (\strlen($request->getContent()) > $maxBytes) {
@@ -62,6 +70,9 @@ final readonly class HubGuard
             time(),
             $this->collaborators->authorization($user),
         );
+        if (null !== $page['topic'] && !$collaborator) {
+            throw new AccessDeniedHttpException('A page grant naming a room requires a collaborator.');
+        }
         // A place the user lost while the grant lasts (a folder revoked) is refused at once.
         if (null !== $page['place'] && !$this->places?->canEnter($user, $page['place'])) {
             throw new AccessDeniedHttpException('The page grant names a place the user may no longer enter.');

@@ -114,7 +114,12 @@ test('initializes once and subscribes using scoped authorization without loading
   expect(mocks.subscribe.mock.calls[0][0]).toBe('http://localhost/.well-known/mercure?match=private');
   expect(document.querySelector('[data-collaborate-layer]').dataset.connected).toBe('true');
   expect(document.body.classList.contains('loading')).toBe(false);
-  expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({ grant: 'grant', updates: false, drafts: [] });
+  expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({
+    grant: 'grant',
+    updates: false,
+    notifications: false,
+    drafts: [],
+  });
 });
 
 test('renders safe labelled platform cursors, ignores self, and smooths subsequent motion', async () => {

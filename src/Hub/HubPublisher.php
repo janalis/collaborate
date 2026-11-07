@@ -7,6 +7,7 @@ namespace Janalis\Collaborate\Hub;
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Clock\NativeClock;
+use Symfony\Component\Console\ConsoleEvents;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\Mercure\HubInterface;
@@ -14,7 +15,7 @@ use Symfony\Component\Mercure\Update;
 use Symfony\Contracts\Service\ResetInterface;
 
 /**
- * Publishes notifications after the response. Symfony saves the session on kernel.response, so a slow
+ * Publishes notices after the response (and after a console command or a Messenger message). Symfony saves the session on kernel.response, so a slow
  * hub does not hold the session lock of frequent requests.
  *
  * A failed publish pauses this worker's publishing for `$pauseSeconds`: an answered request no longer
@@ -38,7 +39,15 @@ final class HubPublisher implements EventSubscriberInterface, ResetInterface
 
     public static function getSubscribedEvents(): array
     {
-        return [KernelEvents::TERMINATE => 'publish'];
+        // A console command and a Messenger worker terminate no kernel: what they deferred is sent once a
+        // command or a message is done with. The worker's events are named by their class, which is no
+        // dependency: without Messenger, nothing dispatches them.
+        return [
+            KernelEvents::TERMINATE => 'publish',
+            ConsoleEvents::TERMINATE => 'publish',
+            'Symfony\\Component\\Messenger\\Event\\WorkerMessageHandledEvent' => 'publish',
+            'Symfony\\Component\\Messenger\\Event\\WorkerMessageFailedEvent' => 'publish',
+        ];
     }
 
     /** Whether the last publish of this worker succeeded, or failed long enough ago to try again. */

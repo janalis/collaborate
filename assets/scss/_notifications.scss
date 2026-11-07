@@ -1,0 +1,611 @@
+// The notifications: the bell and its menu, the page of them all, the topics -- as a module that needs no
+// framework:
+//
+//     @use 'collaborate/assets/scss/notifications';
+//
+// Its colours, font, radius and shadow are custom properties a host maps onto its own tokens, each defaulting
+// to the system's colours, which follow the colour scheme:
+//
+//     .collaborate-notifications, .collaborate-notifications-page, .collaborate-notification-topics {
+//       --collaborate-notifications-accent: var(--bs-primary);
+//     }
+//
+// `--collaborate-notifications-accent` (switches, the unread dot, the focus ring), `-bg` and `-fg` (the menu
+// and the buttons), `-muted` (dates, notes), `-border`, `-hover`, `-badge-bg` and `-badge-fg` (the count),
+// `-danger`, `-radius`, `-shadow`, `-font`, `-focus` (the whole outline).
+
+// What every part of the notifications reads, defined once where any of them starts.
+.collaborate-notifications,
+.collaborate-notifications-page,
+.collaborate-notification-topics {
+  --cn-accent: var(--collaborate-notifications-accent, LinkText);
+  --cn-bg: var(--collaborate-notifications-bg, Canvas);
+  --cn-fg: var(--collaborate-notifications-fg, CanvasText);
+  --cn-muted: var(--collaborate-notifications-muted, color-mix(in srgb, CanvasText 62%, Canvas));
+  --cn-border: var(--collaborate-notifications-border, color-mix(in srgb, CanvasText 20%, Canvas));
+  --cn-hover: var(--collaborate-notifications-hover, color-mix(in srgb, CanvasText 8%, Canvas));
+  --cn-badge-bg: var(--collaborate-notifications-badge-bg, #c81e1e);
+  --cn-badge-fg: var(--collaborate-notifications-badge-fg, #fff);
+  --cn-danger: var(--collaborate-notifications-danger, #b42318);
+  --cn-radius: var(--collaborate-notifications-radius, 0.5rem);
+  --cn-shadow: var(--collaborate-notifications-shadow, 0 0.5rem 1rem rgb(0 0 0 / 15%));
+  --cn-font: var(--collaborate-notifications-font, inherit);
+  --cn-focus: var(--collaborate-notifications-focus, 2px solid var(--cn-accent));
+  font-family: var(--cn-font);
+}
+
+@media (prefers-color-scheme: dark) {
+  .collaborate-notifications,
+  .collaborate-notifications-page,
+  .collaborate-notification-topics {
+    --cn-badge-bg: var(--collaborate-notifications-badge-bg, #f05252);
+    --cn-badge-fg: var(--collaborate-notifications-badge-fg, #000);
+    --cn-danger: var(--collaborate-notifications-danger, #f97066);
+    --cn-shadow: var(--collaborate-notifications-shadow, 0 0.5rem 1rem rgb(0 0 0 / 50%));
+  }
+}
+
+// Read by a screen reader, drawn nowhere.
+.collaborate-visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+@mixin -focus-ring {
+  &:focus-visible {
+    outline: var(--cn-focus);
+    outline-offset: 2px;
+  }
+}
+
+// The bell: its button, its count, its menu.
+.collaborate-notifications {
+  position: relative;
+  display: inline-flex;
+
+  &__toggle {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.25rem;
+    min-height: 2.25rem;
+    padding: 0.375rem;
+    color: inherit;
+    font: inherit;
+    background: none;
+    border: 0;
+    border-radius: 50%;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--cn-hover);
+    }
+
+    @include -focus-ring;
+  }
+
+  &__bell {
+    display: block;
+  }
+
+  &__count {
+    position: absolute;
+    top: 0;
+    inset-inline-end: 0;
+    box-sizing: border-box;
+    min-width: 1.125rem;
+    height: 1.125rem;
+    padding: 0 0.3125rem;
+    color: var(--cn-badge-fg);
+    font: 600 0.6875rem/1.125rem var(--cn-font);
+    text-align: center;
+    background: var(--cn-badge-bg);
+    border-radius: 0.5625rem;
+    // Apart from the bell under it, whatever is behind.
+    box-shadow: 0 0 0 2px var(--cn-bg);
+
+    &[hidden] {
+      display: none;
+    }
+  }
+
+  // A popover, placed by bell.js under the bell at its end.
+  &__menu {
+    position: fixed;
+    inset: auto;
+    box-sizing: border-box;
+    width: min(22rem, calc(100vw - 1rem));
+    max-height: min(32rem, calc(100vh - 5rem));
+    margin: 0;
+    padding: 0.5rem 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    color: var(--cn-fg);
+    font: inherit;
+    font-family: var(--cn-font);
+    background: var(--cn-bg);
+    border: 1px solid var(--cn-border);
+    border-radius: var(--cn-radius);
+    box-shadow: var(--cn-shadow);
+  }
+
+  &__header {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.25rem 1rem 0.5rem;
+    font-weight: 600;
+  }
+
+  &__read-all {
+    padding: 0.125rem 0.375rem;
+    color: var(--cn-accent);
+    font: inherit;
+    font-size: 0.8125rem;
+    font-weight: 400;
+    background: none;
+    border: 0;
+    border-radius: 0.25rem;
+    cursor: pointer;
+
+    &:hover {
+      text-decoration: underline;
+    }
+
+    @include -focus-ring;
+  }
+
+  &__empty {
+    margin: 0;
+    padding: 0.75rem 1rem;
+    color: var(--cn-muted);
+  }
+
+  &__divider {
+    margin: 0.5rem 0;
+    border: 0;
+    border-top: 1px solid var(--cn-border);
+  }
+
+  // The items under the list: the switch of web push, the ways to the page and to the topics.
+  &__push,
+  &__all,
+  &__topics {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 0.5rem 1rem;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    text-decoration: none;
+    background: none;
+    border: 0;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      background: var(--cn-hover);
+    }
+
+    &:focus-visible {
+      outline: var(--cn-focus);
+      outline-offset: -2px;
+    }
+
+    &[hidden] {
+      display: none;
+    }
+  }
+
+  // A switch drawn before its name, on as `aria-checked` says.
+  &__push {
+    &::before {
+      flex: none;
+      box-sizing: border-box;
+      width: 1.75rem;
+      height: 1rem;
+      content: '';
+      background:
+        radial-gradient(circle at 0.5rem 50%, var(--cn-muted) 0.3125rem, transparent 0.34375rem),
+        var(--cn-bg);
+      border: 1px solid var(--cn-muted);
+      border-radius: 0.5rem;
+    }
+
+    &[aria-checked='true']::before {
+      background:
+        radial-gradient(circle at calc(100% - 0.5rem) 50%, var(--cn-bg) 0.3125rem, transparent 0.34375rem),
+        var(--cn-accent);
+      border-color: var(--cn-accent);
+    }
+
+    &[aria-disabled='true'] {
+      color: var(--cn-muted);
+      cursor: not-allowed;
+    }
+  }
+
+  &__push-denied {
+    margin: 0;
+    padding: 0 1rem 0.5rem;
+    color: var(--cn-muted);
+    font-size: 0.8125rem;
+
+    &[hidden] {
+      display: none;
+    }
+  }
+}
+
+// A notification: under the bell an item of the menu, on the page a row.
+.collaborate-notification {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  column-gap: 0.5rem;
+  align-items: start;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.5rem 1rem;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  text-decoration: none;
+  background: none;
+  border: 0;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--cn-hover);
+  }
+
+  &:focus-visible {
+    outline: var(--cn-focus);
+    outline-offset: -2px;
+  }
+
+  // The text and its date beside the icon and the dot.
+  &__text,
+  &__date {
+    grid-column: 3;
+  }
+
+  &__icon {
+    grid-row: 1 / span 2;
+    grid-column: 1;
+    color: var(--cn-muted);
+  }
+
+  &__unread {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-top: 0.4375rem;
+    border-radius: 50%;
+  }
+
+  &__text {
+    overflow-wrap: anywhere;
+  }
+
+  &__date {
+    color: var(--cn-muted);
+    font-size: 0.8125rem;
+  }
+
+  &[data-unread='true'] &__text {
+    font-weight: 600;
+  }
+}
+
+// The dot of what is not read, whatever holds it; the words beside it are for screen readers alone.
+[data-unread] > .collaborate-notification__unread {
+  visibility: hidden;
+}
+
+[data-unread='true'] > .collaborate-notification__unread {
+  visibility: visible;
+  background: var(--cn-accent);
+}
+
+// The page of all notifications.
+.collaborate-notifications-page {
+  max-width: 48rem;
+  color: var(--cn-fg);
+
+  &__title {
+    margin: 0 0 1rem;
+    font-size: 1.5rem;
+
+    // Given the focus by page.js when what had it left: where the keys go on from, no control.
+    &:focus {
+      outline: none;
+    }
+  }
+
+  &__toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+
+  &__filters,
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+  }
+}
+
+.collaborate-notifications__filter {
+  padding: 0.25rem 0.75rem;
+  color: inherit;
+  text-decoration: none;
+  border: 1px solid var(--cn-border);
+  border-radius: 1rem;
+
+  &:hover {
+    background: var(--cn-hover);
+  }
+
+  &[aria-current] {
+    color: var(--cn-bg);
+    background: var(--cn-accent);
+    border-color: var(--cn-accent);
+  }
+
+  @include -focus-ring;
+}
+
+.collaborate-notifications__button {
+  display: inline-flex;
+  gap: 0.25rem;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  color: var(--cn-fg);
+  font: inherit;
+  font-size: 0.875rem;
+  text-decoration: none;
+  background: var(--cn-bg);
+  border: 1px solid var(--cn-border);
+  border-radius: calc(var(--cn-radius) / 2);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--cn-hover);
+  }
+
+  &[hidden] {
+    display: none;
+  }
+
+  // Pressed, until the server answered (page.js).
+  &[aria-disabled='true'] {
+    cursor: progress;
+    opacity: 0.6;
+  }
+
+  &--danger {
+    color: var(--cn-danger);
+    border-color: currentcolor;
+  }
+
+  @include -focus-ring;
+}
+
+.collaborate-notification-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--cn-border);
+}
+
+.collaborate-notification-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  gap: 0.25rem 0.5rem;
+  align-items: start;
+  padding: 0.75rem 0.5rem;
+  border-bottom: 1px solid var(--cn-border);
+
+  .collaborate-notification__icon {
+    grid-row: 1 / span 2;
+    grid-column: 1;
+    color: var(--cn-muted);
+  }
+
+  .collaborate-notification__unread {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-top: 0.4375rem;
+    border-radius: 50%;
+  }
+
+  .collaborate-notification__text {
+    grid-column: 3;
+    color: inherit;
+    overflow-wrap: anywhere;
+  }
+
+  a.collaborate-notification__text {
+    text-decoration: underline;
+    text-decoration-color: var(--cn-border);
+
+    &:hover {
+      text-decoration-color: currentcolor;
+    }
+
+    @include -focus-ring;
+  }
+
+  .collaborate-notification__date {
+    grid-column: 3;
+    color: var(--cn-muted);
+    font-size: 0.8125rem;
+  }
+
+  &[data-unread='true'] .collaborate-notification__text {
+    font-weight: 600;
+  }
+
+  &__actions {
+    display: flex;
+    grid-row: 1 / span 2;
+    grid-column: 4;
+    gap: 0.25rem;
+  }
+}
+
+.collaborate-notification-more {
+  display: flex;
+  justify-content: center;
+  padding: 0.75rem;
+}
+
+.collaborate-notifications-page .collaborate-notifications__empty {
+  margin: 1rem 0;
+  color: var(--cn-muted);
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+// The topics: a switch each.
+.collaborate-notification-topics {
+  max-width: 40rem;
+  color: var(--cn-fg);
+
+  &__intro,
+  &__status {
+    color: var(--cn-muted);
+  }
+
+  &__status:empty {
+    display: none;
+  }
+
+  &__list {
+    margin: 1rem 0;
+    padding: 0;
+    list-style: none;
+  }
+}
+
+.collaborate-notification-topic {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--cn-border);
+
+  &__switch {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    cursor: pointer;
+
+    &:has(input:disabled) {
+      cursor: default;
+    }
+  }
+
+  // The checkbox drawn as a switch.
+  input[role='switch'] {
+    flex: none;
+    box-sizing: border-box;
+    width: 2.25rem;
+    height: 1.25rem;
+    margin: 0;
+    background:
+      radial-gradient(circle at 0.625rem 50%, var(--cn-muted) 0.375rem, transparent 0.40625rem),
+      var(--cn-bg);
+    border: 1px solid var(--cn-muted);
+    border-radius: 0.625rem;
+    cursor: inherit;
+    appearance: none;
+
+    &:checked {
+      background:
+        radial-gradient(circle at calc(100% - 0.625rem) 50%, var(--cn-bg) 0.375rem, transparent 0.40625rem),
+        var(--cn-accent);
+      border-color: var(--cn-accent);
+    }
+
+    &:disabled {
+      opacity: 0.6;
+    }
+
+    @include -focus-ring;
+  }
+
+  &__description {
+    margin: 0.25rem 0 0 3rem;
+    color: var(--cn-muted);
+    font-size: 0.875rem;
+  }
+}
+
+// High contrast: the system's colours, and what tells a state apart (the dot, a switch on, the filter shown)
+// kept by drawing it in them.
+@media (forced-colors: active) {
+  .collaborate-notifications,
+  .collaborate-notifications-page,
+  .collaborate-notification-topics {
+    --cn-accent: Highlight;
+    --cn-bg: Canvas;
+    --cn-fg: CanvasText;
+    --cn-muted: CanvasText;
+    --cn-border: CanvasText;
+    --cn-focus: 2px solid Highlight;
+  }
+
+  .collaborate-notifications__count {
+    border: 1px solid CanvasText;
+  }
+
+  [data-unread='true'] > .collaborate-notification__unread,
+  .collaborate-notifications__push::before,
+  .collaborate-notification-topic input[role='switch'],
+  .collaborate-notifications__filter[aria-current] {
+    forced-color-adjust: none;
+  }
+
+  .collaborate-notifications__filter[aria-current] {
+    color: HighlightText;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .collaborate-notifications__menu {
+    transition:
+      opacity 120ms ease-out,
+      overlay 120ms allow-discrete,
+      display 120ms allow-discrete;
+
+    &:not(:popover-open) {
+      opacity: 0;
+    }
+
+    @starting-style {
+      &:popover-open {
+        opacity: 0;
+      }
+    }
+  }
+}

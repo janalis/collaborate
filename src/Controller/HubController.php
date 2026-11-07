@@ -8,6 +8,7 @@ use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Hub\Admission;
 use Janalis\Collaborate\Hub\HubGuard;
 use Janalis\Collaborate\Hub\Topics;
+use Janalis\Collaborate\Notification\NotificationAccess;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -21,7 +22,8 @@ use Symfony\Component\Mercure\Jwt\Grant;
  * `POST <prefix>/cursors/session`: the page's one subscriber JWT.
  *
  * One subscription carries every topic of the page: its cursors, the saved views when updates are on,
- * and each draft its field grant proves. A browser keeps six HTTP/1.1 connections per origin, and each
+ * each draft its field grant proves, and the notifications of its user when the page asks for them. A
+ * bare grant carries no cursor room: the notifications alone. A browser keeps six HTTP/1.1 connections per origin, and each
  * stream holds one. A signature the server no longer knows is named in `resend`, a refused grant in `denied`.
  */
 final readonly class HubController
@@ -34,6 +36,7 @@ final readonly class HubController
         private bool $updates = false,
         private int $maxDrafts = 8,
         private int $subscriptionTtl = 300,
+        private ?NotificationAccess $notifications = null,
     ) {}
 
     public function __invoke(Request $request): Response
@@ -44,8 +47,15 @@ final readonly class HubController
             return $admission;
         }
         // The session stays open until Symfony writes the security token on kernel.response.
-        $topics = [$admission->topic];
-        if (true === ($admission->data['updates'] ?? null) && $this->updates) {
+        $topics = null === $admission->topic ? [] : [$admission->topic];
+        $recipient = true === ($admission->data['notifications'] ?? null) ? $this->notifications?->recipient() : null;
+        if (null !== $recipient) {
+            $topics[] = $this->topics->notifications($recipient);
+        }
+        if ([] === $topics) {
+            throw new AccessDeniedHttpException('A bare page grant subscribes to the notifications alone.');
+        }
+        if (true === ($admission->data['updates'] ?? null) && $this->updates && null !== $admission->topic) {
             $topics[] = $this->topics->updates();
         }
         $resend = [];

@@ -226,6 +226,17 @@ final class CollaborateBundleConfigurationTest extends TestCase
     {
         $this->expectException(\LogicException::class);
         $this->expectExceptionMessage('The "identity" option must be a string.');
+        $this->loadUnprocessed([
+            'drafts' => ['enabled' => false],
+            'updates' => ['enabled' => false],
+            'notifications' => ['enabled' => false],
+        ]);
+    }
+
+    public function testRefusesUnprocessedNotifications(): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('The "notifications" option must be an array.');
         $this->loadUnprocessed(['drafts' => ['enabled' => false], 'updates' => ['enabled' => false]]);
     }
 

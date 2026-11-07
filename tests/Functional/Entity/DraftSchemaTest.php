@@ -38,7 +38,10 @@ final class DraftSchemaTest extends TestCase
 
         self::assertSame([], $changes);
         // A schema created from the mapping is the documented one, in the application's default charset.
-        $documented = DraftJournalTest::schema();
+        $documented = array_values(array_filter(DraftJournalTest::schema(), static fn(string $sql): bool => str_contains(
+            $sql,
+            'CREATE TABLE collaborate_draft',
+        )));
         sort($documented);
         $created = new SchemaTool($em)->getCreateSchemaSql($classes);
         sort($created);

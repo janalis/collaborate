@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Janalis\Collaborate\Tests\Application\Host;
 
+use Janalis\Collaborate\Notification\Notifier;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -22,6 +23,7 @@ final readonly class LibraryController
     public function __construct(
         private Environment $twig,
         private HostPlaces $places,
+        private Notifier $notifier,
     ) {}
 
     public function page(Request $request, string $folder): Response
@@ -32,6 +34,22 @@ final readonly class LibraryController
     public function listing(Request $request, string $folder): Response
     {
         return new Response($this->twig->render('_listing.html.twig', $this->listed($request, $folder)));
+    }
+
+    /** What the library would tell somebody: a notification the scenarios send. */
+    public function notify(Request $request): JsonResponse
+    {
+        $data = $request->toArray();
+        $given = \is_array($data['parameters'] ?? null) ? $data['parameters'] : [];
+        $parameters = array_combine(array_map(strval(...), array_keys($given)), array_map(strval(...), $given));
+        $this->notifier->notify(
+            \is_int($data['to'] ?? null) ? $data['to'] : 0,
+            \is_string($data['type'] ?? null) ? $data['type'] : 'record_shared',
+            $parameters,
+            \is_string($data['url'] ?? null) ? $data['url'] : null,
+        );
+
+        return new JsonResponse(['notified' => true]);
     }
 
     public function revoke(Request $request, string $folder): JsonResponse

@@ -64,7 +64,7 @@ test('subscribes once for every member that joined on the same task, with their 
   expect(fetcher).toHaveBeenCalledOnce();
   expect(fetcher.mock.calls[0][0]).toBe('/session');
   expect(fetcher.mock.calls[0][1].headers['X-CSRF-Token']).toBe('csrf');
-  expect(body(fetcher)).toEqual({ grant: 'page', updates: true, drafts: ['sig'] });
+  expect(body(fetcher)).toEqual({ grant: 'page', updates: true, notifications: false, drafts: ['sig'] });
   expect(subscribe).toHaveBeenCalledOnce();
   expect(streams[0].url).toBe('http://localhost/mercure?match=cursors&match=updates&match=draft%3Aa');
   expect(streams[0].options.headers.Authorization).toBe('Bearer jwt');
@@ -94,6 +94,17 @@ test('routes each message to the members of its channel, a draft message to its 
   expect(cursors.receive.mock.calls[0][1]).toEqual({ channel: 'cursors', kind: 'move' });
   expect(first.receive.mock.calls.map(([, data]) => data.kind)).toEqual(['append', 'record']);
   expect(second.receive.mock.calls.map(([, data]) => data.kind)).toEqual(['record']);
+});
+
+test('asks for the notifications topic while a member follows it', async () => {
+  const fetcher = vi.fn(async () => session({ topics: ['notifications:7'] }));
+  const hub = new CollaborateHub(layer, fetcher, subscribe);
+  const bell = member('notifications');
+  hub.join(bell);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(body(fetcher)).toMatchObject({ updates: false, notifications: true });
+  await streams[0].options.onmessage({ data: JSON.stringify({ channel: 'notifications' }) });
+  expect(bell.receive).toHaveBeenCalledWith(expect.anything(), { channel: 'notifications' });
 });
 
 test('reconnects without a member that left, closes with the last one, and renews every four minutes', async () => {

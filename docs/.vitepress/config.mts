@@ -71,6 +71,7 @@ export default defineConfig({
             { text: 'Shared drafts', link: '/guide/shared-drafts' },
             { text: 'Cursors and presence', link: '/guide/cursors-and-presence' },
             { text: 'Saved-view refresh', link: '/guide/saved-views' },
+            { text: 'Notifications', link: '/guide/notifications' },
             { text: 'Operations and security', link: '/guide/operations' },
           ],
         },

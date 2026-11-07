@@ -131,6 +131,13 @@ final class HubControllerTest extends HubTestCase
         $controller($this->request('/cursors/session', ['drafts' => array_fill(0, 9, 'grant')]));
     }
 
+    public function testAHostWithoutNotificationsSubscribesAPageThatAsksForThemToItsRoomAlone(): void
+    {
+        $data = $this->sessionTopics(['notifications' => true]);
+        self::assertCount(1, $data['topics']);
+        self::assertStringStartsWith('urn:collaborate:cursors:', $data['topics'][0]);
+    }
+
     public function testADraftProvedTwiceIsSubscribedOnce(): void
     {
         $first = $this->draftGrant('first');

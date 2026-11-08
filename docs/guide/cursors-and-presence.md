@@ -209,5 +209,7 @@ Each colour is drawn with black or white, whichever reads best (or
 The bundle publishes after the response (`kernel.terminate`). A server that
 publishes in process, and whose runtime terminates the kernel outside the
 request it served, can flush `HubPublisher::publish()` on a late
-`kernel.response` listener instead; a decorator of the Mercure hub service
-can then publish with the server's own function.
+`kernel.response` listener instead; a decorator of
+`Janalis\Collaborate\Hub\Transport\HubTransportInterface` can then
+publish each `Notice` (its `topics` and its JSON `data`) with the server's
+own function.

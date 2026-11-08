@@ -66,7 +66,7 @@ return [
     'admin' => ['path' => './assets/admin.js', 'entrypoint' => true],
     '@janalis/collaborate/easyadmin.js' => ['path' => '@janalis/collaborate/easyadmin.js'],
     '@janalis/collaborate/ckeditor5/collaborate.js' => ['path' => '@janalis/collaborate/ckeditor5/collaborate.js'],
-    // ckeditor5, @microsoft/fetch-event-source, bootstrap/js/src/modal.js: see Installation
+    // ckeditor5, bootstrap/js/src/modal.js, and @microsoft/fetch-event-source with Mercure: see Installation
 ];
 ```
 

@@ -12,11 +12,12 @@ Open an issue and pick a template. Include:
 - the smallest form type, entity and page that show the problem, and your
   `collaborate` configuration;
 - the versions of the bundle, PHP, Symfony, EasyAdmin (if used), CKEditor,
-  the database server and the Mercure hub;
+  the database server, and the hub (Mercure and its version, or the
+  WebSocket server);
 - errors from the browser console and from the `collaborate` log channel.
 
 A lost edit, an outside save silently overwritten, or content reaching the
-Mercure hub are treated as bugs of the highest priority. Report security
+hub are treated as bugs of the highest priority. Report security
 issues privately, through the repository's **Security → Report a
 vulnerability**.
 

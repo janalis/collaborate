@@ -7,7 +7,9 @@ sizes in bytes.
 
 Each option is also a container parameter named after its path
 (`collaborate.drafts.max_fields`, `collaborate.hub.topic_prefix`…), with
-`collaborate.<branch>` holding a whole branch.
+`collaborate.<branch>` holding a whole branch, except the WebSocket hub's
+`secret` and `previous_secret`, which are no parameters.
+`collaborate.hub.name` still holds the Mercure hub's name.
 
 ## Reference
 
@@ -20,7 +22,30 @@ collaborate:
     system_label: System
     colors: [blue, indigo, purple, pink, red, orange, yellow, green, teal, cyan, black, white, gray, gray-dark]
     hub:
-        name: default
+        transport: mercure                  # or websocket
+        mercure:
+            name: default
+        websocket:                          # read with transport: websocket
+            public_url: null                # required: /collaborate-hub, or a wss:// URL
+            path: null
+            publish_url: 'http://127.0.0.1:8091'
+            publish_socket: null
+            listen: '127.0.0.1:8090'
+            publish_listen: '127.0.0.1:8091'
+            socket_mode: 0660
+            secret: null                    # required: '%env(COLLABORATE_HUB_SECRET)%'
+            previous_secret: null
+            allowed_origins: []
+            trusted_proxies: []
+            cursor_events: true
+            ping_interval: 25
+            max_connections: 1000
+            max_connections_per_ip: 0
+            max_connections_per_user: 50
+            max_pending: 1000
+            max_message_size: 16384
+            max_buffer: 1048576
+            shutdown_timeout: 10
         topic_prefix: 'urn:collaborate:'
         subscription_ttl: 300
         renew_interval: 240
@@ -113,12 +138,42 @@ collaborate:
 
 | Option | Default | Meaning |
 |---|---|---|
-| `name` | `default` | The Mercure hub to publish on and mint tokens with (`mercure.hubs.<name>`). |
+| `transport` | `mercure` | How notices reach the pages: `mercure`, a Mercure hub through `symfony/mercure-bundle`, or `websocket`, the bundle's own server ([WebSocket hub](./websocket-hub)). Read when the container is compiled: no environment variable. |
+| `mercure.name` | `default` | The Mercure hub to publish on and mint tokens with (`mercure.hubs.<name>`). `hub.name`, its former place, still works and is deprecated; setting both is an error. |
 | `topic_prefix` | `urn:collaborate:` | Prefix of every topic: `<prefix>cursors:<room>`, `<prefix>draft:<id>` and `<prefix>updates`. Give each application sharing a hub its own prefix. |
-| `subscription_ttl` | `300` (min 30) | Lifetime of the subscriber JWT the session endpoint mints. |
+| `subscription_ttl` | `300` (min 30) | Lifetime of the subscriber token the session endpoint mints (a JWT with Mercure). |
 | `renew_interval` | `240` (min 10) | How often a page asks for a new subscription. Keep it below `subscription_ttl`. |
 | `publish_pause` | `5` (min 0) | After a failed publication, how long a worker stops publishing (and answers cursor events with 503), so a hanging hub does not hold a worker per request. |
 | `max_drafts` | `8` (min 1) | Field grants one session request may carry: the shared forms of one page. More is refused with 400. |
+
+### `hub.websocket`
+
+Read with `transport: websocket` alone. The application and
+`collaborate:hub:serve` read the same values. See
+[WebSocket hub](./websocket-hub).
+
+| Option | Default | Meaning |
+|---|---|---|
+| `public_url` | `null` | Required. Where browsers connect: a path on the application's origin behind its reverse proxy (recommended, e.g. `/collaborate-hub`), or a `wss://` URL; `ws://` only on `localhost`, `127.0.0.1`, `[::1]` and `*.localhost`. Tokens name it, as written, as their audience. |
+| `path` | `null` | The path the server upgrades; `null` for the path of `public_url`. Set it when the proxy rewrites the path. |
+| `publish_url` | `http://127.0.0.1:8091` | Where the application publishes: the `http://` or `https://` root of the server's private side, with no path. |
+| `publish_socket` | `null` | A unix socket the application publishes through, `publish_url`'s host then naming the `Host` header alone (`http://localhost`). Needs curl. |
+| `listen` | `127.0.0.1:8090` | The server's browser side: `host:port` or `unix:///path`. `--listen` overrides it. |
+| `publish_listen` | `127.0.0.1:8091` | The server's private side: `host:port` on loopback (anything else needs `--allow-remote-publish`), or `unix:///path`. Differs from `listen`. |
+| `socket_mode` | `0660` | Permissions of the unix sockets the server creates. |
+| `secret` | `null` | Required. The hub's own secret, 32 bytes or more (not `kernel.secret`): it signs the subscriber tokens and the publish requests. Never a container parameter. |
+| `previous_secret` | `null` | The secret being rotated out: the server still accepts what it signed. |
+| `cursor_events` | `true` | Pages send their pointer, caret and presence over their socket, which the hub validates, stamps and relays at once, rather than posting each to the application. Off, every event is checked against the page grant as on Mercure; see [Cursor events over the socket](./websocket-hub#cursor-events-over-the-socket). |
+| `allowed_origins` | `[]` | Origins the server accepts at the handshake, on top of the check of each token's origin; empty for that check alone. |
+| `trusted_proxies` | `[]` | Proxies (IPs, CIDRs or `PRIVATE_SUBNETS`) whose `X-Forwarded-For` names the client address the per-IP limits count. Unix socket peers are trusted. |
+| `ping_interval` | `25` (min 5) | Seconds between pings: keep it under the idle timeout of every proxy in front of the server. |
+| `max_connections` | `1000` (min 1) | Connections in all. Past 1000, the server needs `ext-ev` or `ext-event` (or `--force`): raise it once one is installed. |
+| `max_connections_per_ip` | `0` (min 0) | `0` for no limit; ignored, with a warning, when the server listens on a loopback address with no `trusted_proxies`. IPv6 clients count by their /64. |
+| `max_connections_per_user` | `50` (min 1) | Subscribed connections of one user. |
+| `max_pending` | `1000` (min 1) | Connections that have not subscribed yet. |
+| `max_message_size` | `16384` (min 1024) | Largest message a browser may send, bytes. |
+| `max_buffer` | `1048576` (min 65536) | Bytes queued for a slow client before it is dropped; it reconnects and catches up. |
+| `shutdown_timeout` | `10` (min 0) | Seconds the server waits for clients to close on `SIGTERM`. `--shutdown-timeout` overrides it. |
 
 ## `cursors`
 
@@ -257,7 +312,7 @@ The bell, the page of all notifications, their topics and web push
 | `icon` | `null` | URL of the icon of a system notification. |
 | `title` | `New notification` | Its title, a key of the `collaborate` domain. |
 | `payload` | `full` | `full`: the sentence, translated and encrypted; `none`: an empty push and a generic sentence. |
-| `skip_online` | `false` | Push nothing to a user whose page holds their stream, focused or not (the subscriptions API of the hub). Off, the service worker decides: in the page only while one has the focus. |
+| `skip_online` | `false` | Push nothing to a user whose page holds their stream, focused or not, as the hub says (Mercure's subscriptions API, or the WebSocket hub's own). Off, the service worker decides: in the page only while one has the focus. |
 | `endpoint_hosts` | FCM, Mozilla, Apple, WNS | Hosts (and their subdomains) a browser's push endpoint may be on: the server posts to every endpoint its users saved, so any other is refused. |
 | `service_worker` | `null` | URL of the host's own service worker, which `importScripts()` the bundle's. |
 

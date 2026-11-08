@@ -1,0 +1,57 @@
+# Upsun (.upsun/config.yaml): the hub is an application of its own, built from the same code, since a
+# route reaches an application's web process, not a worker. On Platform.sh, the same keys go in
+# .platform/applications.yaml and .platform/routes.yaml.
+# An untested sketch: check on your project that the route reaches the hub on a path, and that the
+# application reaches the hub's private port (8091) over the relationship.
+#
+#   collaborate:
+#       hub:
+#           transport: websocket
+#           websocket:
+#               public_url: /collaborate-hub
+#               publish_url: '%env(COLLABORATE_HUB_PUBLISH_URL)%'   # http://hub.internal:8091
+#               secret: '%env(COLLABORATE_HUB_SECRET)%'             # an environment variable of both apps
+#               trusted_proxies: [PRIVATE_SUBNETS]
+applications:
+  app:
+    source:
+      root: /
+    type: php:8.4
+    relationships:
+      hub: hub:http
+    variables:
+      env:
+        COLLABORATE_HUB_PUBLISH_URL: http://hub.internal:8091
+    web:
+      locations:
+        /:
+          root: public
+          passthru: /index.php
+    # build, deploy, mounts…: as the application has them.
+
+  hub:
+    source:
+      root: /
+    type: php:8.4
+    runtime:
+      extensions: [ev]
+    variables:
+      env:
+        COLLABORATE_HUB_PUBLISH_URL: http://hub.internal:8091
+    web:
+      upstream:
+        socket_family: tcp
+        protocol: http
+      commands:
+        # $PORT is the browser side, which the router reaches; 8091 is the private side, for the app.
+        start: php bin/console collaborate:hub:serve --listen=0.0.0.0:$PORT --publish-listen=0.0.0.0:8091 --allow-remote-publish
+    # One instance only: never scale the hub out.
+
+routes:
+  "https://{default}/":
+    type: upstream
+    upstream: app:http
+  # The longest matching path wins: the hub's path goes to the hub application, unchanged.
+  "https://{default}/collaborate-hub":
+    type: upstream
+    upstream: hub:http

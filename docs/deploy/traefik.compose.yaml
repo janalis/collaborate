@@ -1,0 +1,79 @@
+# Traefik (v3) in front of the application and of collaborate:hub:serve, configured by Docker labels.
+# Traefik forwards WebSocket upgrades, Host, Origin and X-Forwarded-Proto on its own: no middleware needed.
+#
+# Traefik must reach the hub's browser side over the web network, which would reach a TCP publish port
+# too: the application publishes through a unix socket on a volume the two containers share instead.
+#   collaborate:
+#       hub:
+#           transport: websocket
+#           websocket:
+#               public_url: '%env(COLLABORATE_HUB_PUBLIC_URL)%'
+#               publish_url: '%env(COLLABORATE_HUB_PUBLISH_URL)%'
+#               publish_socket: /run/collaborate/publish.sock
+#               publish_listen: unix:///run/collaborate/publish.sock
+#               secret: '%env(COLLABORATE_HUB_SECRET)%'
+#
+# The longer rule wins: Traefik ranks routers by rule length, so the hub's Host && Path rule is matched
+# before the application's Host rule.
+services:
+  traefik:
+    image: traefik:v3.5
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.websecure.address=:443
+    ports:
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [web]
+
+  app:
+    image: registry.example.com/admin:latest
+    env_file: .env.prod
+    environment:
+      COLLABORATE_HUB_PUBLIC_URL: /collaborate-hub
+      COLLABORATE_HUB_PUBLISH_URL: http://localhost
+    volumes:
+      - hub-run:/run/collaborate
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.app.rule=Host(`admin.example.com`)
+      - traefik.http.routers.app.entrypoints=websecure
+      - traefik.http.routers.app.tls=true
+      - traefik.http.services.app.loadbalancer.server.port=80
+    networks: [web]
+
+  hub:
+    # The application's own image: the server reads the application's configuration.
+    image: registry.example.com/admin:latest
+    command:
+      - php
+      - bin/console
+      - collaborate:hub:serve
+      - --listen=0.0.0.0:8090
+    env_file: .env.prod
+    environment:
+      COLLABORATE_HUB_PUBLIC_URL: /collaborate-hub
+      COLLABORATE_HUB_PUBLISH_URL: http://localhost
+    volumes:
+      - hub-run:/run/collaborate
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=web
+      - traefik.http.routers.collaborate-hub.rule=Host(`admin.example.com`) && Path(`/collaborate-hub`)
+      - traefik.http.routers.collaborate-hub.entrypoints=websecure
+      - traefik.http.routers.collaborate-hub.tls=true
+      - traefik.http.services.collaborate-hub.loadbalancer.server.port=8090
+    # Above shutdown_timeout (10 s): the server closes every socket with 1001 first.
+    stop_grace_period: 20s
+    restart: unless-stopped
+    # Not under ports: Traefik alone reaches 8090.
+    networks: [web]
+
+networks:
+  web: {}
+
+volumes:
+  # Both containers run as the same user (the image's): socket_mode 0660 lets the application in.
+  hub-run: {}

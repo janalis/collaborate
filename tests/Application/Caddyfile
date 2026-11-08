@@ -3,6 +3,8 @@
 # Ports: PLAIN_PORT (8710), EASYADMIN_PORT (8720), LIMITS_PORT (8730: the plain application in its
 # `e2e_limits` environment), HOST_PORT (8740), and the plain application with another stock form theme
 # (PlainKernel::FORM_THEMES): PLAIN_DIV_PORT (8750), PLAIN_TABLE_PORT (8760), PLAIN_TAILWIND_PORT (8770).
+# PLAIN_WS_PORT (8780) serves the plain application in its `e2e_ws` environment, without Mercure: its hub is
+# `collaborate:hub:serve`, on the unix sockets of COLLABORATE_HUB_RUN, proxied on the application's own origin.
 # Database: COLLABORATE_DATABASE_URL.
 {
 	auto_https off
@@ -40,6 +42,26 @@
 	}
 }
 
+# The recommended deployment of the WebSocket hub: the browser side on a path of the application's origin, over
+# a unix socket. /_hub/health reaches the private side's health check alone, for Playwright to wait on.
+(app_ws) {
+	bind 127.0.0.1
+	root * tests/Application/{args[0]}/public
+	encode zstd gzip
+	route {
+		reverse_proxy /collaborate-hub unix/{$COLLABORATE_HUB_RUN}/hub.sock
+		handle /_hub/health {
+			rewrite * /health
+			reverse_proxy unix/{$COLLABORATE_HUB_RUN}/publish.sock
+		}
+		php_server {
+			env APP_ENV {args[2]}
+			env COLLABORATE_DATABASE_URL "{$COLLABORATE_DATABASE_URL}"
+			env COLLABORATE_HUB_RUN "{$COLLABORATE_HUB_RUN}"
+		}
+	}
+}
+
 :{$PLAIN_PORT:8710} {
 	import app Plain {$PLAIN_PORT:8710} plain e2e
 }
@@ -66,4 +88,8 @@
 
 :{$PLAIN_TAILWIND_PORT:8770} {
 	import app Plain {$PLAIN_TAILWIND_PORT:8770} plain e2e_tailwind
+}
+
+:{$PLAIN_WS_PORT:8780} {
+	import app_ws Plain {$PLAIN_WS_PORT:8780} e2e_ws
 }

@@ -22,19 +22,20 @@ record a page edits ([Without EasyAdmin](./without-easyadmin)).
 
 ## How it works
 
-- **One Mercure stream per page.** A page holds a single subscription that
+- **One hub stream per page.** A page holds a single subscription that
   carries its cursor room, the drafts of its forms and the saved-view
-  notices. Each payload names its `channel`, since Mercure does not tell a
-  subscriber which topic an event came from, and a browser keeps only six
-  HTTP/1.1 connections per origin.
+  notices, over a [Mercure](https://mercure.rocks) hub or the bundle's own
+  [WebSocket server](./websocket-hub). Each payload names its `channel`,
+  since a subscriber is not told which topic an event came from, and a
+  browser keeps only six HTTP/1.1 connections per origin.
 - **Signed grants.** The layout renders a *page grant* (who the user is,
   which page, until when) and each shared form a *field grant* (which
   record, which fields, until when), both signed with the kernel secret and
   bound to a hash of what admits the user. The session endpoint mints a
-  short-lived subscriber JWT for exactly the topics those grants prove.
+  short-lived subscriber token for exactly the topics those grants prove.
 - **A journal in your database.** Draft content never travels through the
   hub. Every change is stored in three tables and read back over
-  authenticated, CSRF-protected requests; Mercure only says "something
+  authenticated, CSRF-protected requests; the hub only says "something
   changed". Writers of one draft serialize on a MariaDB/MySQL named lock, so
   a hub outage loses nothing that was committed.
 - **Operational transformation on the clients.** The server orders and
@@ -42,7 +43,7 @@ record a page edits ([Without EasyAdmin](./without-easyadmin)).
   transformations merge concurrent edits in every browser. Plain text fields
   use the same model, one paragraph long.
 - **No Node service.** Everything server-side is PHP: the controllers, the
-  journal and the purge command. The browser side is a set of native ES
+  journal, the purge command and, with the WebSocket transport, the hub. The browser side is a set of native ES
   modules served by AssetMapper.
 
 ## Requirements
@@ -53,8 +54,8 @@ record a page edits ([Without EasyAdmin](./without-easyadmin)).
 | Symfony | 7.4 or 8 (FrameworkBundle, SecurityBundle, TwigBundle, Form, CSRF protection, sessions) |
 | Doctrine | ORM 3, DBAL 4, DoctrineBundle 2.13 or 3 |
 | Database | MariaDB or MySQL 8: the journal uses `GET_LOCK`, `INSERT IGNORE`, `ON DUPLICATE KEY UPDATE` and `SELECT … FOR UPDATE` |
-| Mercure | `symfony/mercure-bundle` and a hub whose subscriber tokens the bundle signs with the hub's own token factory |
-| Front end | Symfony AssetMapper; `ckeditor5`, `@microsoft/fetch-event-source` and `bootstrap/js/src/modal.js` in the import map; Bootstrap 5's Sass sources for the styles |
+| Hub | Either `symfony/mercure-bundle` and a Mercure hub whose subscriber tokens the bundle signs with the hub's own token factory, or the bundle's WebSocket server: `react/http`, `react/socket`, `react/stream`, `ratchet/rfc6455`, `nyholm/psr7` and `symfony/http-client` ([WebSocket hub](./websocket-hub)) |
+| Front end | Symfony AssetMapper; `ckeditor5` and `bootstrap/js/src/modal.js` in the import map, and `@microsoft/fetch-event-source` with Mercure; Bootstrap 5's Sass sources for the styles |
 | Optional | `easycorp/easyadmin-bundle` 4.24+ or 5 (the adapter), `gedmo/doctrine-extensions` 3.13+ (per-locale draft fields for translatable properties) |
 
 The continuous integration runs PHP 8.4 and 8.5 with Symfony 7.4 and 8.1,

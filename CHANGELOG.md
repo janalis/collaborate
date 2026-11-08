@@ -5,6 +5,74 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **A WebSocket hub**, as an alternative to Mercure
+  ([guide](https://janalis.github.io/collaborate/guide/websocket-hub)):
+  `collaborate.hub.transport: websocket` and a server shipped in the
+  bundle, `bin/console collaborate:hub:serve` (ReactPHP: `react/http`,
+  `react/socket`, `react/stream`, `ratchet/rfc6455`,
+  `symfony/http-client`). Pages subscribe over one socket with a token
+  bound to their origin and topics; the server stops delivering when it
+  expires, and a renewal that loses a topic stops it at once. The
+  application publishes over a private side, every request signed. The
+  server handles `SIGTERM` gracefully with `ext-pcntl`, and past 1000
+  connections needs `ext-ev` or `ext-event`. Copy-ready proxy and process
+  files for nginx, Apache, Caddy, Traefik, HAProxy, systemd, Supervisor,
+  Docker Compose, Kubernetes, the Symfony CLI and Upsun are in
+  `docs/deploy/`.
+- On the WebSocket hub, pages send their pointer, caret and presence over
+  their socket: the hub validates each event as the controller does,
+  stamps it with the identity the token signed and relays it at once, with
+  no request to the application per move and no wait for one before the
+  next. `collaborate.hub.websocket.cursor_events: false` posts them to the
+  application instead, which checks each against the page grant.
+- `collaborate.hub.websocket`: `public_url`, `path`, `publish_url`,
+  `publish_socket`, `listen`, `publish_listen`, `socket_mode`, `secret`,
+  `previous_secret` (rotation), `allowed_origins`, `trusted_proxies`,
+  `cursor_events`,
+  `ping_interval`, the connection, message and buffer limits, and
+  `shutdown_timeout`.
+- The session endpoint's answer names the page's `transport` (`mercure`
+  or `websocket`), which picks the client `hub.js` loads, and
+  `cursorEvents`, whether the page sends its cursor events over it.
+- `Janalis\Collaborate\Cursor\CursorEvents`: the one shape of a cursor
+  notice, which `CursorController` and the WebSocket hub both publish.
+
+### Changed
+
+- `collaborate.hub.name` moves to `collaborate.hub.mercure.name`. The
+  former key still works and triggers a deprecation; setting both is an
+  error. The `collaborate.hub.name` parameter still holds the name.
+- `symfony/mercure` and `symfony/mercure-bundle` are optional (suggested):
+  only the Mercure transport, still the default, needs them. Without
+  MercureBundle registered, that transport fails at container compilation
+  with a message saying what to do. `@microsoft/fetch-event-source` is
+  loaded only on pages that stream from Mercure.
+- The `janalis_collaborate.hub` alias (the Mercure hub service) is gone:
+  the bundle publishes and subscribes through
+  `Janalis\Collaborate\Hub\Transport\HubTransportInterface`, and asks
+  who listens (`notifications.web_push.skip_online`) through
+  `PresenceProbeInterface`, both aliased to the configured transport.
+- `HubPublisher::defer()` takes a `Janalis\Collaborate\Hub\Notice` (one
+  or more topics and a JSON payload, always private) instead of a
+  `Symfony\Component\Mercure\Update`, and the deferred notices of a
+  request go to the transport in one call. A host decorating
+  `HubPublisher` builds `Notice`s.
+- Log messages and errors say "hub" where they said "Mercure".
+
+### Upgrading
+
+- On the Mercure transport, run `composer require symfony/mercure-bundle`
+  **before** updating the bundle: it is no longer required, so Composer
+  would remove it, and `config/bundles.php`, which still registers
+  `MercureBundle`, would fail.
+- Move `collaborate.hub.name` to `collaborate.hub.mercure.name`.
+- A decorator of the Mercure hub service (`mercure.hub.<name>` or
+  `janalis_collaborate.hub`) that the bundle published through decorates
+  `Janalis\Collaborate\Hub\Transport\HubTransportInterface` instead,
+  whose `publish()` receives the `Notice`s.
+
 ## [0.3.4] - 2026-11-07
 
 ### Fixed

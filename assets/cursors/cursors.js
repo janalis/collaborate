@@ -211,8 +211,15 @@ export function initCursors(
     const event = build(pendingHello || pending);
     if (pendingHello) pendingHello = null;
     else pending = null;
-    sending = true;
     lastSend = performance.now();
+    // On the hub's socket, once its session takes cursor events: sent at once, nothing to wait for. A hello
+    // that a socket lost afterwards needs no resending: the stream that opens again says hello itself. A state
+    // queued behind the hello follows it, behind the throttle.
+    if (hub?.send({ hub: 'cursor', event })) {
+      if (pending) flush();
+      return;
+    }
+    sending = true;
     const pauses = paused;
     let lost = false;
     try {
@@ -627,8 +634,8 @@ export function initCursors(
     if (!animation && !stopped) animation = requestAnimationFrame(draw);
   }
 
-  // The page's one Mercure stream carries the cursor topic while the page is visible; over HTTP/1.1 with
-  // `share_stream`, while the page holds its turn among the tabs of the browser.
+  // The page's one hub stream (Mercure or WebSocket) carries the cursor topic while the page is visible; over
+  // HTTP/1.1 with `share_stream`, while the page holds its turn among the tabs of the browser.
   function connect() {
     if (stopped || denied || leave || document.hidden || !navigator.onLine || !hub) return;
     const pauses = paused;

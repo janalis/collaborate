@@ -16,7 +16,10 @@ use Janalis\Collaborate\Doctrine\ChangeCollector;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\EasyAdmin\UpdatesSubscriber;
 use Janalis\Collaborate\Hub\HubPublisher;
+use Janalis\Collaborate\Hub\Notice;
 use Janalis\Collaborate\Hub\Topics;
+use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
+use Janalis\Collaborate\Hub\Transport\PublishFailedException;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Tag;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -37,6 +40,9 @@ use Symfony\Component\Mercure\Update;
 #[CoversClass(UpdatesSubscriber::class)]
 #[UsesClass(DraftAccess::class)]
 #[UsesClass(HubPublisher::class)]
+#[UsesClass(Notice::class)]
+#[UsesClass(MercureTransport::class)]
+#[UsesClass(PublishFailedException::class)]
 #[UsesClass(Topics::class)]
 final class UpdatesSubscriberTest extends TestCase
 {
@@ -126,7 +132,7 @@ final class UpdatesSubscriberTest extends TestCase
                     && ($payloads[$event->getTopics()[0]] ?? null) === $event->getData()
                 );
             }));
-        $publisher = new HubPublisher($hub, $this->createStub(LoggerInterface::class));
+        $publisher = new HubPublisher(new MercureTransport($hub), $this->createStub(LoggerInterface::class));
         $collector = $this->collector($requests);
         $collector->onFlush($this->flush(new Tag(), ['name' => ['old', 'new']]));
         // A second flush in the same request names its entities once.
@@ -172,7 +178,7 @@ final class UpdatesSubscriberTest extends TestCase
         $requests = new RequestStack();
         $hub = $this->createMock(HubInterface::class);
         $hub->expects($this->never())->method('publish');
-        $publisher = new HubPublisher($hub, $this->createStub(LoggerInterface::class));
+        $publisher = new HubPublisher(new MercureTransport($hub), $this->createStub(LoggerInterface::class));
         $collector = $this->collector($requests, ['ignored_fields' => ['lastLogin', 'updatedAt']]);
         $collector->onFlush($this->flush(new Tag()));
         $public = Request::create('/tags');
@@ -243,7 +249,7 @@ final class UpdatesSubscriberTest extends TestCase
             ->with(self::callback(
                 static fn(Update $event): bool => '{"channel":"updates","kind":"saved","entities":["Tag"]}' === $event->getData(),
             ));
-        $publisher = new HubPublisher($hub, $this->createStub(LoggerInterface::class));
+        $publisher = new HubPublisher(new MercureTransport($hub), $this->createStub(LoggerInterface::class));
         $this->collector($requests)->onFlush(new OnFlushEventArgs($em));
         $this->subscriber($publisher)->publish($this->response($request));
         $publisher->publish();
@@ -263,7 +269,7 @@ final class UpdatesSubscriberTest extends TestCase
             ->willThrowException(new \RuntimeException('offline'));
         $logger = $this->createMock(LoggerInterface::class);
         $logger->expects($this->once())->method('warning');
-        $publisher = new HubPublisher($hub, $logger);
+        $publisher = new HubPublisher(new MercureTransport($hub), $logger);
         $this->collector($requests, ['routes' => ['sort_entries']])->onFlush($this->flush(new Tag()));
         self::assertSame([Tag::class], $request->attributes->get('_collaborate_data_changed'));
         $this->subscriber($publisher)->publish($this->response($request));
@@ -280,7 +286,7 @@ final class UpdatesSubscriberTest extends TestCase
 
             return 'id';
         });
-        $publisher = new HubPublisher($hub, $this->createStub(LoggerInterface::class));
+        $publisher = new HubPublisher(new MercureTransport($hub), $this->createStub(LoggerInterface::class));
         $request = Request::create('/admin/tag/1/edit');
         $records = array_map(static fn(int $id): string => $access->draftId(Tag::class, (string) $id), range(1, 6));
         // A value that names no draft is skipped, wherever it stands.
@@ -311,7 +317,7 @@ final class UpdatesSubscriberTest extends TestCase
 
                 return 'id';
             });
-            $publisher = new HubPublisher($hub, $this->createStub(LoggerInterface::class));
+            $publisher = new HubPublisher(new MercureTransport($hub), $this->createStub(LoggerInterface::class));
             $request = Request::create('/admin/tag/1/edit');
             $request->attributes->set('_collaborate_records_changed', ['first', 'second']);
 
@@ -340,7 +346,7 @@ final class UpdatesSubscriberTest extends TestCase
 
                 return 'id';
             });
-            $publisher = new HubPublisher($hub, $this->createStub(LoggerInterface::class));
+            $publisher = new HubPublisher(new MercureTransport($hub), $this->createStub(LoggerInterface::class));
             $request = Request::create('/admin/tag/1/edit');
             $request->attributes->set('_collaborate_data_changed', [Tag::class]);
             $request->attributes->set('_collaborate_committed', $draft);
@@ -375,7 +381,7 @@ final class UpdatesSubscriberTest extends TestCase
 
             return 'id';
         });
-        $publisher = new HubPublisher($hub, $this->createStub(LoggerInterface::class));
+        $publisher = new HubPublisher(new MercureTransport($hub), $this->createStub(LoggerInterface::class));
         $subscriber = new UpdatesSubscriber($access, new Topics(), $publisher);
 
         // A response that fails announces nothing.

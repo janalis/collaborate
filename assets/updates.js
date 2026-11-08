@@ -184,9 +184,10 @@ export function initUpdates(
     }, 1000);
   }
 
-  // The page's one Mercure stream carries the saved-views topic. The hub keeps no history: a save published
-  // while the stream was lost is missed, so its return refreshes the page as if one concerned it. A stream
-  // that never opened lost nothing: the page's first opening refreshes nothing, however many attempts it took.
+  // The page's one hub stream (Mercure or WebSocket) carries the saved-views topic. The hub keeps no history:
+  // a save published while the stream was lost is missed, so its return refreshes the page as if one concerned
+  // it. A stream that never opened lost nothing: the page's first opening refreshes nothing, however many
+  // attempts it took.
   function connect() {
     let streamed = false;
     let lost = false;

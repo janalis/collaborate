@@ -11,6 +11,8 @@ use Janalis\Collaborate\Controller\CursorController;
 use Janalis\Collaborate\Controller\DraftController;
 use Janalis\Collaborate\Controller\HubController;
 use Janalis\Collaborate\Cursor\CursorEvent;
+use Janalis\Collaborate\Cursor\CursorEvents;
+use Janalis\Collaborate\Cursor\CursorIdentity;
 use Janalis\Collaborate\Cursor\CursorPosition;
 use Janalis\Collaborate\Cursor\PageGrant;
 use Janalis\Collaborate\DependencyInjection\Configuration;
@@ -39,8 +41,14 @@ use Janalis\Collaborate\Grant;
 use Janalis\Collaborate\Hub\Admission;
 use Janalis\Collaborate\Hub\HubGuard;
 use Janalis\Collaborate\Hub\HubPublisher;
+use Janalis\Collaborate\Hub\HubSession;
+use Janalis\Collaborate\Hub\HubSessions;
+use Janalis\Collaborate\Hub\Notice;
 use Janalis\Collaborate\Hub\RenewSubscriber;
 use Janalis\Collaborate\Hub\Topics;
+use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
+use Janalis\Collaborate\Hub\Transport\PublishFailedException;
+use Janalis\Collaborate\Hub\Transport\Subscription;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
 use Janalis\Collaborate\Tests\Application\Plain\PlainFormContext;
 use Janalis\Collaborate\Tests\Application\Plain\PlainKernel;
@@ -51,6 +59,7 @@ use Janalis\Collaborate\Tests\Application\Shared\Form\TagType;
 use Janalis\Collaborate\Tests\Fixtures\TestUserProvider;
 use Janalis\Collaborate\Twig\CollaborateExtension;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Form\Extension\Core\Type\CollectionType;
 use Symfony\Component\Form\FormFactoryInterface;
@@ -98,6 +107,14 @@ use Twig\Environment;
 #[CoversClass(Topics::class)]
 #[CoversClass(SecurityCollaboratorProvider::class)]
 #[CoversClass(CollaborateExtension::class)]
+#[UsesClass(Notice::class)]
+#[UsesClass(HubSessions::class)]
+#[UsesClass(CursorEvents::class)]
+#[UsesClass(CursorIdentity::class)]
+#[UsesClass(HubSession::class)]
+#[UsesClass(MercureTransport::class)]
+#[UsesClass(Subscription::class)]
+#[UsesClass(PublishFailedException::class)]
 final class PlainApplicationTest extends CollaborationTestCase
 {
     protected static function kernel(): string

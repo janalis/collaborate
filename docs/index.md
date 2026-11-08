@@ -4,7 +4,7 @@ layout: home
 hero:
   name: collaborate
   text: Live collaboration for Symfony admin pages
-  tagline: Shared form drafts, presence and cursors, and saved-view refresh, carried by one Mercure stream per page. PHP and your database on the server, no Node service.
+  tagline: Shared form drafts, presence and cursors, and saved-view refresh, carried by one stream per page, over Mercure or the bundle's own WebSocket server. PHP and your database on the server, no Node service.
   image:
     src: /logo.svg
     alt: collaborate, two pointers over a shared document
@@ -42,7 +42,7 @@ features:
     linkText: Saved-view refresh
   - icon: 🔐
     title: Signed and private
-    details: Signed page and field grants, CSRF-protected requests and private Mercure updates that carry invalidations, never content.
+    details: Signed page and field grants, CSRF-protected requests and private hub notices that carry invalidations, never content.
     link: /guide/operations
     linkText: Operations and security
   - icon: 🧩

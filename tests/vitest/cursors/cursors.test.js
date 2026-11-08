@@ -16,6 +16,9 @@ import { initCursors } from '../../../assets/cursors/cursors.js';
 import { CURSOR_SHAPES, shapeHotspot } from '../../../assets/cursors/geometry.js';
 import { CollaborateHub } from '../../../assets/hub.js';
 
+// The hub loads its transport's module on its first connection: loaded here, it is ready within a tick.
+beforeAll(() => import('../../../assets/hub/mercure.js'));
+
 let instance;
 let fetcher;
 let stream;
@@ -36,8 +39,11 @@ const event = (overrides = {}) => ({
   anchor,
   ...overrides,
 });
-const begin = (layer = document.querySelector('[data-collaborate-layer]')) =>
-  initCursors(layer, fetcher, new CollaborateHub(layer, fetcher, mocks.subscribe));
+let hub;
+const begin = (layer = document.querySelector('[data-collaborate-layer]')) => {
+  hub = new CollaborateHub(layer, fetcher);
+  return initCursors(layer, fetcher, hub);
+};
 const receive = (overrides) => instance.receive({ data: JSON.stringify(event(overrides)) });
 const flush = async () => {
   await vi.advanceTimersByTimeAsync(0);
@@ -239,6 +245,116 @@ test('throttles and coalesces movement and switches to a transient touch cursor'
   now = 600;
   await vi.advanceTimersByTimeAsync(400);
   expect(JSON.parse(fetcher.mock.calls.at(-1)[1].body).kind).toBe('hide');
+});
+
+describe('on the hub socket', () => {
+  let sent;
+  const posted = () => fetcher.mock.calls.filter(([url]) => url === '/events').map(([, init]) => JSON.parse(init.body));
+  const overSocket = () => sent.mock.calls.map(([message]) => message);
+
+  // The socket takes cursor events from the start: the opening hello goes on it too.
+  async function startOnSocket() {
+    instance = begin();
+    sent = vi.spyOn(hub, 'send').mockReturnValue(true);
+    await flush();
+  }
+
+  test('sends moves on the socket, without the grant, and posts nothing', async () => {
+    await startOnSocket();
+    now = 100;
+    pointer('pointermove');
+    expect(overSocket().map(({ hub, event }) => [hub, event.kind])).toEqual([
+      ['cursor', 'hello'],
+      ['cursor', 'move'],
+    ]);
+    expect(overSocket()[1].event).toMatchObject({
+      clientId: expect.any(String),
+      sequence: 2,
+      anchor: { selector: anchor.selector },
+    });
+    expect(overSocket()[1].event).not.toHaveProperty('grant');
+    expect(posted()).toEqual([]);
+  });
+
+  test('keeps the throttle and the crowd spacing, waiting on no answer', async () => {
+    await startOnSocket();
+    now = 100;
+    pointer('pointermove');
+    pointer('pointermove');
+    expect(overSocket()).toHaveLength(2);
+    now = 200;
+    await vi.advanceTimersByTimeAsync(100);
+    expect(overSocket()).toHaveLength(3);
+    // Nothing is pending on an answer: the next move past the throttle leaves at once.
+    now = 300;
+    pointer('pointermove');
+    expect(overSocket()).toHaveLength(4);
+    // Six peers: twice the throttle between two events.
+    for (let id = 2; id <= 7; id++)
+      receive({ userId: id, clientId: `client-${id}-1234567890`, kind: 'hello', anchor: null, timestamp: 1 });
+    now = 2000;
+    await vi.advanceTimersByTimeAsync(1000);
+    const times = [];
+    sent.mockImplementation(() => times.push(performance.now()) > 0);
+    for (let step = 0; step < 20; step++) {
+      now += 50;
+      pointer('pointermove');
+      await vi.advanceTimersByTimeAsync(50);
+    }
+    expect(times.length).toBeGreaterThan(2);
+    for (let index = 1; index < times.length; index++)
+      expect(times[index] - times[index - 1]).toBeGreaterThanOrEqual(200);
+    expect(posted()).toEqual([]);
+  });
+
+  test('sends a state queued behind the hello once the throttle allows', async () => {
+    await startOnSocket();
+    now = 100;
+    pointer('pointermove');
+    // Within the throttle: the move waits, and a stream opening again queues its hello beside it.
+    now = 150;
+    pointer('pointermove');
+    hub.reconnect();
+    await flush();
+    now = 200;
+    await vi.advanceTimersByTimeAsync(50);
+    now = 300;
+    await vi.advanceTimersByTimeAsync(100);
+    expect(overSocket().map(({ event }) => event.kind)).toEqual(['hello', 'move', 'hello', 'move']);
+    expect(posted()).toEqual([]);
+  });
+
+  test('posts what the socket cannot send', async () => {
+    await startOnSocket();
+    sent.mockReturnValue(false);
+    now = 100;
+    pointer('pointermove');
+    expect(posted().map((event) => event.kind)).toEqual(['move']);
+    expect(posted()[0].grant).toBe('grant');
+    sent.mockReturnValue(true);
+    now = 200;
+    pointer('pointermove');
+    await vi.advanceTimersByTimeAsync(100);
+    expect(posted()).toHaveLength(1);
+    expect(overSocket().at(-1).event.kind).toBe('move');
+  });
+
+  test('leaves over HTTP, which outlives the page', async () => {
+    await startOnSocket();
+    window.dispatchEvent(new Event('pagehide'));
+    expect(posted().map((event) => event.kind)).toEqual(['leave']);
+    expect(fetcher.mock.calls.at(-1)[1].keepalive).toBe(true);
+    expect(overSocket().map(({ event }) => event.kind)).toEqual(['hello']);
+  });
+});
+
+test('posts every event under Mercure, the hub sending none', async () => {
+  await start();
+  const sent = vi.spyOn(hub, 'send');
+  now = 100;
+  pointer('pointermove');
+  expect(sent).toHaveReturnedWith(false);
+  expect(JSON.parse(fetcher.mock.calls.at(-1)[1].body).kind).toBe('move');
 });
 
 test('posts movement with the grant and CSRF token the hub last renewed on the layer', async () => {
@@ -889,7 +1005,7 @@ test('throttles, beats, expires and colours as the layer configures', async () =
     maxAvatars: 1,
     colors: ['lime'],
   });
-  instance = initCursors(layer, fetcher, new CollaborateHub(layer, fetcher, mocks.subscribe));
+  instance = initCursors(layer, fetcher, new CollaborateHub(layer, fetcher));
   await flush();
   const events = () => fetcher.mock.calls.filter(([url]) => url === '/events').map(([, init]) => JSON.parse(init.body));
   expect(events().map((sent) => sent.kind)).toEqual(['hello']);

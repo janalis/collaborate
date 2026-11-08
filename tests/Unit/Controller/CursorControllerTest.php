@@ -6,6 +6,8 @@ namespace Janalis\Collaborate\Tests\Unit\Controller;
 
 use Janalis\Collaborate\Controller\CursorController;
 use Janalis\Collaborate\Cursor\CursorEvent;
+use Janalis\Collaborate\Cursor\CursorEvents;
+use Janalis\Collaborate\Cursor\CursorIdentity;
 use Janalis\Collaborate\Cursor\CursorPosition;
 use Janalis\Collaborate\Cursor\PageGrant;
 use Janalis\Collaborate\Draft\DraftAccess;
@@ -13,7 +15,10 @@ use Janalis\Collaborate\Grant;
 use Janalis\Collaborate\Hub\Admission;
 use Janalis\Collaborate\Hub\HubGuard;
 use Janalis\Collaborate\Hub\HubPublisher;
+use Janalis\Collaborate\Hub\Notice;
 use Janalis\Collaborate\Hub\Topics;
+use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
+use Janalis\Collaborate\Hub\Transport\PublishFailedException;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -29,11 +34,16 @@ use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
 use Symfony\Component\Security\Core\User\UserInterface;
 
 #[CoversClass(CursorController::class)]
+#[CoversClass(CursorEvents::class)]
+#[CoversClass(CursorIdentity::class)]
 #[UsesClass(CursorEvent::class)]
 #[UsesClass(CursorPosition::class)]
 #[UsesClass(HubGuard::class)]
 #[UsesClass(Admission::class)]
 #[UsesClass(HubPublisher::class)]
+#[UsesClass(Notice::class)]
+#[UsesClass(MercureTransport::class)]
+#[UsesClass(PublishFailedException::class)]
 #[UsesClass(DraftAccess::class)]
 #[UsesClass(PageGrant::class)]
 #[UsesClass(Topics::class)]
@@ -100,7 +110,7 @@ final class CursorControllerTest extends CursorTestCase
 
                 return 'id';
             });
-        $publisher = new HubPublisher($this->hub, $this->logger);
+        $publisher = new HubPublisher(new MercureTransport($this->hub), $this->logger);
         $controller = new CursorController($this->guard(), $this->collaborators, $publisher);
         $padding = 4096 - \strlen($this->request('/cursors/events', ['extra' => ''])->getContent());
         \assert($padding > 0);
@@ -182,9 +192,9 @@ final class CursorControllerTest extends CursorTestCase
             ->expects($this->exactly(2))
             ->method('publish')
             ->willThrowException(new \RuntimeException('unavailable'));
-        $this->logger->expects($this->exactly(2))->method('warning')->with('Cursor Mercure publication failed.');
+        $this->logger->expects($this->exactly(2))->method('warning')->with('Cursor hub publication failed.');
         $clock = new MockClock();
-        $publisher = new HubPublisher($this->hub, $this->logger, $clock, 5);
+        $publisher = new HubPublisher(new MercureTransport($this->hub), $this->logger, $clock, 5);
         self::assertSame(204, $this->handle(publisher: $publisher)->getStatusCode());
 
         $paused = $this->handle(publisher: $publisher);

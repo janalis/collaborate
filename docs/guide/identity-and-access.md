@@ -125,7 +125,7 @@ own.
 |---|---|---|---|
 | Page grant | `collaborate_layer()` | The user id, the page's cursor room (an HMAC of the route, its parameters and the query, without `_locale`, `_token` and `_switch_user`), the authorization hash | [`cursors.grant_ttl`](./configuration#cursors), 10 hours |
 | Field grant | the form, in its `data-collaborate` attribute | The user id, the draft, the record's class, `create` or `update`, every shared field and its schema, the authorization hash | [`drafts.grant_ttl`](./configuration#drafts), 10 hours |
-| Subscriber JWT | `POST <prefix>/cursors/session` | The topics the page grant and the verified field grants admit | [`hub.subscription_ttl`](./configuration#hub), 5 minutes |
+| Subscriber token | `POST <prefix>/cursors/session` | The topics the page grant and the verified field grants admit (a JWT with Mercure, an HMAC token with the [WebSocket hub](./websocket-hub#subscriber-tokens)) | [`hub.subscription_ttl`](./configuration#hub), 5 minutes |
 
 A grant is refused when its signature is wrong, it has expired, it names
 another user, or the user's `authorization()` hash has changed. Field
@@ -133,9 +133,10 @@ grants are also refused when `canEdit()` now says no.
 
 What happens then:
 
-- **Subscription.** The page asks for a new subscriber JWT every
+- **Subscription.** The page asks for a new subscriber token every
   [`hub.renew_interval`](./configuration#hub) (4 minutes). A field grant the
-  server refuses is left out of the subscription; the form's next draft
+  server refuses is left out of the subscription (the WebSocket hub stops
+  its topic at once; a Mercure stream keeps it until it is replaced); the form's next draft
   request meets the same refusal and renews the grant as described below.
 - **Page grant refused** (401, 403 or 404 on the session request: the grant
   expired, or a new session replaced the CSRF token). The page loads itself

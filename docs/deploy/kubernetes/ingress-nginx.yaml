@@ -1,0 +1,26 @@
+# Legacy: ingress-nginx, retired upstream; prefer the Gateway API (httproute.yaml). ingress-nginx forwards
+# WebSocket upgrades on its own; its timeouts default to 60 s, above ping_interval (25 s).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: admin-collaborate-hub
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [admin.example.com]
+      secretName: admin-example-com-tls
+  rules:
+    - host: admin.example.com
+      http:
+        paths:
+          # No rewrite-target: the path reaches the server unchanged.
+          - path: /collaborate-hub
+            pathType: Exact
+            backend:
+              service:
+                name: collaborate-hub
+                port:
+                  name: ws

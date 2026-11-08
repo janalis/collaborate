@@ -98,7 +98,7 @@ test.describe('the state bar', () => {
     const id = await article();
     const alice = await editor('alice');
     const bob = await editor('bob');
-    await alice.page.route('**/.well-known/mercure?**', (route) => route.abort());
+    const reachHub = await cutHub(alice.page);
     await alice.edit(id);
     await bob.edit(id);
     await expectState(alice, 'offline');
@@ -107,7 +107,7 @@ test.describe('the state bar', () => {
     await bob.control('title').fill('Heard without the hub');
     await expect(alice.control('title')).toHaveValue('Heard without the hub', { timeout: 20_000 });
 
-    await alice.page.unroute('**/.well-known/mercure?**');
+    await reachHub();
     await alice.control('summary').fill('Back on the hub');
     await expect(bob.control('summary')).toHaveValue('Back on the hub');
     await bob.control('summary').fill('Heard on the hub');
@@ -270,3 +270,20 @@ test.describe('the state bar', () => {
     await expectState(bob, 'conflict');
   });
 });
+
+/**
+ * Cuts a page off its hub, whichever the application runs: the Mercure stream fails, the WebSocket closes as
+ * soon as it opens. The returned function reconnects them to the real hub.
+ */
+async function cutHub(page) {
+  let cut = true;
+  await page.route('**/.well-known/mercure?**', (route) => (cut ? route.abort() : route.fallback()));
+  await page.routeWebSocket(/\/collaborate-hub$/, (socket) => {
+    if (cut) socket.close({ code: 1011, reason: 'cut' });
+    else socket.connectToServer();
+  });
+
+  return () => {
+    cut = false;
+  };
+}

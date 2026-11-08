@@ -1,0 +1,39 @@
+# /etc/systemd/system/collaborate-hub.service
+# systemctl daemon-reload && systemctl enable --now collaborate-hub
+# Restart it on every deployment: systemctl restart collaborate-hub
+#
+# With unix sockets (listen: unix:///run/collaborate/hub.sock, publish_listen:
+# unix:///run/collaborate/publish.sock), RuntimeDirectory creates /run/collaborate, owned by
+# User:Group, mode 0750: the web server's user (nginx, caddy) and PHP-FPM's need that group, and
+# socket_mode (0660) lets the group in. Debian's nginx and PHP-FPM run as www-data already.
+[Unit]
+Description=collaborate WebSocket hub
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/app
+Environment=APP_ENV=prod
+ExecStart=/usr/bin/php bin/console collaborate:hub:serve --no-interaction
+Restart=always
+RestartSec=2
+
+# SIGTERM: the server closes every socket with 1001 and stops within shutdown_timeout (10 s).
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+# One descriptor per connection: keep it well above max_connections.
+LimitNOFILE=65536
+
+RuntimeDirectory=collaborate
+RuntimeDirectoryMode=0750
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

@@ -5,40 +5,42 @@ declare(strict_types=1);
 namespace Janalis\Collaborate\Tests\Unit\Hub;
 
 use Janalis\Collaborate\Hub\HubPublisher;
+use Janalis\Collaborate\Hub\Notice;
+use Janalis\Collaborate\Hub\Transport\HubTransportInterface;
+use Janalis\Collaborate\Hub\Transport\PublishFailedException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Console\ConsoleEvents;
 use Symfony\Component\HttpKernel\KernelEvents;
-use Symfony\Component\Mercure\HubInterface;
-use Symfony\Component\Mercure\Update;
 use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
 use Symfony\Component\Messenger\Event\WorkerMessageHandledEvent;
 
 #[CoversClass(HubPublisher::class)]
+#[UsesClass(Notice::class)]
+#[UsesClass(PublishFailedException::class)]
 final class HubPublisherTest extends TestCase
 {
-    public function testPublishesDeferredUpdatesOnTerminateOnceAndLogsAFailure(): void
+    public function testPublishesDeferredNoticesTogetherOnTerminateOnceAndLogsTheOneThatFailed(): void
     {
-        $first = new Update('urn:a', '{}', true);
-        $second = new Update('urn:b', '{}', true);
+        $first = new Notice('urn:a', '{}');
+        $second = new Notice('urn:b', '{}');
+        $offline = new \RuntimeException('offline');
         $published = [];
-        $hub = $this->createMock(HubInterface::class);
-        $hub
-            ->expects($this->exactly(2))
+        $transport = $this->createMock(HubTransportInterface::class);
+        $transport
+            ->expects($this->once())
             ->method('publish')
-            ->willReturnCallback(static function (Update $update) use (&$published, $second): string {
-                $published[] = $update;
-                if ($update === $second) {
-                    throw new \RuntimeException('offline');
-                }
+            ->willReturnCallback(static function (array $notices) use (&$published, $offline): void {
+                $published[] = $notices;
 
-                return 'id';
+                throw new PublishFailedException(1, $offline);
             });
         $logger = $this->createMock(LoggerInterface::class);
-        $logger->expects($this->once())->method('warning')->with('second failed');
-        $publisher = new HubPublisher($hub, $logger);
+        $logger->expects($this->once())->method('warning')->with('second failed', ['exception' => $offline]);
+        $publisher = new HubPublisher($transport, $logger);
         self::assertSame(
             [
                 KernelEvents::TERMINATE => 'publish',
@@ -55,57 +57,54 @@ final class HubPublisherTest extends TestCase
         $publisher->publish();
         $publisher->publish();
 
-        self::assertSame([$first, $second], $published);
+        self::assertSame([[$first, $second]], $published);
     }
 
     public function testAFailurePausesPublishingAcrossRequestsUntilThePauseEnds(): void
     {
         $published = [];
-        $hub = $this->createMock(HubInterface::class);
-        $hub
+        $transport = $this->createMock(HubTransportInterface::class);
+        $transport
             ->expects($this->exactly(2))
             ->method('publish')
-            ->willReturnCallback(static function (Update $update) use (&$published): string {
-                $published[] = $update->getTopics()[0];
-                if ('urn:a' === $update->getTopics()[0]) {
-                    throw new \RuntimeException('offline');
+            ->willReturnCallback(static function (array $notices) use (&$published): void {
+                $topics = array_map(static fn(Notice $notice): string => $notice->topics[0], $notices);
+                $published = [...$published, ...$topics];
+                if ('urn:a' === $topics[0]) {
+                    throw new PublishFailedException(0, new \RuntimeException('offline'));
                 }
-
-                return 'id';
             });
         $clock = new MockClock();
-        $publisher = new HubPublisher($hub, $this->createStub(LoggerInterface::class), $clock, 3);
+        $publisher = new HubPublisher($transport, $this->createStub(LoggerInterface::class), $clock, 3);
         self::assertTrue($publisher->available());
 
-        $publisher->defer(new Update('urn:a', '{}', true), 'failed');
-        $publisher->defer(new Update('urn:skipped', '{}', true), 'failed');
+        $publisher->defer(new Notice('urn:a', '{}'), 'failed');
+        $publisher->defer(new Notice('urn:skipped', '{}'), 'failed');
         $publisher->publish();
         self::assertFalse($publisher->available());
         $publisher->reset();
         self::assertFalse($publisher->available());
-        $publisher->defer(new Update('urn:dropped', '{}', true), 'failed');
+        $publisher->defer(new Notice('urn:dropped', '{}'), 'failed');
         $publisher->publish();
 
         $clock->sleep(2.5);
         self::assertFalse($publisher->available());
         $clock->sleep(0.5);
         self::assertTrue($publisher->available());
-        $publisher->defer(new Update('urn:b', '{}', true), 'failed');
+        $publisher->defer(new Notice('urn:b', '{}'), 'failed');
         $publisher->publish();
+        self::assertTrue($publisher->available());
 
-        self::assertSame(['urn:a', 'urn:b'], $published);
+        self::assertSame(['urn:a', 'urn:skipped', 'urn:b'], $published);
     }
 
-    public function testAFailurePausesFiveSecondsByDefaultToTheMicrosecondAndLogsItsException(): void
+    public function testAFailurePausesFiveSecondsByDefaultToTheMicrosecond(): void
     {
-        $offline = new \RuntimeException('offline');
-        $hub = $this->createStub(HubInterface::class);
-        $hub->method('publish')->willThrowException($offline);
-        $logger = $this->createMock(LoggerInterface::class);
-        $logger->expects($this->once())->method('warning')->with('failed', ['exception' => $offline]);
+        $transport = $this->createStub(HubTransportInterface::class);
+        $transport->method('publish')->willThrowException(new PublishFailedException(0, new \RuntimeException('x')));
         $clock = new MockClock('2026-01-01 00:00:00.750000');
-        $publisher = new HubPublisher($hub, $logger, $clock);
-        $publisher->defer(new Update('urn:a', '{}', true), 'failed');
+        $publisher = new HubPublisher($transport, $this->createStub(LoggerInterface::class), $clock);
+        $publisher->defer(new Notice('urn:a', '{}'), 'failed');
         $publisher->publish();
 
         $clock->sleep(4.999_999);
@@ -114,12 +113,20 @@ final class HubPublisherTest extends TestCase
         self::assertTrue($publisher->available());
     }
 
-    public function testResetDropsUpdatesOfAnUnfinishedRequest(): void
+    public function testNothingDeferredPublishesNothing(): void
     {
-        $hub = $this->createMock(HubInterface::class);
-        $hub->expects($this->never())->method('publish');
-        $publisher = new HubPublisher($hub, $this->createStub(LoggerInterface::class));
-        $publisher->defer(new Update('urn:a', '{}', true), 'failed');
+        $transport = $this->createMock(HubTransportInterface::class);
+        $transport->expects($this->never())->method('publish');
+        $publisher = new HubPublisher($transport, $this->createStub(LoggerInterface::class));
+        $publisher->publish();
+    }
+
+    public function testResetDropsNoticesOfAnUnfinishedRequest(): void
+    {
+        $transport = $this->createMock(HubTransportInterface::class);
+        $transport->expects($this->never())->method('publish');
+        $publisher = new HubPublisher($transport, $this->createStub(LoggerInterface::class));
+        $publisher->defer(new Notice('urn:a', '{}'), 'failed');
         $publisher->reset();
         $publisher->publish();
     }

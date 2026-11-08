@@ -1,0 +1,114 @@
+# collaborate:hub:serve on Kubernetes: one pod, a Service for its two ports, and a NetworkPolicy that lets
+# only the application's pods publish.
+#
+# The application publishes to http://collaborate-hub:8091; the browser side is routed by httproute.yaml
+# (Gateway API) or, on a legacy cluster, ingress-nginx.yaml.
+#   collaborate:
+#       hub:
+#           transport: websocket
+#           websocket:
+#               public_url: '%env(COLLABORATE_HUB_PUBLIC_URL)%'     # /collaborate-hub
+#               publish_url: '%env(COLLABORATE_HUB_PUBLISH_URL)%'   # http://collaborate-hub:8091
+#               secret: '%env(COLLABORATE_HUB_SECRET)%'
+#               trusted_proxies: [PRIVATE_SUBNETS]                  # the gateway's pods
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: collaborate-hub
+  labels:
+    app.kubernetes.io/name: collaborate-hub
+spec:
+  # One process holds every connection: never more than one replica, and never two at once.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: collaborate-hub
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: collaborate-hub
+    spec:
+      # Above shutdown_timeout (10 s): on SIGTERM the server closes every socket with 1001 first.
+      terminationGracePeriodSeconds: 20
+      containers:
+        - name: hub
+          # The application's own image: the server reads the application's configuration.
+          image: registry.example.com/admin:latest
+          command: ["php", "bin/console", "collaborate:hub:serve"]
+          args:
+            - --listen=0.0.0.0:8090
+            - --publish-listen=0.0.0.0:8091
+            # 0.0.0.0 is no loopback address; the NetworkPolicy below keeps 8091 private.
+            - --allow-remote-publish
+          envFrom:
+            - configMapRef:
+                name: admin-env
+            - secretRef:
+                name: admin-secrets   # COLLABORATE_HUB_SECRET among them
+          ports:
+            - name: ws
+              containerPort: 8090
+            - name: publish
+              containerPort: 8091
+          # /health is on the private side, unauthenticated, and says nothing.
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: publish
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: publish
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              # About 45 KiB per connection: 10000 connections need about 480 MiB.
+              memory: 640Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: collaborate-hub
+spec:
+  selector:
+    app.kubernetes.io/name: collaborate-hub
+  ports:
+    - name: ws
+      port: 8090
+      targetPort: ws
+    - name: publish
+      port: 8091
+      targetPort: publish
+---
+# The browser side from the gateway's (or ingress controller's) namespace; the publish side from the
+# application's pods alone (ingress-nginx.yaml: the ingress-nginx namespace). Kubelet probes come from the node, which most network plugins let through.
+# kubernetes.io/metadata.name is set on every namespace (Kubernetes 1.22+): name your gateway's namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: collaborate-hub
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: collaborate-hub
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: gateway-system
+      ports:
+        - port: 8090
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: admin
+      ports:
+        - port: 8091

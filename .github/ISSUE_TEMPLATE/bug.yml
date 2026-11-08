@@ -13,9 +13,19 @@ body:
         - Saved-view refresh
         - EasyAdmin adapter
         - Integration without EasyAdmin
-        - Mercure hub, grants and tokens
+        - Hub (Mercure or WebSocket), grants and tokens
         - Installation and configuration
         - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: transport
+    attributes:
+      label: Hub transport
+      description: "`collaborate.hub.transport`"
+      options:
+        - mercure
+        - websocket
     validations:
       required: true
   - type: textarea
@@ -42,7 +52,7 @@ body:
     id: versions
     attributes:
       label: Versions
-      description: janalis/collaborate, PHP, Symfony, EasyAdmin (if used), CKEditor, database server, Mercure hub.
+      description: janalis/collaborate, PHP, Symfony, EasyAdmin (if used), CKEditor, database server, Mercure hub (with the Mercure transport) or event loop extension (with the WebSocket one), and the reverse proxy in front of the hub.
       placeholder: "collaborate 0.1.0, PHP 8.5, Symfony 8.1, EasyAdmin 5.0, CKEditor 48.2.0, MariaDB 11.4, FrankenPHP 1.x"
     validations:
       required: true

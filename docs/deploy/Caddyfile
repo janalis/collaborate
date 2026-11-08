@@ -1,0 +1,29 @@
+# Caddy or FrankenPHP serving the application, with the WebSocket hub instead of the Mercure module.
+# collaborate.hub.websocket:
+#   public_url:     /collaborate-hub
+#   listen:         unix:///run/collaborate/hub.sock
+#   publish_listen: unix:///run/collaborate/publish.sock
+#   publish_url:    http://localhost
+#   publish_socket: /run/collaborate/publish.sock
+#
+# Caddy forwards Upgrade, Host, Origin and X-Forwarded-Proto on its own, upgrades to the server over
+# HTTP/1.1, and offers WebSockets over HTTP/2 (RFC 8441) to browsers. Its user needs access to the sockets
+# (socket_mode 0660: the same group as the server's user).
+{
+	frankenphp
+}
+
+admin.example.com {
+	root * /var/www/app/public
+	encode zstd gzip
+
+	route {
+		reverse_proxy /collaborate-hub unix//run/collaborate/hub.sock {
+			# On a config reload, close the sockets 5 minutes later rather than at once.
+			stream_close_delay 5m
+		}
+		# FrankenPHP. With Caddy and PHP-FPM: php_fastcgi unix//run/php/php8.4-fpm.sock, then file_server,
+		# and no frankenphp global option.
+		php_server
+	}
+}

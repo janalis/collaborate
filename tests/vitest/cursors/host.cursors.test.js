@@ -6,6 +6,9 @@ import { configureGeometry } from '../../../assets/cursors/geometry.js';
 import { createPresence } from '../../../assets/cursors/presence.js';
 import { CollaborateHub } from '../../../assets/hub.js';
 
+// The hub loads its transport's module on its first connection: loaded here, it is ready within a tick.
+beforeAll(() => import('../../../assets/hub/mercure.js'));
+
 // A host's file listing: a listing of records keyed by `data-key`, a dialog holding a popup of a
 // record, presence as a menu, and every option on.
 const CONFIG = {
@@ -58,7 +61,7 @@ const begin = (config = CONFIG) => {
   return initCursors(
     layer(),
     fetcher,
-    new CollaborateHub(layer(), fetcher, mocks.subscribe),
+    new CollaborateHub(layer(), fetcher),
     createPresence(undefined, config.maxAvatars, config),
     turn
   );

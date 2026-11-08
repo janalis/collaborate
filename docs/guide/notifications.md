@@ -150,7 +150,8 @@ A message holds scalars alone, and is dated when it was sent. Its key makes
 handling it idempotent: a redelivered message writes no second row. Each
 browser to push to is a `SendWebPush` of its own, retried by Messenger. What
 a worker or a console command publishes is sent once its message or command
-is done; the hub must be reachable from the worker.
+is done; the hub (with the WebSocket hub, its `publish_url`) must be
+reachable from the worker.
 
 ## Web push
 
@@ -193,8 +194,9 @@ another window. The pages left open count it through the hub without
 saying it, so it is never shown twice. A click on a system notification
 marks it read and opens where it leads. `skip_online` (off) pushes nothing
 to a user whose page holds the stream of their notifications, focused or
-not, asking the subscriptions API of the hub (`subscriptions` on in the
-Mercure configuration).
+not, asking the hub: Mercure's subscriptions API (`subscriptions` on in
+the hub's configuration), or the WebSocket hub's own, which needs no
+setting.
 
 What a push says is the sentence of the notification, translated in the
 language of its reader (a

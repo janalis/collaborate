@@ -836,7 +836,7 @@ export class DraftSession {
     }
   }
 
-  /** Follows the draft's topic on the page's one Mercure stream; without it, the page replays every 5 s (`replayDisconnected`). */
+  /** Follows the draft's topic on the page's one hub stream; without it, the page replays every 5 s (`replayDisconnected`). */
   connect() {
     if (this.stopped || this.suspended || this.leaveHub || !this.hub) return;
     this.leaveHub = this.hub.join({

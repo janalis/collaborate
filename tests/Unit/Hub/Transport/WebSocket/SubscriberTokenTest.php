@@ -142,7 +142,7 @@ final class SubscriberTokenTest extends TestCase
     public function testRefusesToSignTopicsTooLongForTheHub(): void
     {
         $tokens = self::tokens();
-        // The longest topics that fit are signed, and verify.
+        // Topics that make the token exactly the longest are signed, and verify.
         $fits = null;
         for ($length = 5800; $length < 6300 && null === $fits; $length++) {
             try {
@@ -150,7 +150,7 @@ final class SubscriberTokenTest extends TestCase
             } catch (\LengthException) {
                 break;
             }
-            if ((SubscriberToken::MAX_LENGTH - 1) <= \strlen($token)) {
+            if (SubscriberToken::MAX_LENGTH === \strlen($token)) {
                 $fits = $token;
             }
         }

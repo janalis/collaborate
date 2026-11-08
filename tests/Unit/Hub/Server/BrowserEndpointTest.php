@@ -118,7 +118,11 @@ final class BrowserEndpointTest extends ServerTestCase
         $this->until(static fn(): bool => 3 === \count($client->messages));
 
         self::assertSame(
-            ['{"hub":"error","id":2,"code":4401}', '{"hub":"error","id":3,"code":4401}', '{"hub":"error","id":4,"code":4401}'],
+            [
+                '{"hub":"error","id":2,"code":4401}',
+                '{"hub":"error","id":3,"code":4401}',
+                '{"hub":"error","id":4,"code":4401}',
+            ],
             $client->messages,
         );
         self::assertSame(204, $this->publish([self::notice([self::A], '{"n":"a"}')]));

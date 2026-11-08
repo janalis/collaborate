@@ -150,7 +150,7 @@ final class SubscriberTokenTest extends TestCase
             } catch (\LengthException) {
                 break;
             }
-            if (SubscriberToken::MAX_LENGTH - 1 <= \strlen($token)) {
+            if ((SubscriberToken::MAX_LENGTH - 1) <= \strlen($token)) {
                 $fits = $token;
             }
         }

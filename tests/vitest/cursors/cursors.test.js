@@ -307,6 +307,23 @@ describe('on the hub socket', () => {
     expect(posted()).toEqual([]);
   });
 
+  test('sends a state queued behind the hello once the throttle allows', async () => {
+    await startOnSocket();
+    now = 100;
+    pointer('pointermove');
+    // Within the throttle: the move waits, and a stream opening again queues its hello beside it.
+    now = 150;
+    pointer('pointermove');
+    hub.reconnect();
+    await flush();
+    now = 200;
+    await vi.advanceTimersByTimeAsync(50);
+    now = 300;
+    await vi.advanceTimersByTimeAsync(100);
+    expect(overSocket().map(({ event }) => event.kind)).toEqual(['hello', 'move', 'hello', 'move']);
+    expect(posted()).toEqual([]);
+  });
+
   test('posts what the socket cannot send', async () => {
     await startOnSocket();
     sent.mockReturnValue(false);

@@ -213,8 +213,12 @@ export function initCursors(
     else pending = null;
     lastSend = performance.now();
     // On the hub's socket, once its session takes cursor events: sent at once, nothing to wait for. A hello
-    // that a socket lost afterwards needs no resending: the stream that opens again says hello itself.
-    if (hub?.send({ hub: 'cursor', event })) return;
+    // that a socket lost afterwards needs no resending: the stream that opens again says hello itself. A state
+    // queued behind the hello follows it, behind the throttle.
+    if (hub?.send({ hub: 'cursor', event })) {
+      if (pending) flush();
+      return;
+    }
     sending = true;
     const pauses = paused;
     let lost = false;

@@ -37,7 +37,10 @@ final readonly class SubscriberToken
     /**
      * A page in a cursor room with cursors on may send its cursor events over its socket: its room and who it is
      * there are claimed too (`cur`), so the hub stamps its events as the controller would. A claim that would
-     * make the token too long is left out: the page then sends its events over HTTP.
+     * make the token too long is left out: the page then sends its events over HTTP. Topics that make it too long
+     * on their own are refused: the hub would refuse that token, and the page would ask for another forever.
+     *
+     * @throws \LengthException when the topics alone make the token longer than the hub accepts
      *
      * @param non-empty-list<string> $topics
      */
@@ -73,7 +76,16 @@ final readonly class SubscriberToken
             }
         }
 
-        return $this->signed($claims);
+        $token = $this->signed($claims);
+        if (\strlen($token) > self::MAX_LENGTH) {
+            throw new \LengthException(\sprintf(
+                'The subscriber token for %d topics is longer than the %d bytes the hub accepts: lower collaborate.hub.max_drafts or shorten collaborate.hub.topic_prefix.',
+                \count($topics),
+                self::MAX_LENGTH,
+            ));
+        }
+
+        return $token;
     }
 
     /** Whether a token this hub just signed lets its page send cursor events over its socket. */

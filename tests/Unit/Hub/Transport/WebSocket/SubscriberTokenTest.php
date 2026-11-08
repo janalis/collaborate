@@ -139,6 +139,31 @@ final class SubscriberTokenTest extends TestCase
         self::assertTrue(SubscriberToken::claimsCursor($kept));
     }
 
+    public function testRefusesToSignTopicsTooLongForTheHub(): void
+    {
+        $tokens = self::tokens();
+        // The longest topics that fit are signed, and verify.
+        $fits = null;
+        for ($length = 5800; $length < 6300 && null === $fits; $length++) {
+            try {
+                $token = $tokens->sign(1, 'https://e.com', ['urn:c:' . str_repeat('t', $length)], self::NOW);
+            } catch (\LengthException) {
+                break;
+            }
+            if (SubscriberToken::MAX_LENGTH - 1 <= \strlen($token)) {
+                $fits = $token;
+            }
+        }
+        self::assertNotNull($fits);
+        self::assertNotNull($tokens->verify($fits, self::NOW));
+
+        $this->expectException(\LengthException::class);
+        $this->expectExceptionMessage(
+            'The subscriber token for 1 topics is longer than the 8192 bytes the hub accepts: lower collaborate.hub.max_drafts or shorten collaborate.hub.topic_prefix.',
+        );
+        $tokens->sign(1, 'https://e.com', ['urn:c:' . str_repeat('t', 6300)], self::NOW);
+    }
+
     public function testRefusesToSignForAnOriginThatIsNone(): void
     {
         $this->expectException(\InvalidArgumentException::class);

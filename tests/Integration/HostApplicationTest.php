@@ -9,6 +9,8 @@ use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Controller\CursorController;
 use Janalis\Collaborate\Controller\HubController;
 use Janalis\Collaborate\Cursor\CursorEvent;
+use Janalis\Collaborate\Cursor\CursorEvents;
+use Janalis\Collaborate\Cursor\CursorIdentity;
 use Janalis\Collaborate\Cursor\CursorPosition;
 use Janalis\Collaborate\Cursor\PageGrant;
 use Janalis\Collaborate\DependencyInjection\Configuration;
@@ -26,8 +28,14 @@ use Janalis\Collaborate\Grant;
 use Janalis\Collaborate\Hub\Admission;
 use Janalis\Collaborate\Hub\HubGuard;
 use Janalis\Collaborate\Hub\HubPublisher;
+use Janalis\Collaborate\Hub\HubSession;
+use Janalis\Collaborate\Hub\HubSessions;
+use Janalis\Collaborate\Hub\Notice;
 use Janalis\Collaborate\Hub\RenewSubscriber;
 use Janalis\Collaborate\Hub\Topics;
+use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
+use Janalis\Collaborate\Hub\Transport\PublishFailedException;
+use Janalis\Collaborate\Hub\Transport\Subscription;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
 use Janalis\Collaborate\Notification\NotificationAccess;
 use Janalis\Collaborate\Notification\NotificationCatalog;
@@ -86,6 +94,14 @@ use Symfony\Component\DomCrawler\Crawler;
 #[UsesClass(\Janalis\Collaborate\Notification\Notifier::class)]
 #[UsesClass(\Janalis\Collaborate\Notification\Preferences::class)]
 #[UsesClass(\Janalis\Collaborate\Notification\Push\PushEndpoints::class)]
+#[UsesClass(Notice::class)]
+#[UsesClass(HubSessions::class)]
+#[UsesClass(CursorEvents::class)]
+#[UsesClass(CursorIdentity::class)]
+#[UsesClass(HubSession::class)]
+#[UsesClass(MercureTransport::class)]
+#[UsesClass(Subscription::class)]
+#[UsesClass(PublishFailedException::class)]
 final class HostApplicationTest extends ApplicationTestCase
 {
     private const array EVENT = [

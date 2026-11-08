@@ -66,8 +66,9 @@ from a local `phpunit.xml` when you keep one.
   their `.js` extension, since browsers load the modules as they are.
 - The bundle's JavaScript ships as written: no bundler, no transpiler, no
   polyfills. Modules use only the bare imports the host's import map
-  provides (`ckeditor5`, `@microsoft/fetch-event-source`,
-  `bootstrap/js/src/modal.js`).
+  provides (`ckeditor5`, `bootstrap/js/src/modal.js`, and
+  `@microsoft/fetch-event-source`, which `hub/mercure.js` alone imports,
+  on demand, so a host on the WebSocket hub need not map it).
 
 ## Ground rules
 

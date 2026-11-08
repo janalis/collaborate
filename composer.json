@@ -1,11 +1,13 @@
 {
     "name": "janalis/collaborate",
-    "description": "Live collaboration for Symfony admin forms: shared drafts, presence and cursors over Mercure, with an EasyAdmin adapter.",
+    "description": "Live collaboration for Symfony admin forms: shared drafts, presence and cursors over Mercure or the bundled WebSocket server, with an EasyAdmin adapter.",
     "type": "symfony-bundle",
     "license": "MIT",
     "keywords": [
         "collaboration",
         "mercure",
+        "websocket",
+        "reactphp",
         "presence",
         "cursors",
         "ckeditor",
@@ -29,13 +31,12 @@
         "symfony/config": "^7.4 || ^8.0",
         "symfony/console": "^7.4 || ^8.0",
         "symfony/dependency-injection": "^7.4 || ^8.0",
+        "symfony/deprecation-contracts": "^3.5",
         "symfony/event-dispatcher": "^7.4 || ^8.0",
         "symfony/form": "^7.4 || ^8.0",
         "symfony/framework-bundle": "^7.4 || ^8.0",
         "symfony/http-foundation": "^7.4 || ^8.0",
         "symfony/http-kernel": "^7.4 || ^8.0",
-        "symfony/mercure": "^0.8 || ^0.9 || ^0.10",
-        "symfony/mercure-bundle": "^0.5 || ^0.6 || ^0.7",
         "symfony/property-access": "^7.4 || ^8.0",
         "symfony/rate-limiter": "^7.4 || ^8.0",
         "symfony/routing": "^7.4 || ^8.0",
@@ -52,19 +53,35 @@
         "minishlink/web-push": "^11.0",
         "nyholm/psr7": "^1.8",
         "phpunit/phpunit": "^12.5",
+        "ratchet/pawl": "^0.4.3",
+        "ratchet/rfc6455": "^0.4.1",
+        "react/event-loop": "^1.6",
+        "react/http": "^1.12",
+        "react/socket": "^1.17",
+        "react/stream": "^1.4",
         "symfony/asset-mapper": "^7.4 || ^8.0",
         "symfony/browser-kit": "^7.4 || ^8.0",
         "symfony/css-selector": "^7.4 || ^8.0",
+        "symfony/http-client": "^7.4 || ^8.0",
+        "symfony/mercure": "^0.8 || ^0.9 || ^0.10",
+        "symfony/mercure-bundle": "^0.5 || ^0.6 || ^0.7",
         "symfony/messenger": "^7.4 || ^8.0",
         "symfony/monolog-bundle": "^3.10 || ^4.0",
+        "symfony/process": "^7.4 || ^8.0",
         "symfony/translation": "^7.4 || ^8.0",
         "symfony/yaml": "^7.4 || ^8.0"
     },
     "suggest": {
         "easycorp/easyadmin-bundle": "Shared drafts on EasyAdmin edit and new forms, and live refresh of saved lists",
+        "ext-ev": "An event loop for collaborate:hub:serve beyond about 1000 connections (or ext-event, or ext-uv)",
+        "ext-pcntl": "Graceful shutdown of collaborate:hub:serve on SIGTERM (or ext-ev / ext-event)",
         "gedmo/doctrine-extensions": "Locale-specific draft fields for Gedmo translatable properties",
+        "minishlink/web-push": "^11.0 for web push (notifications.web_push), over Symfony's HTTP client and a PSR-17 implementation such as nyholm/psr7",
+        "ratchet/rfc6455": "^0.4.1, with react/http: the WebSocket hub server",
+        "react/http": "^1.12 with react/socket ^1.17, react/stream ^1.4 and ratchet/rfc6455 ^0.4.1: the WebSocket hub server (collaborate.hub.transport: websocket, bin/console collaborate:hub:serve)",
         "symfony/asset-mapper": "Serves the bundle's JavaScript and reads the pinned CKEditor version",
-        "minishlink/web-push": "^11.0 for web push (notifications.web_push), over Symfony's HTTP client and a PSR-17 implementation such as nyholm/psr7"
+        "symfony/http-client": "Required by the websocket hub transport (the application publishes over HTTP), and by Mercure's subscriptions API for notifications.web_push.skip_online",
+        "symfony/mercure-bundle": "Required by the mercure hub transport (collaborate.hub.transport: mercure, the default), with a Mercure hub"
     },
     "autoload": {
         "psr-4": {
@@ -98,6 +115,11 @@
         ]
     },
     "conflict": {
-        "minishlink/web-push": "<11.0"
+        "minishlink/web-push": "<11.0",
+        "ratchet/rfc6455": "<0.4.1",
+        "react/http": "<1.12",
+        "react/socket": "<1.17",
+        "symfony/mercure": "<0.8",
+        "symfony/mercure-bundle": "<0.5"
     }
 }

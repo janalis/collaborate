@@ -1,0 +1,59 @@
+# Docker Compose: the application (FrankenPHP, Caddy or nginx inside its image, serving the site) and
+# collaborate:hub:serve from the same image, on a network of their own that nothing else joins.
+#
+# The application's web server proxies /collaborate-hub to http://hub:8090 (see Caddyfile or nginx.conf,
+# with the upstream "hub:8090"), and publishes to http://hub:8091.
+#   collaborate:
+#       hub:
+#           transport: websocket
+#           websocket:
+#               public_url: '%env(COLLABORATE_HUB_PUBLIC_URL)%'
+#               publish_url: '%env(COLLABORATE_HUB_PUBLISH_URL)%'
+#               secret: '%env(COLLABORATE_HUB_SECRET)%'
+#               trusted_proxies: [PRIVATE_SUBNETS]   # the application's web server, for per-IP limits
+services:
+  app:
+    image: registry.example.com/admin:latest
+    env_file: .env.prod   # APP_ENV, APP_SECRET, DATABASE_URL, COLLABORATE_HUB_SECRET…
+    environment:
+      COLLABORATE_HUB_PUBLIC_URL: /collaborate-hub
+      COLLABORATE_HUB_PUBLISH_URL: http://hub:8091
+    ports:
+      - "80:80"
+      - "443:443"
+    networks: [default, hub]
+
+  hub:
+    # The application's own image and environment: the server reads the application's configuration.
+    image: registry.example.com/admin:latest
+    command:
+      - php
+      - bin/console
+      - collaborate:hub:serve
+      - --listen=0.0.0.0:8090
+      - --publish-listen=0.0.0.0:8091
+      # 0.0.0.0 is no loopback address: reachable on the hub network alone, below.
+      - --allow-remote-publish
+    env_file: .env.prod
+    environment:
+      COLLABORATE_HUB_PUBLIC_URL: /collaborate-hub
+      COLLABORATE_HUB_PUBLISH_URL: http://hub:8091
+    # Never under ports: neither the browser side (the application proxies it) nor, above all, 8091.
+    expose: ["8090", "8091"]
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(false === @file_get_contents('http://127.0.0.1:8091/health') ? 1 : 0);"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    # Above shutdown_timeout (10 s): the server closes every socket with 1001 first.
+    stop_grace_period: 20s
+    ulimits:
+      nofile: 65536
+    restart: unless-stopped
+    # One instance: never scale it.
+    networks: [hub]
+
+networks:
+  # No route out, and only the two services above on it.
+  hub:
+    internal: true

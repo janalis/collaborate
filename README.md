@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Live collaboration for Symfony admin pages.</strong><br>
-  Shared form drafts · presence and cursors · saved-view refresh · notifications · over Mercure, no Node service
+  Shared form drafts · presence and cursors · saved-view refresh · notifications · over Mercure or WebSockets, no Node service
 </p>
 
 <p align="center">
@@ -43,9 +43,11 @@ the same admin page at once:
 - **Notifications.** A bell on every page, topics each user subscribes to,
   Messenger delivery, and web push when no page of the application is open.
 
-It runs on PHP and a [Mercure](https://mercure.rocks) hub (FrankenPHP's
-built-in hub works). Draft content lives in MariaDB or MySQL; the hub only
-carries invalidations and presence, never form content. The bundle is a
+It runs on PHP and a hub: a [Mercure](https://mercure.rocks) hub
+(FrankenPHP's built-in hub works), or the WebSocket server the bundle ships
+(`bin/console collaborate:hub:serve`, on ReactPHP). Draft content lives in
+MariaDB or MySQL; the hub only carries invalidations and presence, never
+form content. The bundle is a
 framework-level core plus an EasyAdmin adapter: without EasyAdmin, a small
 form-context service is all a page needs.
 
@@ -56,7 +58,10 @@ composer require janalis/collaborate
 ```
 
 Requirements: PHP 8.4+, Symfony 7.4 or 8, Doctrine ORM 3 on MariaDB or
-MySQL 8, `symfony/mercure-bundle` and a Mercure hub, Symfony AssetMapper.
+MySQL 8, Symfony AssetMapper, and a hub: `symfony/mercure-bundle` and a
+Mercure hub, or the bundled
+[WebSocket server](https://janalis.github.io/collaborate/guide/websocket-hub)
+(`react/http`, `react/socket`, `react/stream`, `ratchet/rfc6455`).
 See [Installation](https://janalis.github.io/collaborate/guide/installation)
 for the routes, the tables, the purge cron and the hub.
 

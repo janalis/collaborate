@@ -7,6 +7,8 @@ namespace Janalis\Collaborate\Tests\Functional;
 use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Controller\CursorController;
 use Janalis\Collaborate\Controller\HubController;
+use Janalis\Collaborate\Cursor\CursorEvents;
+use Janalis\Collaborate\Cursor\CursorIdentity;
 use Janalis\Collaborate\Cursor\PageGrant;
 use Janalis\Collaborate\DependencyInjection\Configuration;
 use Janalis\Collaborate\Doctrine\ChangeCollector;
@@ -23,8 +25,14 @@ use Janalis\Collaborate\Grant;
 use Janalis\Collaborate\Hub\Admission;
 use Janalis\Collaborate\Hub\HubGuard;
 use Janalis\Collaborate\Hub\HubPublisher;
+use Janalis\Collaborate\Hub\HubSession;
+use Janalis\Collaborate\Hub\HubSessions;
+use Janalis\Collaborate\Hub\Notice;
 use Janalis\Collaborate\Hub\RenewSubscriber;
 use Janalis\Collaborate\Hub\Topics;
+use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
+use Janalis\Collaborate\Hub\Transport\PublishFailedException;
+use Janalis\Collaborate\Hub\Transport\Subscription;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
 use Janalis\Collaborate\Tests\Fixtures\Arrays;
 use Janalis\Collaborate\Tests\Fixtures\TestKernel;
@@ -61,6 +69,14 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 #[UsesClass(Topics::class)]
 #[UsesClass(SecurityCollaboratorProvider::class)]
 #[UsesClass(Admission::class)]
+#[UsesClass(Notice::class)]
+#[UsesClass(HubSessions::class)]
+#[UsesClass(CursorEvents::class)]
+#[UsesClass(CursorIdentity::class)]
+#[UsesClass(HubSession::class)]
+#[UsesClass(MercureTransport::class)]
+#[UsesClass(Subscription::class)]
+#[UsesClass(PublishFailedException::class)]
 final class MercureTokenTest extends CollaborateWebTestCase
 {
     public function testTheSessionTokenIsAnAccessTokenForTheHubCarryingItsConfiguredClaims(): void
@@ -69,6 +85,7 @@ final class MercureTokenTest extends CollaborateWebTestCase
         $client = $this->signIn();
         $data = $this->session($client, ['updates' => true]);
 
+        self::assertSame('mercure', $data['transport']);
         self::assertSame(TestKernel::HUB_URL, $data['url']);
         self::assertSame(15, $data['userId']);
         $topics = Arrays::at($data, 'topics');
@@ -100,7 +117,9 @@ final class MercureTokenTest extends CollaborateWebTestCase
 
     public function testTheSubscriptionLifetimeAndTopicPrefixAreConfigured(): void
     {
-        static::$collaborate = ['hub' => ['subscription_ttl' => 60, 'topic_prefix' => 'https://app.example.com/']];
+        static::$collaborate = [
+            'hub' => ['subscription_ttl' => 60, 'renew_interval' => 50, 'topic_prefix' => 'https://app.example.com/'],
+        ];
         $data = $this->session($this->signIn(), ['updates' => true]);
         self::assertIsArray($data['topics']);
         // Updates follow shared drafts, which are off.

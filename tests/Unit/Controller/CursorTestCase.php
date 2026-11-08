@@ -6,7 +6,9 @@ namespace Janalis\Collaborate\Tests\Unit\Controller;
 
 use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Controller\CursorController;
+use Janalis\Collaborate\Cursor\CursorEvents;
 use Janalis\Collaborate\Hub\HubPublisher;
+use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Mercure\HubInterface;
@@ -51,7 +53,11 @@ abstract class CursorTestCase extends HubTestCase
 
             return 'id';
         });
-        $response = $this->handle($overrides, publisher: new HubPublisher($hub, $this->logger), colors: $colors);
+        $response = $this->handle(
+            $overrides,
+            publisher: new HubPublisher(new MercureTransport($hub), $this->logger),
+            colors: $colors,
+        );
         self::assertSame(204, $response->getStatusCode());
 
         return $published;
@@ -68,7 +74,7 @@ abstract class CursorTestCase extends HubTestCase
         array $colors = CollaborateBundle::COLORS,
         int $maxEventBytes = 4096,
     ): Response {
-        $publisher ??= new HubPublisher($this->hub, $this->logger);
+        $publisher ??= new HubPublisher(new MercureTransport($this->hub), $this->logger);
         $controller = new CursorController(
             $this->guard(),
             $this->collaborators,
@@ -76,9 +82,7 @@ abstract class CursorTestCase extends HubTestCase
             $this->enabled,
             $colors,
             $maxEventBytes,
-            $this->regions,
-            $this->popups,
-            $this->caretRegions,
+            new CursorEvents($this->regions, $this->popups, $this->caretRegions),
         );
         $response = $controller($this->request('/cursors/events', $overrides));
         self::assertTrue(

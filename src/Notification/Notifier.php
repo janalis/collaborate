@@ -6,13 +6,13 @@ namespace Janalis\Collaborate\Notification;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Janalis\Collaborate\Hub\HubPublisher;
+use Janalis\Collaborate\Hub\Notice;
 use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Notification\Entity\Notification;
 use Janalis\Collaborate\Notification\Messenger\SendNotification;
 use Janalis\Collaborate\Notification\Push\PushDispatcher;
 use Psr\Clock\ClockInterface;
-use Symfony\Component\Mercure\Update;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 
@@ -116,10 +116,9 @@ final readonly class Notifier
     public function changed(int $recipient): void
     {
         $this->publisher->defer(
-            new Update(
+            new Notice(
                 $this->topics->notifications($recipient),
                 json_encode(['channel' => 'notifications'], \JSON_THROW_ON_ERROR),
-                true,
             ),
             'Collaborate could not tell the pages of a user of their notifications.',
         );

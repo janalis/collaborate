@@ -9,8 +9,10 @@ use Janalis\Collaborate\Cursor\PageGrant;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Hub\HubGuard;
 use Janalis\Collaborate\Hub\HubPublisher;
+use Janalis\Collaborate\Hub\HubSessions;
 use Janalis\Collaborate\Hub\RenewSubscriber;
 use Janalis\Collaborate\Hub\Topics;
+use Janalis\Collaborate\Hub\Transport\HubTransportInterface;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Twig\CollaborateExtension;
 
@@ -20,7 +22,7 @@ return static function (ContainerConfigurator $container): void {
     $services
         ->set(HubPublisher::class)
         ->args([
-            service('janalis_collaborate.hub'),
+            service(HubTransportInterface::class),
             service('logger'),
             service('clock'),
             param('collaborate.hub.publish_pause'),
@@ -41,17 +43,25 @@ return static function (ContainerConfigurator $container): void {
         service('janalis_collaborate.notifications.access')->nullOnInvalid(),
     ]);
 
+    $services->set(HubSessions::class)->args([
+        service(DraftAccess::class),
+        service(Topics::class),
+        param('collaborate.updates.enabled'),
+        param('collaborate.hub.max_drafts'),
+        service('janalis_collaborate.notifications.access')->nullOnInvalid(),
+        service(CollaboratorProviderInterface::class),
+        param('collaborate.cursors.enabled'),
+        param('collaborate.colors'),
+    ]);
+
+    // HubTransportInterface and PresenceProbeInterface are aliased by hub_mercure.php or hub_websocket.php.
     $services
         ->set(HubController::class)
         ->args([
             service(HubGuard::class),
             service(DraftAccess::class),
-            service(Topics::class),
-            service('janalis_collaborate.hub'),
-            param('collaborate.updates.enabled'),
-            param('collaborate.hub.max_drafts'),
-            param('collaborate.hub.subscription_ttl'),
-            service('janalis_collaborate.notifications.access')->nullOnInvalid(),
+            service(HubSessions::class),
+            service(HubTransportInterface::class),
         ])
         ->tag('controller.service_arguments');
 

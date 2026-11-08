@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Janalis\Collaborate\Tests\Integration;
 
+use Janalis\Collaborate\Hub\Notice;
 use Janalis\Collaborate\Tests\Application\Shared\Entity\Article;
-use Symfony\Component\Mercure\Update;
 
 /**
  * What both test applications share with the bundle, whatever their admin: the layer, the hub session,
@@ -124,9 +124,9 @@ abstract class CollaborationTestCase extends ApplicationTestCase
         ];
         $this->post((string) $layer['events'], $layer['csrf'], $event, 204);
 
-        $room = static fn(Update $update): string => (string) ($update->getTopics()[0] ?? '');
-        $cursors = array_values(array_filter($this->published(), static fn(Update $update): bool => str_starts_with(
-            $room($update),
+        $room = static fn(Notice $notice): string => $notice->topics[0];
+        $cursors = array_values(array_filter($this->published(), static fn(Notice $notice): bool => str_starts_with(
+            $room($notice),
             'urn:collaborate:cursors:',
         )));
         self::assertCount(1, $cursors);

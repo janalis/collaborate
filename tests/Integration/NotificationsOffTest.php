@@ -6,6 +6,12 @@ namespace Janalis\Collaborate\Tests\Integration;
 
 use Janalis\Collaborate\Controller\NotificationController;
 use Janalis\Collaborate\Controller\PushController;
+use Janalis\Collaborate\Hub\HubSession;
+use Janalis\Collaborate\Hub\HubSessions;
+use Janalis\Collaborate\Hub\Notice;
+use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
+use Janalis\Collaborate\Hub\Transport\PublishFailedException;
+use Janalis\Collaborate\Hub\Transport\Subscription;
 use Janalis\Collaborate\Notification\NotificationAccess;
 use Janalis\Collaborate\Tests\Application\Plain\PlainKernel;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -36,6 +42,12 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(\Janalis\Collaborate\DependencyInjection\Configuration::class)]
 #[UsesClass(\Janalis\Collaborate\Form\CollaborateFormExtension::class)]
 #[UsesClass(\Janalis\Collaborate\Notification\Push\PushEndpoints::class)]
+#[UsesClass(Notice::class)]
+#[UsesClass(HubSessions::class)]
+#[UsesClass(HubSession::class)]
+#[UsesClass(MercureTransport::class)]
+#[UsesClass(Subscription::class)]
+#[UsesClass(PublishFailedException::class)]
 final class NotificationsOffTest extends ApplicationTestCase
 {
     protected static function kernel(): string

@@ -1,0 +1,15 @@
+# Symfony CLI: copy to .symfony.local.yaml at the project's root. `symfony serve` then starts the hub with
+# the web server, and restarts it when the configuration or the code changes.
+#
+# The Symfony CLI's web server cannot proxy a path to another port, so the hub is reached on its own
+# port, which ws:// allows on localhost:
+#   # .env.local
+#   COLLABORATE_HUB_PUBLIC_URL=ws://127.0.0.1:8090/collaborate-hub
+#   COLLABORATE_HUB_PUBLISH_URL=http://127.0.0.1:8091
+# A page served over https://127.0.0.1:8000 opening ws:// is mixed content, which some browsers block
+# even on localhost: serve over HTTP (`symfony serve --no-tls`), or proxy the hub on the page's origin
+# with a web server of your own and a relative public_url.
+workers:
+  collaborate_hub:
+    cmd: ['symfony', 'console', 'collaborate:hub:serve']
+    watch: ['config', 'src', '.env', '.env.local']

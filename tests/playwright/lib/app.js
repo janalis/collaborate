@@ -1,7 +1,8 @@
 import { test as base, expect } from '@playwright/test';
 
 // The pages of each test application, by Playwright project name (`limits` is the plain application in
-// its `e2e_limits` environment, `plain-*` the plain application rendered by another stock form theme).
+// its `e2e_limits` environment, `plain-*` the plain application rendered by another stock form theme, and
+// `plain-ws` the plain application on the bundle's WebSocket hub).
 const plain = {
   form: 'article',
   index: '/admin/articles',
@@ -14,6 +15,7 @@ const routes = {
   'plain-div': plain,
   'plain-table': plain,
   'plain-tailwind': plain,
+  'plain-ws': plain,
   easyadmin: {
     form: 'Article',
     index: '/admin/article',

@@ -6,8 +6,9 @@ namespace Janalis\Collaborate\Tests\Application\Shared;
 
 use Doctrine\Bundle\DoctrineBundle\DoctrineBundle;
 use Janalis\Collaborate\CollaborateBundle;
+use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
 use Janalis\Collaborate\Tests\Application\Shared\Command\SetupCommand;
-use Janalis\Collaborate\Tests\Application\Shared\Hub\RecordingHub;
+use Janalis\Collaborate\Tests\Application\Shared\Hub\RecordingTransport;
 use Janalis\Collaborate\Tests\Application\Shared\Security\LoginAuthenticator;
 use Janalis\Collaborate\Tests\Application\Shared\Security\LoginController;
 use Janalis\Collaborate\Tests\Fixtures\TestUserProvider;
@@ -34,16 +35,20 @@ use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
  * are administrators, reader is not), Doctrine on the database {@see Database::url()} names, a Mercure hub
  * and the bundle with shared drafts, cursors and saved-view updates on.
  *
- * Environments: `test` (PHPUnit: mock sessions, a {@see RecordingHub}), `e2e` (FrankenPHP: file sessions,
+ * Environments: `test` (PHPUnit: mock sessions, a {@see RecordingTransport}), `e2e` (FrankenPHP: file sessions,
  * the hub the web server runs at `MERCURE_URL`, two avatars before the `+N` counter) and `e2e_limits` (`e2e`
  * with the smallest draft limits, {@see LIMITS}); the plain application also runs `e2e_div`, `e2e_table` and
- * `e2e_tailwind`, `e2e` rendered by another stock form theme ({@see \Janalis\Collaborate\Tests\Application\Plain\PlainKernel::FORM_THEMES}).
+ * `e2e_tailwind`, `e2e` rendered by another stock form theme ({@see \Janalis\Collaborate\Tests\Application\Plain\PlainKernel::FORM_THEMES}),
+ * and `e2e_ws`, `e2e` on the bundle's WebSocket hub ({@see WEBSOCKET}).
  */
 abstract class AppKernel extends Kernel
 {
     use MicroKernelTrait;
 
     public const string MERCURE_SECRET = '!ChangeThisMercureHubJWTSecretKey!';
+
+    /** The plain application's browser environment on the bundle's WebSocket hub, without Mercure. */
+    public const string WEBSOCKET = 'e2e_ws';
 
     /** The browser environment whose drafts reach their limits within one scenario, and compact as soon as they may. */
     public const string LIMITS = 'e2e_limits';
@@ -72,7 +77,10 @@ abstract class AppKernel extends Kernel
         yield new SecurityBundle();
         yield new TwigBundle();
         yield new DoctrineBundle();
-        yield new MercureBundle();
+        // Without Mercure, as an application on the bundle's own hub runs.
+        if (self::WEBSOCKET !== $this->environment) {
+            yield new MercureBundle();
+        }
         yield from $this->appBundles();
         yield new CollaborateBundle();
     }
@@ -105,6 +113,56 @@ abstract class AppKernel extends Kernel
         $token = Environment::get('TEST_TOKEN');
 
         return \dirname(__DIR__) . '/var/' . static::app() . (null === $token ? '' : '/t' . $token);
+    }
+
+    /** The `mercure` extension: the hub FrankenPHP runs at `MERCURE_URL`, read when the container runs. */
+    private function configureMercure(ContainerConfigurator $container): void
+    {
+        // Read when the container runs: the console that prepares an application builds the same cached container.
+        $container->parameters()->set('env(MERCURE_URL)', 'http://127.0.0.1/.well-known/mercure');
+        $container->parameters()->set('env(MERCURE_JWT_SECRET)', self::MERCURE_SECRET);
+        $hub = '%env(MERCURE_URL)%';
+        $container->extension('mercure', [
+            'hubs' => [
+                'default' => [
+                    'url' => $hub,
+                    'public_url' => $hub,
+                    'jwt' => [
+                        'secret' => '%env(MERCURE_JWT_SECRET)%',
+                        'publish' => ['*'],
+                        'claims' => [
+                            'iss' => 'collaborate-' . static::app(),
+                            'sub' => 'collaborate-' . static::app(),
+                            'client_id' => 'collaborate-' . static::app(),
+                            'aud' => $hub,
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+    }
+
+    /**
+     * The bundle's own hub, as the WebSocket guide recommends deploying it: the browser side on a path of the
+     * application's origin, proxied by the web server to a unix socket, and the private side on another.
+     *
+     * @return array<string, mixed>
+     */
+    private function websocketHub(): array
+    {
+        $run = Environment::get('COLLABORATE_HUB_RUN') ?? \dirname(__DIR__) . '/var/' . static::app() . '/run';
+
+        return [
+            'transport' => 'websocket',
+            'websocket' => [
+                'public_url' => '/collaborate-hub',
+                'listen' => 'unix://' . $run . '/hub.sock',
+                'publish_listen' => 'unix://' . $run . '/publish.sock',
+                'publish_url' => 'http://localhost',
+                'publish_socket' => $run . '/publish.sock',
+                'secret' => hash('sha256', 'collaborate-hub-' . static::app()),
+            ],
+        ];
     }
 
     private function configureContainer(ContainerConfigurator $container): void
@@ -175,28 +233,9 @@ abstract class AppKernel extends Kernel
                 ],
             ],
         ]);
-        // Read when the container runs: the console that prepares an application builds the same cached container.
-        $container->parameters()->set('env(MERCURE_URL)', 'http://127.0.0.1/.well-known/mercure');
-        $container->parameters()->set('env(MERCURE_JWT_SECRET)', self::MERCURE_SECRET);
-        $hub = '%env(MERCURE_URL)%';
-        $container->extension('mercure', [
-            'hubs' => [
-                'default' => [
-                    'url' => $hub,
-                    'public_url' => $hub,
-                    'jwt' => [
-                        'secret' => '%env(MERCURE_JWT_SECRET)%',
-                        'publish' => ['*'],
-                        'claims' => [
-                            'iss' => 'collaborate-' . static::app(),
-                            'sub' => 'collaborate-' . static::app(),
-                            'client_id' => 'collaborate-' . static::app(),
-                            'aud' => $hub,
-                        ],
-                    ],
-                ],
-            ],
-        ]);
+        if (self::WEBSOCKET !== $this->environment) {
+            $this->configureMercure($container);
+        }
         $container->extension('collaborate', [
             'drafts' =>
                 [
@@ -204,7 +243,9 @@ abstract class AppKernel extends Kernel
                     'rich_text' => ['block_prefixes' => ['rich_text'], 'ckeditor_version' => self::ckeditorVersion()],
                 ] + (self::LIMITS === $this->environment ? self::SMALL_LIMITS : []),
             'updates' => ['enabled' => true],
-        ] + ($test ? [] : ['cursors' => ['max_avatars' => 2]]));
+        ]
+        + ($test ? [] : ['cursors' => ['max_avatars' => 2]])
+        + (self::WEBSOCKET === $this->environment ? ['hub' => $this->websocketHub()] : []));
 
         $services = $container->services();
         $services->defaults()->autowire()->autoconfigure();
@@ -212,8 +253,8 @@ abstract class AppKernel extends Kernel
             // Nothing a test asserts on is logged; the hub records instead of publishing.
             $services->set('logger', NullLogger::class);
             $services
-                ->set(RecordingHub::class)
-                ->decorate('mercure.hub.default')
+                ->set(RecordingTransport::class)
+                ->decorate(MercureTransport::class)
                 ->args([service('.inner')])
                 ->public();
         } else {

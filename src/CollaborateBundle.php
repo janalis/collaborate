@@ -8,6 +8,7 @@ use EasyCorp\Bundle\EasyAdminBundle\EasyAdminBundle;
 use Gedmo\Translatable\Translatable;
 use Janalis\Collaborate\Access\DraftAccessCheckerInterface;
 use Janalis\Collaborate\DependencyInjection\Configuration;
+use Janalis\Collaborate\Hub\Transport\WebSocket\Keys;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Notification\NotificationAccess;
 use Symfony\Component\AssetMapper\AssetMapperInterface;
@@ -18,7 +19,8 @@ use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
 use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
- * Shared drafts, presence and cursors for admin pages, carried by one Mercure stream per page.
+ * Shared drafts, presence and cursors for admin pages, carried by one hub stream per page: a Mercure hub, or the
+ * bundle's own WebSocket server.
  *
  * Every option is exposed as a `collaborate.<path>` container parameter (e.g. `collaborate.drafts.max_fields`)
  * that the service definitions in `config/services/*.php` read.
@@ -42,6 +44,9 @@ final class CollaborateBundle extends AbstractBundle
         'gray',
         'gray-dark',
     ];
+
+    /** Named, not imported: symfony/mercure-bundle is optional. */
+    private const string MERCURE_BUNDLE = 'Symfony\\Bundle\\MercureBundle\\MercureBundle';
 
     /** Region name => root selector, EasyAdmin's layout. */
     public const array REGIONS = [
@@ -94,6 +99,14 @@ final class CollaborateBundle extends AbstractBundle
         // Notifications are told to whoever collaborates unless they name a role of their own.
         $notifications['role'] ??= $config['role'] ?? null;
         $config['notifications'] = $notifications;
+        // The secrets of the WebSocket hub are no parameters: `debug:container --parameters` would list them.
+        $hub = self::branch($config, 'hub');
+        $websocket = self::branch($hub, 'websocket');
+        $secrets = [$websocket['secret'] ?? null, $websocket['previous_secret'] ?? null];
+        $websocket['secret'] = null;
+        $websocket['previous_secret'] = null;
+        $hub['websocket'] = $websocket;
+        $config['hub'] = $hub;
 
         // A `%` the configuration holds reaches the extension escaped still (the `%name%` of a popup's sentence is
         // written `%%name%%`): the parameter resolves it once the container is compiled.
@@ -101,15 +114,14 @@ final class CollaborateBundle extends AbstractBundle
         foreach (array_keys($parameters) as $name) {
             $configurator->parameters()->set($name, $parameters[$name]);
         }
+        $mercure = self::string(self::branch($hub, 'mercure'), 'name');
+        // The name hosts read before 0.4.
+        $configurator->parameters()->set('collaborate.hub.name', $mercure);
 
         $configurator->import(__DIR__ . '/../config/services/core.php');
         $container->setAlias(CollaboratorProviderInterface::class, self::string($config, 'identity'));
         $container->setAlias(DraftAccessCheckerInterface::class, self::string($config, 'access'));
         $container->setAlias('janalis_collaborate.grant_cache', self::string($drafts, 'grant_cache'));
-        $container->setAlias(
-            'janalis_collaborate.hub',
-            'mercure.hub.' . self::string(self::branch($config, 'hub'), 'name'),
-        );
         $cursors = self::branch($config, 'cursors');
         if (\is_string($cursors['places'] ?? null) && '' !== $cursors['places']) {
             $container->setAlias('janalis_collaborate.places', $cursors['places']);
@@ -122,6 +134,20 @@ final class CollaborateBundle extends AbstractBundle
             $container->setAlias('janalis_collaborate.limiter.' . $name, $branch['rate_limiter']);
         }
         $configurator->import(__DIR__ . '/../config/services/hub.php');
+        // Registered, not only installed: EasyAdmin or MercureBundle may be a dependency of another package.
+        $bundles = $container->hasParameter('kernel.bundles') ? $container->getParameter('kernel.bundles') : null;
+        if ('websocket' === $hub['transport']) {
+            $configurator->import(__DIR__ . '/../config/services/hub_websocket.php');
+            $container->getDefinition(Keys::class)->setArguments($secrets);
+        } else {
+            if (\is_array($bundles) && !\in_array(self::MERCURE_BUNDLE, $bundles, true)) {
+                throw new \LogicException(
+                    'The mercure transport of collaborate.hub needs symfony/mercure-bundle: require and register it, or set collaborate.hub.transport to websocket.',
+                );
+            }
+            $container->setAlias('janalis_collaborate.mercure_hub', 'mercure.hub.' . $mercure);
+            $configurator->import(__DIR__ . '/../config/services/hub_mercure.php');
+        }
         // Always registered: the cursor events route answers 404 when cursors are disabled.
         $configurator->import(__DIR__ . '/../config/services/cursors.php');
         $configurator->import(__DIR__ . '/../config/services/drafts.php');
@@ -129,8 +155,6 @@ final class CollaborateBundle extends AbstractBundle
         if (true === $notifications['enabled']) {
             $this->loadNotifications($notifications, $configurator, $container);
         }
-        // Registered, not only installed: EasyAdmin may be a dependency of another package.
-        $bundles = $container->hasParameter('kernel.bundles') ? $container->getParameter('kernel.bundles') : [];
         if (\is_array($bundles) && \in_array(EasyAdminBundle::class, $bundles, true)) {
             $configurator->import(__DIR__ . '/../config/services/easyadmin.php');
         }

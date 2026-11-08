@@ -9,6 +9,8 @@ use Janalis\Collaborate\Controller\CursorController;
 use Janalis\Collaborate\Controller\HubController;
 use Janalis\Collaborate\Controller\NotificationController;
 use Janalis\Collaborate\Controller\PushController;
+use Janalis\Collaborate\Cursor\CursorEvents;
+use Janalis\Collaborate\Cursor\CursorIdentity;
 use Janalis\Collaborate\Cursor\PageGrant;
 use Janalis\Collaborate\DependencyInjection\Configuration;
 use Janalis\Collaborate\Doctrine\ChangeCollector;
@@ -22,8 +24,14 @@ use Janalis\Collaborate\Grant;
 use Janalis\Collaborate\Hub\Admission;
 use Janalis\Collaborate\Hub\HubGuard;
 use Janalis\Collaborate\Hub\HubPublisher;
+use Janalis\Collaborate\Hub\HubSession;
+use Janalis\Collaborate\Hub\HubSessions;
+use Janalis\Collaborate\Hub\Notice;
 use Janalis\Collaborate\Hub\RenewSubscriber;
 use Janalis\Collaborate\Hub\Topics;
+use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
+use Janalis\Collaborate\Hub\Transport\PublishFailedException;
+use Janalis\Collaborate\Hub\Transport\Subscription;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
 use Janalis\Collaborate\Notification\Entity\Notification;
 use Janalis\Collaborate\Notification\Entity\NotificationPreference;
@@ -41,6 +49,7 @@ use Janalis\Collaborate\Notification\Push\PushResult;
 use Janalis\Collaborate\Notification\Push\PushSubscriptions;
 use Janalis\Collaborate\Tests\Application\Host\HostStreamGuard;
 use Janalis\Collaborate\Tests\Application\Host\Push\HubSubscriptions;
+use Janalis\Collaborate\Tests\Application\Shared\Hub\RecordingTransport;
 use Janalis\Collaborate\Twig\CollaborateExtension;
 use Janalis\Collaborate\Twig\NotificationRuntime;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -88,6 +97,14 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(SecurityCollaboratorProvider::class)]
 #[UsesClass(\Janalis\Collaborate\Form\CollaborateFormExtension::class)]
 #[CoversClass(\Janalis\Collaborate\Notification\Push\PushEndpoints::class)]
+#[UsesClass(Notice::class)]
+#[UsesClass(HubSessions::class)]
+#[UsesClass(CursorEvents::class)]
+#[UsesClass(CursorIdentity::class)]
+#[UsesClass(HubSession::class)]
+#[UsesClass(MercureTransport::class)]
+#[UsesClass(Subscription::class)]
+#[UsesClass(PublishFailedException::class)]
 final class NotificationsApplicationTest extends NotificationsTestCase
 {
     public function testTheBellListsTheLatestNotificationsAndCountsTheUnreadOnes(): void
@@ -352,9 +369,9 @@ final class NotificationsApplicationTest extends NotificationsTestCase
             self::on($this->published(), 'urn:collaborate:notifications:15')[0] ?? null,
         );
         // Another user's notification is none of hers: nothing changes, and her pages are told so all the same.
-        $hub = static::getContainer()->get(\Janalis\Collaborate\Tests\Application\Shared\Hub\RecordingHub::class);
-        self::assertInstanceOf(\Janalis\Collaborate\Tests\Application\Shared\Hub\RecordingHub::class, $hub);
-        $hub->clear();
+        $transport = static::getContainer()->get(RecordingTransport::class);
+        self::assertInstanceOf(RecordingTransport::class, $transport);
+        $transport->clear();
         self::assertSame(['unread' => 1, 'total' => 2], $this->change('read', (string) $his->id));
         self::assertCount(1, self::on($this->published(), 'urn:collaborate:notifications:15'));
         self::assertTrue($this->rows(self::BOB)[0]->isUnread());

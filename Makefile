@@ -87,8 +87,10 @@ app-setup: ## Prepare the test applications for the browser: assets, EasyAdmin's
 	COLLABORATE_APP=plain APP_ENV=e2e_limits $(CONSOLE) app:setup
 	for env in e2e_div e2e_table e2e_tailwind; do COLLABORATE_APP=plain APP_ENV=$$env $(CONSOLE) app:setup || exit 1; done
 	COLLABORATE_APP=host APP_ENV=e2e $(CONSOLE) app:setup
+	mkdir -p tests/Application/var/plain/run && chmod 0750 tests/Application/var/plain/run
+	COLLABORATE_APP=plain APP_ENV=e2e_ws COLLABORATE_HUB_RUN=$(CURDIR)/tests/Application/var/plain/run $(CONSOLE) app:setup
 
-e2e: app-setup ## Run the Playwright scenarios against the three applications under FrankenPHP (ARGS="--project=plain …")
+e2e: app-setup ## Run the Playwright scenarios against the three applications under FrankenPHP and the WebSocket hub (ARGS="--project=plain …")
 	npx playwright test $(ARGS)
 
 verify: validate fmt-check lint analyze test lint-js test-js ## Everything CI checks, but the browser and mutation runs

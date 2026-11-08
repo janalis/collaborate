@@ -10,6 +10,7 @@ use Janalis\Collaborate\DependencyInjection\Configuration;
 use Janalis\Collaborate\Tests\Fixtures\Arrays;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\IgnoreDeprecations;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bundle\FrameworkBundle\DependencyInjection\FrameworkExtension;
 use Symfony\Bundle\TwigBundle\DependencyInjection\TwigExtension;
@@ -37,7 +38,30 @@ final class CollaborateBundleConfigurationTest extends TestCase
         self::assertSame(CollaborateBundle::COLORS, $config['colors']);
         self::assertSame(
             [
-                'name' => 'default',
+                'transport' => 'mercure',
+                'mercure' => ['name' => 'default'],
+                'websocket' => [
+                    'public_url' => null,
+                    'path' => null,
+                    'publish_url' => 'http://127.0.0.1:8091',
+                    'publish_socket' => null,
+                    'listen' => '127.0.0.1:8090',
+                    'publish_listen' => '127.0.0.1:8091',
+                    'socket_mode' => 0o660,
+                    'secret' => null,
+                    'previous_secret' => null,
+                    'allowed_origins' => [],
+                    'trusted_proxies' => [],
+                    'cursor_events' => true,
+                    'ping_interval' => 25,
+                    'max_connections' => 1000,
+                    'max_connections_per_ip' => 0,
+                    'max_connections_per_user' => 50,
+                    'max_pending' => 1000,
+                    'max_message_size' => 16_384,
+                    'max_buffer' => 1_048_576,
+                    'shutdown_timeout' => 10,
+                ],
                 'topic_prefix' => 'urn:collaborate:',
                 'subscription_ttl' => 300,
                 'renew_interval' => 240,
@@ -91,6 +115,98 @@ final class CollaborateBundleConfigurationTest extends TestCase
         self::assertNull($updates['enabled']);
         self::assertSame('#^/admin(?:/|$)#', $updates['path_pattern']);
         self::assertSame(['updatedAt'], $updates['ignored_fields']);
+    }
+
+    #[IgnoreDeprecations]
+    public function testTheHubNameOfBeforeIsTheMercureHubName(): void
+    {
+        $this->expectUserDeprecationMessage(
+            'Since janalis/collaborate 0.4: The "collaborate.hub.name" option is deprecated, use "collaborate.hub.mercure.name" instead.',
+        );
+        $hub = Arrays::at($this->process(['hub' => ['name' => 'collaboration', 'max_drafts' => 4]]), 'hub');
+        self::assertSame(['name' => 'collaboration'], $hub['mercure']);
+        self::assertArrayNotHasKey('name', $hub);
+        // The rest of the branch is kept.
+        self::assertSame(4, $hub['max_drafts']);
+    }
+
+    public function testTheMercureHubIsNamedOnce(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Set "collaborate.hub.mercure.name" alone, not "collaborate.hub.name" too.');
+        $this->process(['hub' => ['name' => 'old', 'mercure' => ['name' => 'new']]]);
+    }
+
+    public function testTheMercureHubNameIsNotEmpty(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->process(['hub' => ['mercure' => ['name' => '']]]);
+    }
+
+    public function testASubscriptionIsRenewedBeforeItExpires(): void
+    {
+        $hub = Arrays::at($this->process(['hub' => ['subscription_ttl' => 60, 'renew_interval' => 59]]), 'hub');
+        self::assertSame(59, $hub['renew_interval']);
+
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessage(
+            'collaborate.hub.renew_interval must be shorter than collaborate.hub.subscription_ttl.',
+        );
+        $this->process(['hub' => ['subscription_ttl' => 60, 'renew_interval' => 60]]);
+    }
+
+    public function testTheWebSocketTransportIsConfigured(): void
+    {
+        $websocket = Arrays::at(
+            $this->process([
+                'hub' => [
+                    'transport' => 'websocket',
+                    'websocket' => ['public_url' => '/hub', 'secret' => str_repeat('s', 32)],
+                ],
+            ]),
+            'hub',
+            'websocket',
+        );
+        self::assertSame('/hub', $websocket['public_url']);
+        // The mercure transport reads neither.
+        self::assertSame('mercure', Arrays::at($this->process(['hub' => ['websocket' => []]]), 'hub')['transport']);
+        self::assertSame(
+            'mercure',
+            Arrays::at($this->process(['hub' => ['transport' => 'mercure']]), 'hub')['transport'],
+        );
+    }
+
+    public function testTheSocketsModeIsAFileMode(): void
+    {
+        self::assertSame(0o777, self::at(
+            $this->process(self::option('hub.websocket.socket_mode', 0o777)),
+            'hub.websocket.socket_mode',
+        ));
+
+        $this->expectException(InvalidConfigurationException::class);
+        $this->process(self::option('hub.websocket.socket_mode', 0o1000));
+    }
+
+    /** @return iterable<string, array{array<string, mixed>, string}> */
+    public static function incompleteWebSockets(): iterable
+    {
+        yield 'no public url' => [
+            ['secret' => str_repeat('s', 32)],
+            'The websocket transport needs collaborate.hub.websocket.public_url.',
+        ];
+        yield 'no secret' => [
+            ['public_url' => '/hub'],
+            'The websocket transport needs collaborate.hub.websocket.secret, a dedicated secret of 32 bytes or more.',
+        ];
+    }
+
+    /** @param array<string, mixed> $websocket */
+    #[DataProvider('incompleteWebSockets')]
+    public function testTheWebSocketTransportNeedsAPublicUrlAndASecret(array $websocket, string $message): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessage($message);
+        $this->process(['hub' => ['transport' => 'websocket', 'websocket' => $websocket]]);
     }
 
     public function testAHostDescribesItsPages(): void
@@ -230,6 +346,7 @@ final class CollaborateBundleConfigurationTest extends TestCase
             'drafts' => ['enabled' => false],
             'updates' => ['enabled' => false],
             'notifications' => ['enabled' => false],
+            'hub' => ['mercure' => ['name' => 'default'], 'websocket' => []],
         ]);
     }
 
@@ -262,6 +379,15 @@ final class CollaborateBundleConfigurationTest extends TestCase
             'hub.renew_interval' => [240, 10],
             'hub.publish_pause' => [5, 0],
             'hub.max_drafts' => [8, 1],
+            'hub.websocket.socket_mode' => [0o660, 0o600],
+            'hub.websocket.ping_interval' => [25, 5],
+            'hub.websocket.max_connections' => [1000, 1],
+            'hub.websocket.max_connections_per_ip' => [0, 0],
+            'hub.websocket.max_connections_per_user' => [50, 1],
+            'hub.websocket.max_pending' => [1000, 1],
+            'hub.websocket.max_message_size' => [16_384, 1024],
+            'hub.websocket.max_buffer' => [1_048_576, 65_536],
+            'hub.websocket.shutdown_timeout' => [10, 0],
             'cursors.grant_ttl' => [36_000, 60],
             'cursors.throttle' => [100, 16],
             'cursors.heartbeat' => [5, 1],
@@ -299,10 +425,15 @@ final class CollaborateBundleConfigurationTest extends TestCase
     public function testEachIntegerOptionHasItsDefaultAndItsMinimum(string $path, int $default, int $minimum): void
     {
         self::assertSame($default, self::at($this->process([]), $path));
-        self::assertSame($minimum, self::at($this->process(self::option($path, $minimum)), $path));
+        // A subscription is renewed before it expires: the shortest one is renewed at the shortest interval.
+        $renewed = 'hub.subscription_ttl' === $path ? self::option('hub.renew_interval', 10) : [];
+        self::assertSame($minimum, self::at(
+            $this->process(array_replace_recursive($renewed, self::option($path, $minimum))),
+            $path,
+        ));
 
         $this->expectException(InvalidConfigurationException::class);
-        $this->process(self::option($path, $minimum - 1));
+        $this->process(array_replace_recursive($renewed, self::option($path, $minimum - 1)));
     }
 
     /** @return array<string, mixed> the configuration setting `$path` to `$value` */

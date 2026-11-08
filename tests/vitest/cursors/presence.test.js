@@ -28,6 +28,21 @@ test('keeps avatars on the page origin only', () => {
   expect(avatarUrl(3)).toBeNull();
 });
 
+test('a forged notice cannot point an avatar at a script, inline data or another origin', () => {
+  for (const [userId, avatar] of [
+    [1, 'javascript:alert(1)'],
+    [2, 'http://evil.example/a.jpg'],
+    [3, 'data:image/svg+xml,<svg onload="alert(1)"/>'],
+    [4, ' JaVaScRiPt:alert(1)'],
+  ])
+    presence.see(peer(userId, { avatar, label: `<img src=x onerror=alert(${userId})>` }));
+  expect(strip.querySelectorAll('img')).toHaveLength(0);
+  for (const item of strip.children) {
+    expect(item.textContent).toBe('<');
+    expect(item.getAttribute('aria-label')).toMatch(/^<img src=x/);
+  }
+});
+
 test('draws each user once, in a stable order, in every container', () => {
   presence.see(peer(7, { avatar: '/a/seven.jpg' }));
   presence.see(peer(3, { label: 'élise' }));

@@ -14,7 +14,7 @@ request answers 429 with `Retry-After: 1`. Request headers the bundle uses:
 fresh grant and tokens) and `X-Collaborate-Renew: 1` (a background reload
 for a fresh page grant, whose flash messages are kept).
 
-## Mercure topics
+## Hub topics
 
 All topics start with [`hub.topic_prefix`](./configuration#hub)
 (`urn:collaborate:`):
@@ -25,23 +25,35 @@ All topics start with [`hub.topic_prefix`](./configuration#hub)
 | `<prefix>draft:<id>` | Invalidations of one draft (`append`, `discard`, `reconcile`, `saved`, `record`). The id is a SHA-256 of the record's class and id, or of `new:<key>` for a new-record page. |
 | `<prefix>updates` | Saved-view notices: the short names of the entities a write can alter. |
 
-Every update is published **private**. Payloads hold ids, kinds and
+Every notice is published **private**: with Mercure, a private update;
+with the WebSocket hub, only to the sockets whose token names its topic.
+Payloads hold ids, kinds and
 revisions; the only user data they carry are cursor events' names, colors
 and avatar URLs. Draft content is only ever read over the authenticated
 draft endpoint.
 
-Give each application that shares a hub its own `topic_prefix`, and do not
-allow anonymous subscribers on the hub.
+Give each application that shares a Mercure hub its own `topic_prefix`,
+and do not allow anonymous subscribers on the hub. Run one
+[WebSocket hub](./websocket-hub#one-hub-per-application) per application,
+with its own secret.
 
 ## Subscriber tokens
 
-The session endpoint mints a subscriber JWT with the hub's own token
-factory, for the topics the page grant and the verified field grants admit,
-valid [`hub.subscription_ttl`](./configuration#hub) seconds (300). Pages
-renew it every `hub.renew_interval` seconds (240), keeping the open stream
-until its replacement is open, so no event is lost in between; an event both
-streams carry arrives twice, which every feature tolerates. A page carries
-at most [`hub.max_drafts`](./configuration#hub) field grants (8).
+The session endpoint mints a subscriber token for the topics the page
+grant and the verified field grants admit, valid
+[`hub.subscription_ttl`](./configuration#hub) seconds (300): a JWT signed
+with the Mercure hub's own token factory, or an HMAC token signed with the
+WebSocket hub's secret. Its answer names the `transport` the page connects
+with. Pages renew it every `hub.renew_interval` seconds (240). With
+Mercure, the page keeps the open stream until its replacement is open, so
+no event is lost in between; an event both streams carry arrives twice,
+which every feature tolerates. With the WebSocket hub, the page renews on
+the open socket, which replaces its topics at once. A page carries at most
+[`hub.max_drafts`](./configuration#hub) field grants (8).
+
+Mercure checks a token when a stream opens; the WebSocket hub stops
+delivery when it expires and at every renewal drops the topics the page
+lost. See [Revocation](./websocket-hub#revocation).
 
 Publications happen on `kernel.terminate`, after the response is sent and
 the session saved, so a slow hub never holds the session lock. A failed
@@ -97,6 +109,9 @@ MySQL: it uses named locks (`GET_LOCK`), `INSERT IGNORE`,
   [Schema compatibility](./shared-drafts#schema-compatibility).
 - **Logs.** Hub failures, oversize forms and failed checkpoints are logged
   on the `collaborate` Monolog channel.
+- **WebSocket hub.** Run `collaborate:hub:serve` as one supervised
+  process, restarted on every deployment, behind the application's proxy:
+  see [Deployment](./websocket-hub#deployment).
 
 ## Security notes
 
@@ -105,7 +120,9 @@ MySQL: it uses named locks (`GET_LOCK`), `INSERT IGNORE`,
   record or field.
 - Every draft request checks `DraftAccessCheckerInterface::canEdit()` again,
   and every request checks the role.
-- Avatar URLs from another origin are dropped by the browser code, and
-  labels are rendered as text.
+- Avatar URLs that are not on the page's own origin (another site, a
+  `javascript:` or `data:` URL) are dropped by the browser code, and labels
+  are rendered as text, so a forged notice can inject neither markup nor a
+  URL.
 - Field names in [`drafts.sensitive_fields`](./configuration#drafts), and
   password, hidden and file controls, never enter a draft or a cursor event.

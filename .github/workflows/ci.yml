@@ -47,7 +47,7 @@ jobs:
       - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: pdo_mysql, mbstring, intl
+          extensions: pdo_mysql, mbstring, intl, pcntl
           coverage: none
           tools: composer:v2, flex
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -86,7 +86,7 @@ jobs:
       - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
           php-version: '8.5'
-          extensions: pdo_mysql, mbstring, intl
+          extensions: pdo_mysql, mbstring, intl, pcntl
           coverage: pcov
           tools: composer:v2
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -173,7 +173,7 @@ jobs:
       - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
           php-version: '8.5'
-          extensions: pdo_mysql, mbstring, intl
+          extensions: pdo_mysql, mbstring, intl, pcntl
           coverage: pcov
           tools: composer:v2
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -208,7 +208,7 @@ jobs:
       - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
           php-version: '8.5'
-          extensions: pdo_mysql, mbstring, intl
+          extensions: pdo_mysql, mbstring, intl, pcntl
           coverage: none
           tools: composer:v2
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -217,7 +217,8 @@ jobs:
           cache: npm
       - run: composer install --no-interaction --prefer-dist
       - run: npm ci
-      # The static build embeds PHP (with pdo_mysql) and the Mercure hub module.
+      # The static build embeds PHP (with pdo_mysql) and the Mercure hub module. The plain application's
+      # `e2e_ws` environment runs without Mercure: Playwright starts collaborate:hub:serve on the runner's PHP.
       - name: Install FrankenPHP
         run: |
           sudo curl -fsSL -o "$FRANKENPHP" \

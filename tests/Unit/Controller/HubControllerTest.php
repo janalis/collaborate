@@ -11,7 +11,11 @@ use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Grant as AuthorizationGrant;
 use Janalis\Collaborate\Hub\Admission;
 use Janalis\Collaborate\Hub\HubGuard;
+use Janalis\Collaborate\Hub\HubSession;
+use Janalis\Collaborate\Hub\HubSessions;
 use Janalis\Collaborate\Hub\Topics;
+use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
+use Janalis\Collaborate\Hub\Transport\Subscription;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
 use Janalis\Collaborate\Tests\Fixtures\Arrays;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -26,6 +30,10 @@ use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
 
 #[CoversClass(HubController::class)]
+#[CoversClass(HubSessions::class)]
+#[UsesClass(HubSession::class)]
+#[UsesClass(MercureTransport::class)]
+#[UsesClass(Subscription::class)]
 #[UsesClass(HubGuard::class)]
 #[UsesClass(Admission::class)]
 #[UsesClass(DraftAccess::class)]
@@ -69,6 +77,8 @@ final class HubControllerTest extends HubTestCase
         $this->hub->expects($this->never())->method('publish');
         $response = $this->handle();
         $data = $this->decode($response);
+        self::assertSame('mercure', $data['transport']);
+        self::assertFalse($data['cursorEvents']);
         self::assertSame('/.well-known/mercure', $data['url']);
         self::assertSame('subscriber-jwt', $data['token']);
         self::assertSame(15, $data['userId']);
@@ -93,7 +103,12 @@ final class HubControllerTest extends HubTestCase
             }))
             ->willReturn('jwt');
         $this->hub->method('getFactory')->willReturn($factory);
-        $controller = new HubController($this->guard(), $this->drafts, new Topics(), $this->hub, true, 2, 60);
+        $controller = new HubController(
+            $this->guard(),
+            $this->drafts,
+            new HubSessions($this->drafts, new Topics(), true, 2),
+            new MercureTransport($this->hub, subscriptionTtl: 60),
+        );
         self::assertSame(
             200,
             $controller($this->request('/cursors/session', ['drafts' => ['a', 'b']]))->getStatusCode(),
@@ -114,7 +129,12 @@ final class HubControllerTest extends HubTestCase
                 return json_encode($grants[0] instanceof Grant ? $grants[0]->topics : null, \JSON_THROW_ON_ERROR);
             });
         $this->hub->method('getFactory')->willReturn($factory);
-        $controller = new HubController($this->guard(), $this->drafts, new Topics(), $this->hub);
+        $controller = new HubController(
+            $this->guard(),
+            $this->drafts,
+            new HubSessions($this->drafts, new Topics()),
+            new MercureTransport($this->hub),
+        );
 
         $before = time();
         $data = $this->decode($controller($this->request('/cursors/session', [
@@ -252,7 +272,12 @@ final class HubControllerTest extends HubTestCase
     /** @param array<string, mixed> $overrides */
     private function handle(array $overrides = []): Response
     {
-        $controller = new HubController($this->guard(), $this->drafts, new Topics(), $this->hub, $this->updates);
+        $controller = new HubController(
+            $this->guard(),
+            $this->drafts,
+            new HubSessions($this->drafts, new Topics(), $this->updates),
+            new MercureTransport($this->hub),
+        );
         $response = $controller($this->request('/cursors/session', $overrides));
         self::assertTrue(
             $this->session?->isStarted(),

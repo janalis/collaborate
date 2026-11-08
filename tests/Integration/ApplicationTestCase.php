@@ -6,17 +6,17 @@ namespace Janalis\Collaborate\Tests\Integration;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Janalis\Collaborate\Draft\DraftText;
+use Janalis\Collaborate\Hub\Notice;
 use Janalis\Collaborate\Tests\Application\Shared\AppKernel;
 use Janalis\Collaborate\Tests\Application\Shared\Database;
 use Janalis\Collaborate\Tests\Application\Shared\Entity\Article;
-use Janalis\Collaborate\Tests\Application\Shared\Hub\RecordingHub;
+use Janalis\Collaborate\Tests\Application\Shared\Hub\RecordingTransport;
 use Janalis\Collaborate\Tests\Fixtures\TestUserProvider;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\DomCrawler\Crawler;
-use Symfony\Component\Mercure\Update;
 
 /**
  * The bundle inside a test application (tests/Application), over HTTP: what a page renders, what its
@@ -72,31 +72,30 @@ abstract class ApplicationTestCase extends WebTestCase
     /**
      * What the last request published, once its response was sent.
      *
-     * @return list<Update>
+     * @return list<Notice>
      */
     protected function published(): array
     {
-        $hub = static::getContainer()->get(RecordingHub::class);
-        self::assertInstanceOf(RecordingHub::class, $hub);
+        $transport = static::getContainer()->get(RecordingTransport::class);
+        self::assertInstanceOf(RecordingTransport::class, $transport);
 
-        return $hub->published;
+        return $transport->published;
     }
 
     /**
-     * @param list<Update> $updates
+     * @param list<Notice> $notices
      *
-     * @return list<array<string, mixed>> the payloads of the updates on `$topic`
+     * @return list<array<string, mixed>> the payloads of the notices on `$topic`
      */
-    protected static function on(array $updates, string $topic): array
+    protected static function on(array $notices, string $topic): array
     {
         $payloads = [];
-        foreach ($updates as $update) {
-            if (!\in_array($topic, $update->getTopics(), true)) {
+        foreach ($notices as $notice) {
+            if (!\in_array($topic, $notice->topics, true)) {
                 continue;
             }
-            self::assertTrue($update->isPrivate());
             /** @var array<string, mixed> $payload */
-            $payload = json_decode($update->getData(), true, flags: \JSON_THROW_ON_ERROR);
+            $payload = json_decode($notice->data, true, flags: \JSON_THROW_ON_ERROR);
             $payloads[] = $payload;
         }
 

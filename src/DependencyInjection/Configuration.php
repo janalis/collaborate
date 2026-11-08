@@ -56,17 +56,189 @@ final class Configuration
             ->end()
             ->arrayNode('hub')
             ->addDefaultsIfNotSet()
+            ->beforeNormalization()
+            ->ifTrue(static fn(mixed $hub): bool => \is_array($hub) && \array_key_exists('name', $hub))
+            ->then(static function (array $hub): array {
+                if (\is_array($hub['mercure'] ?? null) && \array_key_exists('name', $hub['mercure'])) {
+                    throw new \InvalidArgumentException(
+                        'Set "collaborate.hub.mercure.name" alone, not "collaborate.hub.name" too.',
+                    );
+                }
+                trigger_deprecation(
+                    'janalis/collaborate',
+                    '0.4',
+                    'The "collaborate.hub.name" option is deprecated, use "collaborate.hub.mercure.name" instead.',
+                );
+                $hub['mercure'] =
+                    ['name' => $hub['name']] + (\is_array($hub['mercure'] ?? null) ? $hub['mercure'] : []);
+                unset($hub['name']);
+
+                return $hub;
+            })
+            ->end()
+            ->validate()
+            ->ifTrue(
+                /** @param array{renew_interval: int, subscription_ttl: int} $hub integer nodes, validated already */
+                static fn(array $hub): bool => $hub['renew_interval'] >= $hub['subscription_ttl'],
+            )
+            ->thenInvalid('collaborate.hub.renew_interval must be shorter than collaborate.hub.subscription_ttl.')
+            ->end()
+            ->validate()
+            ->ifTrue(
+                static fn(array $hub): bool => (
+                    'websocket' === ($hub['transport'] ?? null)
+                    && null === ($hub['websocket']['public_url'] ?? null)
+                ),
+            )
+            ->thenInvalid('The websocket transport needs collaborate.hub.websocket.public_url.')
+            ->end()
+            ->validate()
+            ->ifTrue(
+                static fn(array $hub): bool => (
+                    'websocket' === ($hub['transport'] ?? null)
+                    && null === ($hub['websocket']['secret'] ?? null)
+                ),
+            )
+            ->thenInvalid(
+                'The websocket transport needs collaborate.hub.websocket.secret, a dedicated secret of 32 bytes or more.',
+            )
+            ->end()
+            ->children()
+            ->enumNode('transport')
+            ->info(
+                'How notices reach the pages: a Mercure hub, or the bundle\'s WebSocket server (collaborate:hub:serve). Read when the container is compiled.',
+            )
+            ->values(['mercure', 'websocket'])
+            ->defaultValue('mercure')
+            ->end()
+            ->arrayNode('mercure')
+            ->addDefaultsIfNotSet()
             ->children()
             ->scalarNode('name')
             ->info('Mercure hub name (mercure.hubs.<name>).')
             ->defaultValue('default')
+            ->cannotBeEmpty()
+            ->end()
+            ->end()
+            ->end()
+            ->arrayNode('websocket')
+            ->addDefaultsIfNotSet()
+            ->children()
+            ->scalarNode('public_url')
+            ->info(
+                'Where browsers connect: a path on the application\'s origin behind its reverse proxy (recommended), or a ws:// or wss:// URL.',
+            )
+            ->defaultNull()
+            ->end()
+            ->scalarNode('path')
+            ->info('Path the server accepts upgrades on; null for the path of public_url.')
+            ->defaultNull()
+            ->end()
+            ->scalarNode('publish_url')
+            ->info('Where the application publishes, on the server\'s private side.')
+            ->defaultValue('http://127.0.0.1:8091')
+            ->end()
+            ->scalarNode('publish_socket')
+            ->info(
+                'Unix socket the application publishes through (curl), in place of publish_url\'s host; null for TCP.',
+            )
+            ->defaultNull()
+            ->end()
+            ->scalarNode('listen')
+            ->info('Browser-facing address of collaborate:hub:serve: host:port, or unix:///path.')
+            ->defaultValue('127.0.0.1:8090')
+            ->end()
+            ->scalarNode('publish_listen')
+            ->info(
+                'Private publishing address of collaborate:hub:serve: host:port (loopback unless --allow-remote-publish), or unix:///path.',
+            )
+            ->defaultValue('127.0.0.1:8091')
+            ->end()
+            ->integerNode('socket_mode')
+            ->info('Permissions of the unix sockets the server creates.')
+            ->defaultValue(0o660)
+            ->min(0o600)
+            ->max(0o777)
+            ->end()
+            ->scalarNode('secret')
+            ->info(
+                'Dedicated secret (32 bytes or more) the subscriber tokens and the publish requests are signed with.',
+            )
+            ->defaultNull()
+            ->end()
+            ->scalarNode('previous_secret')
+            ->info('The secret being rotated out: the server still accepts what it signed.')
+            ->defaultNull()
+            ->end()
+            ->arrayNode('allowed_origins')
+            ->info(
+                'Origins the server accepts at the handshake on top of the one each token names; empty for the token\'s alone.',
+            )
+            ->scalarPrototype()
+            ->end()
+            ->end()
+            ->arrayNode('trusted_proxies')
+            ->info(
+                'Proxies (IPs, CIDRs or PRIVATE_SUBNETS) whose forwarding headers name the client address the limits count.',
+            )
+            ->scalarPrototype()
+            ->end()
+            ->end()
+            ->booleanNode('cursor_events')
+            ->info(
+                'Pages send their pointer, caret and presence over their socket, which the server stamps and relays at once, in place of a request to the application each. Off, they post them to the application, which checks each against the page grant.',
+            )
+            ->defaultTrue()
+            ->end()
+            ->integerNode('ping_interval')
+            ->info('Seconds between pings: under the idle timeout of every proxy in front of the server.')
+            ->defaultValue(25)
+            ->min(5)
+            ->end()
+            ->integerNode('max_connections')
+            ->info(
+                'Connections in all. Past 1000, the server needs ext-ev or ext-event: stream_select() handles no more.',
+            )
+            ->defaultValue(1000)
+            ->min(1)
+            ->end()
+            ->integerNode('max_connections_per_ip')
+            ->info('0 for no limit; ignored when every client comes through one untrusted proxy.')
+            ->defaultValue(0)
+            ->min(0)
+            ->end()
+            ->integerNode('max_connections_per_user')
+            ->defaultValue(50)
+            ->min(1)
+            ->end()
+            ->integerNode('max_pending')
+            ->info('Connections that have not subscribed yet.')
+            ->defaultValue(1000)
+            ->min(1)
+            ->end()
+            ->integerNode('max_message_size')
+            ->info('Largest message a browser may send, bytes.')
+            ->defaultValue(16_384)
+            ->min(1024)
+            ->end()
+            ->integerNode('max_buffer')
+            ->info('Bytes queued for a slow client before it is dropped (it catches up when it reconnects).')
+            ->defaultValue(1_048_576)
+            ->min(65_536)
+            ->end()
+            ->integerNode('shutdown_timeout')
+            ->info('Seconds the server waits for clients to close on SIGTERM.')
+            ->defaultValue(10)
+            ->min(0)
+            ->end()
+            ->end()
             ->end()
             ->scalarNode('topic_prefix')
             ->info('Prefix of every topic: <prefix>cursors:<room>, <prefix>draft:<id>, <prefix>updates.')
             ->defaultValue('urn:collaborate:')
             ->end()
             ->integerNode('subscription_ttl')
-            ->info('Subscriber JWT lifetime, seconds.')
+            ->info('Subscriber token lifetime, seconds.')
             ->defaultValue(300)
             ->min(30)
             ->end()

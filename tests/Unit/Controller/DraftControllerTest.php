@@ -10,7 +10,10 @@ use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Grant;
 use Janalis\Collaborate\Hub\HubPublisher;
+use Janalis\Collaborate\Hub\Notice;
 use Janalis\Collaborate\Hub\Topics;
+use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
+use Janalis\Collaborate\Hub\Transport\PublishFailedException;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
 use Janalis\Collaborate\Tests\Fixtures\TestUser;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
@@ -39,6 +42,9 @@ use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 #[UsesClass(DraftAccess::class)]
 #[UsesClass(Grant::class)]
 #[UsesClass(HubPublisher::class)]
+#[UsesClass(Notice::class)]
+#[UsesClass(MercureTransport::class)]
+#[UsesClass(PublishFailedException::class)]
 #[UsesClass(Topics::class)]
 #[UsesClass(SecurityCollaboratorProvider::class)]
 #[AllowMockObjectsWithoutExpectations]
@@ -93,7 +99,7 @@ final class DraftControllerTest extends TestCase
     /** @param array<string, mixed> $body */
     private function handle(string $action, array $body = [], bool $terminate = true, ?string $csrf = 'csrf'): Response
     {
-        $publisher = new HubPublisher($this->hub, $this->logger);
+        $publisher = new HubPublisher(new MercureTransport($this->hub), $this->logger);
         $security = $this->createStub(Security::class);
         $security->method('getUser')->willReturnCallback(fn(): ?UserInterface => $this->signedIn);
         $security

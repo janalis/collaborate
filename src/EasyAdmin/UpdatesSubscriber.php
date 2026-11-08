@@ -6,12 +6,12 @@ namespace Janalis\Collaborate\EasyAdmin;
 
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Hub\HubPublisher;
+use Janalis\Collaborate\Hub\Notice;
 use Janalis\Collaborate\Hub\Topics;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
-use Symfony\Component\Mercure\Update;
 
 /**
  * Announces a successful admin write, as the Doctrine change collector recorded it, once its response
@@ -53,30 +53,28 @@ final readonly class UpdatesSubscriber implements EventSubscriberInterface
             )), $this->strings($request->attributes->all('_collaborate_data_changed'))));
             // sort() lists them again.
             sort($entities);
-            $updates[] = new Update(
+            $updates[] = new Notice(
                 $this->topics->updates(),
                 json_encode(['channel' => 'updates', 'kind' => 'saved', 'entities' => $entities], \JSON_THROW_ON_ERROR),
-                true,
             );
         }
         if ($this->drafts) {
             $updates = [...$updates, ...$this->drafts($request)];
         }
         foreach ($updates as $update) {
-            $this->publisher->defer($update, 'Collaborate updates Mercure publication failed.');
+            $this->publisher->defer($update, 'Collaborate updates hub publication failed.');
         }
     }
 
-    /** @return list<Update> */
+    /** @return list<Notice> */
     private function drafts(Request $request): array
     {
         $updates = [];
         $draft = self::stringOrNull($request->attributes->get('_collaborate_committed'));
         if (null !== $draft) {
-            $updates[] = new Update(
+            $updates[] = new Notice(
                 $this->access->topic($draft),
                 json_encode(['channel' => 'draft', 'draft' => $draft, 'kind' => 'saved'], \JSON_THROW_ON_ERROR),
-                true,
             );
         }
         // Edit pages of the other changed records compare their form with the saved record again;
@@ -88,10 +86,9 @@ final readonly class UpdatesSubscriber implements EventSubscriberInterface
         // array_chunk() lists each chunk again.
         foreach (array_chunk($records, max(1, $this->chunk)) as $chunk) {
             // One notice names several drafts: it carries none, and every draft session of the page compares again.
-            $updates[] = new Update(
+            $updates[] = new Notice(
                 array_map($this->access->topic(...), $chunk),
                 '{"channel":"draft","kind":"record"}',
-                true,
             );
         }
 

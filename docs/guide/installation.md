@@ -48,7 +48,7 @@ This adds three `POST` routes:
 
 | Route | Path | Purpose |
 |---|---|---|
-| `collaborate_session` | `<prefix>/cursors/session` | The page's subscriber JWT and its topics. |
+| `collaborate_session` | `<prefix>/cursors/session` | The page's subscriber token and its topics. |
 | `collaborate_cursor_events` | `<prefix>/cursors/events` | Pointer, caret and presence events (404 when cursors are disabled). |
 | `collaborate_draft` | `<prefix>/collaborate/{action}` | Draft requests; `action` is `join`, `replay`, `append`, `discard` or `reconcile`. |
 
@@ -113,11 +113,31 @@ unsaved change or have created their record, and any draft idle for
 `drafts.purge.unsaved_days` (90). A draft whose lock is held is in use and
 skipped.
 
-## 5. Set up the Mercure hub
+## 5. Set up the hub
 
-The bundle publishes through `symfony/mercure-bundle` and mints subscriber
-tokens with the hub's own token factory, so the hub needs a JWT secret (or
-a factory) in its configuration:
+Pages hear of changes over a hub, which carries invalidations and
+presence, never content. Pick its transport with
+[`hub.transport`](./configuration#hub):
+
+- **Mercure** (`mercure`, the default): a Mercure hub, such as
+  FrankenPHP's or Caddy's built-in one, through `symfony/mercure-bundle`.
+- **WebSocket** (`websocket`): the bundle's own server,
+  `collaborate:hub:serve`, a PHP process next to the application. No
+  Mercure hub needed.
+
+[WebSocket hub](./websocket-hub#choosing-a-transport) compares them.
+
+### Mercure
+
+`symfony/mercure-bundle` is optional since 0.4: require it.
+
+```sh
+composer require symfony/mercure-bundle
+```
+
+The bundle publishes through it and mints subscriber tokens with the
+hub's own token factory, so the hub needs a JWT secret (or a factory) in
+its configuration:
 
 ```yaml
 # config/packages/mercure.yaml
@@ -130,6 +150,9 @@ mercure:
                 secret: '%env(MERCURE_JWT_SECRET)%'
                 publish: ['*']
 ```
+
+With several hubs, name the one to use in
+[`hub.mercure.name`](./configuration#hub) (`default`).
 
 The same secret signs the publisher and subscriber tokens, so the hub must
 accept it for both. Recent versions of `symfony/mercure` speak the Mercure
@@ -144,7 +167,7 @@ CORS, or allow the application's origin on the hub.
 The bundle publishes **private** updates and the hub needs no history: it
 keeps nothing and every page catches up from the journal on its own.
 
-### FrankenPHP or Caddy
+#### FrankenPHP or Caddy
 
 FrankenPHP ships the Mercure module. A site block serving the application
 and its hub on the same origin, with the protocol 1.0 issuer syntax the
@@ -177,6 +200,35 @@ and `jwt.claims.aud` to the hub's URL in `mercure.yaml`. Older hubs take
 see the documentation of your hub version. Do not enable anonymous
 subscribers: nothing the bundle publishes is meant for them.
 
+### WebSocket
+
+Require the server's dependencies, configure the transport with a
+secret of its own, and run the server behind the application's reverse
+proxy:
+
+```sh
+composer require react/http react/socket react/stream ratchet/rfc6455 nyholm/psr7 symfony/http-client
+```
+
+```yaml
+# config/packages/collaborate.yaml
+collaborate:
+    hub:
+        transport: websocket
+        websocket:
+            public_url: '%env(COLLABORATE_HUB_PUBLIC_URL)%'     # /collaborate-hub
+            publish_url: '%env(COLLABORATE_HUB_PUBLISH_URL)%'   # http://127.0.0.1:8091
+            secret: '%env(COLLABORATE_HUB_SECRET)%'             # php -r 'echo bin2hex(random_bytes(32));'
+```
+
+```sh
+bin/console collaborate:hub:serve
+```
+
+[WebSocket hub](./websocket-hub) covers the configuration, the server,
+the proxy (nginx, Apache, Caddy, Traefik, HAProxy, Kubernetes…) and
+security.
+
 ## 6. Front-end dependencies
 
 The bundle's JavaScript is a set of native ES modules under
@@ -186,7 +238,7 @@ uses:
 | Import | Used by |
 |---|---|
 | `ckeditor5` | Drafts (every text field is a one-paragraph CKEditor model) and the rich-text plugin. |
-| `@microsoft/fetch-event-source` | The page's Mercure stream (it sends the bearer token). |
+| `@microsoft/fetch-event-source` | The page's Mercure stream (it sends the bearer token). Only with the Mercure transport: the WebSocket hub uses the browser's own `WebSocket`. |
 | `bootstrap/js/src/modal.js` | The Discard and "use saved record" confirmations. Only this module, never the whole `bootstrap` package, so EasyAdmin's own Bootstrap is not registered twice. |
 
 `ckeditor5` and `@microsoft/fetch-event-source` come from the registry like
@@ -212,8 +264,10 @@ return [
 ];
 ```
 
-Every page that loads the entry point needs all three, even with drafts off:
-the entry point loads the draft modules, which import `ckeditor5`.
+Every page that loads the entry point needs `ckeditor5` and the modal,
+even with drafts off: the entry point loads the draft modules, which import
+`ckeditor5`. `@microsoft/fetch-event-source` is needed with Mercure alone:
+the hub's client loads it only when the session names that transport.
 
 The pinned `ckeditor5` version is part of every text field's schema (see
 [Schema compatibility](./shared-drafts#schema-compatibility)). If your

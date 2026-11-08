@@ -10,7 +10,7 @@ applications, and Playwright for real browsers on those applications.
 
 | Suite | Directory | What it covers |
 |---|---|---|
-| `unit` | `tests/Unit` | Every class on its own: grants, topics, controllers, the form extension, the EasyAdmin and Gedmo adapters, the configuration tree. |
+| `unit` | `tests/Unit` | Every class on its own: grants, topics, controllers, the form extension, the EasyAdmin and Gedmo adapters, the configuration tree, both transports, and the WebSocket server in process (`tests/Unit/Hub/Server`). |
 | `functional` | `tests/Functional` | A test kernel (`tests/Fixtures`) with a real MariaDB: the journal's SQL, locks and limits, the entity mapping against `docs/schema.sql`, Mercure tokens, page renewal. |
 | `integration` | `tests/Integration` | The bundle inside the test applications of `tests/Application` (with and without EasyAdmin), over HTTP: what a page renders, what its scripts ask the endpoints, what a save publishes. |
 | `tools` | `tests/Tools` | The release tool, `tools/relprep.php`. |
@@ -52,6 +52,12 @@ with the configuration in `infection.json5.dist` (copy it to the ignored
 to `var/infection/`; pass Infection options with `ARGS`, for example
 `make infection ARGS="--filter=src/Draft"`.
 
+The WebSocket server's tests (`tests/Unit/Hub/Server`) run it in process:
+each test injects an event loop, binds port 0 or a temporary unix socket,
+connects `ratchet/pawl` clients in the same loop and stops it with timers.
+`SmokeTest` goes end to end: subscribe, publish, ask who listens, shut
+down (1001).
+
 CI runs the PHP suites on PHP 8.4 and 8.5 with Symfony 7.4 and 8.1, against
 MariaDB 11.4, and once against MariaDB 10.11.
 
@@ -62,7 +68,8 @@ The browser modules are tested with Vitest in jsdom, under
 CKEditor models: concurrency, undo, replay, source edits and field
 adapters. The host's bare imports (`ckeditor5`,
 `@microsoft/fetch-event-source`, `bootstrap/js/src/modal.js`) resolve from
-`node_modules`.
+`node_modules`. `tests/vitest/hub/` tests the two sources, the WebSocket
+one against a fake `WebSocket`.
 
 ```sh
 make test-js             # vitest run (npm test)
@@ -94,7 +101,8 @@ make app-setup
 ```
 
 It builds the stylesheets and an ES module copy of
-`@microsoft/fetch-event-source` (`tests/Application/bin/setup-assets.mjs`),
+`@microsoft/fetch-event-source`, which the Mercure projects load
+(`tests/Application/bin/setup-assets.mjs`),
 installs EasyAdmin's public files, and recreates both applications'
 databases with their fixtures
 (`COLLABORATE_APP=plain|easyadmin|host APP_ENV=e2e php tests/Application/bin/console.php app:setup`).
@@ -104,7 +112,9 @@ databases with their fixtures
 `tests/playwright` drives the applications in Chromium, each scenario with
 two or more signed-in editors in browser contexts of their own.
 `playwright.config.js` starts FrankenPHP with `tests/Application/Caddyfile`,
-which serves four sites, each with its own Mercure hub on its own origin:
+which serves the sites below, each with its own Mercure hub on its own
+origin, but `plain-ws`, whose hub is `collaborate:hub:serve`, which
+Playwright starts too:
 
 | Project | Port | What it runs |
 |---|---|---|
@@ -112,6 +122,7 @@ which serves four sites, each with its own Mercure hub on its own origin:
 | `easyadmin` | `EASYADMIN_PORT` (8720) | The EasyAdmin application (`e2e`): every spec but `host-*` and `limits`. |
 | `limits` | `LIMITS_PORT` (8730) | The plain application in its `e2e_limits` environment, whose drafts take updates of 4 KiB, journals of 64 KiB and 30 field states, and compact on the next Join past 1 KiB: `limits.spec.js`. |
 | `host` | `HOST_PORT` (8740) | The host application (`e2e`), whose pointers go idle after 5 s: `host-*.spec.js`. A folder is revoked with `POST /e2e/folders/{folder}/revoke`. |
+| `plain-ws` | `PLAIN_WS_PORT` (8780) | The plain application in its `e2e_ws` environment, without Mercure: the WebSocket hub on unix sockets under `COLLABORATE_HUB_RUN`, proxied on the application's origin as the [guide](/guide/websocket-hub#same-origin) recommends. `collaboration`, `cursors`, `presence` and `draft-states`. |
 
 The `e2e` environments show two avatars before the `+N` counter. Every
 scenario creates its own article through `POST /e2e/articles`; a script
@@ -126,7 +137,7 @@ restored from the cache.
 
 ```sh
 npx playwright install chromium
-make e2e                              # app-setup, then the four projects
+make e2e                              # app-setup, then every project
 make e2e ARGS="--project=plain"       # one application
 PLAIN_PORT=8810 EASYADMIN_PORT=8820 LIMITS_PORT=8830 make e2e   # other ports
 ```

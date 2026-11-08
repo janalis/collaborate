@@ -19,7 +19,7 @@ function version(): string {
 export default defineConfig({
   title: 'collaborate',
   description:
-    'Live collaboration for Symfony admin pages over Mercure: shared form drafts, presence and cursors, saved-view refresh.',
+    'Live collaboration for Symfony admin pages over Mercure or WebSockets: shared form drafts, presence and cursors, saved-view refresh.',
   lang: 'en-US',
   base,
   cleanUrls: true,
@@ -53,6 +53,7 @@ export default defineConfig({
             { text: 'What is collaborate?', link: '/guide/introduction' },
             { text: 'Installation', link: '/guide/installation' },
             { text: 'Getting started', link: '/guide/getting-started' },
+            { text: 'WebSocket hub', link: '/guide/websocket-hub' },
           ],
         },
         {

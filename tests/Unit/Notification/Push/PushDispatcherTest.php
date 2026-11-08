@@ -6,6 +6,7 @@ namespace Janalis\Collaborate\Tests\Unit\Notification\Push;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Janalis\Collaborate\Hub\Topics;
+use Janalis\Collaborate\Hub\Transport\PresenceProbeInterface;
 use Janalis\Collaborate\Notification\Entity\Notification;
 use Janalis\Collaborate\Notification\Entity\PushSubscription;
 use Janalis\Collaborate\Notification\NotificationCatalog;
@@ -19,8 +20,6 @@ use Janalis\Collaborate\Notification\Push\PushSubscriptions;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\LoggerInterface;
-use Symfony\Component\Mercure\HubInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
 
 #[CoversClass(PushDispatcher::class)]
@@ -48,11 +47,7 @@ final class PushDispatcherTest extends TestCase
                 new NotificationRepository($this->createStub(EntityManagerInterface::class)),
                 $sender,
                 new PushPayload(new NotificationCatalog()),
-                new OnlineRecipients(
-                    $this->createStub(HubInterface::class),
-                    new Topics(),
-                    $this->createStub(LoggerInterface::class),
-                ),
+                new OnlineRecipients($this->createStub(PresenceProbeInterface::class), new Topics()),
                 $through,
                 false,
             );
@@ -85,11 +80,7 @@ final class PushDispatcherTest extends TestCase
             new NotificationRepository($this->createStub(EntityManagerInterface::class)),
             $sender,
             new PushPayload(new NotificationCatalog()),
-            new OnlineRecipients(
-                $this->createStub(HubInterface::class),
-                new Topics(),
-                $this->createStub(LoggerInterface::class),
-            ),
+            new OnlineRecipients($this->createStub(PresenceProbeInterface::class), new Topics()),
         );
         $pushes->push(new Notification(1, 't', 'x', [], null, new \DateTimeImmutable()));
         $pushes->push(new Notification(2, 't', 'x', [], null, new \DateTimeImmutable()));
@@ -118,11 +109,7 @@ final class PushDispatcherTest extends TestCase
             new NotificationRepository($this->createStub(EntityManagerInterface::class)),
             $sender,
             new PushPayload(new NotificationCatalog()),
-            new OnlineRecipients(
-                $this->createStub(HubInterface::class),
-                new Topics(),
-                $this->createStub(LoggerInterface::class),
-            ),
+            new OnlineRecipients($this->createStub(PresenceProbeInterface::class), new Topics()),
         );
         $pushes->push(new Notification(2, 't', 'x', [], null, new \DateTimeImmutable()));
         $pushes->flush();

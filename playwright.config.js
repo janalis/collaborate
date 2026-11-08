@@ -1,7 +1,8 @@
+import path from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 
 // The three test applications run in one FrankenPHP server (tests/Application/Caddyfile), each on its own
-// port with its own Mercure hub, and the plain one again in its `e2e_limits` environment, whose drafts
+// port with its own Mercure hub (the plain one again on the bundle's WebSocket hub, `plain-ws`), and the plain one again in its `e2e_limits` environment, whose drafts
 // reach their limits within a scenario, and in one environment per other stock form theme it is tested with. `make e2e` prepares their databases and assets first.
 const ports = {
   plain: process.env.PLAIN_PORT || '8710',
@@ -12,7 +13,11 @@ const ports = {
   'plain-div': process.env.PLAIN_DIV_PORT || '8750',
   'plain-table': process.env.PLAIN_TABLE_PORT || '8760',
   'plain-tailwind': process.env.PLAIN_TAILWIND_PORT || '8770',
+  // The plain application without Mercure: the bundle's WebSocket hub, behind the application's origin.
+  'plain-ws': process.env.PLAIN_WS_PORT || '8780',
 };
+// The unix sockets of the WebSocket hub (`collaborate:hub:serve`), which FrankenPHP proxies.
+const hubRun = process.env.COLLABORATE_HUB_RUN || path.resolve('tests/Application/var/plain/run');
 const plainIgnore = [/easyadmin-.*\.spec\.js/, /limits\.spec\.js/, /host-.*\.spec\.js/];
 
 export default defineConfig({
@@ -43,21 +48,45 @@ export default defineConfig({
     { name: 'limits', testMatch: /limits\.spec\.js/, use: { baseURL: `http://127.0.0.1:${ports.limits}` } },
     // The host application: a library of records, every cursor option on, no drafts.
     { name: 'host', testMatch: /host-.*\.spec\.js/, use: { baseURL: `http://127.0.0.1:${ports.host}` } },
-  ],
-  webServer: {
-    command: `${process.env.FRANKENPHP || 'frankenphp'} run --config tests/Application/Caddyfile`,
-    url: `http://127.0.0.1:${ports.limits}/login`,
-    reuseExistingServer: !process.env.CI,
-    stdout: 'ignore',
-    stderr: 'pipe',
-    env: {
-      PLAIN_PORT: ports.plain,
-      EASYADMIN_PORT: ports.easyadmin,
-      LIMITS_PORT: ports.limits,
-      HOST_PORT: ports.host,
-      PLAIN_DIV_PORT: ports['plain-div'],
-      PLAIN_TABLE_PORT: ports['plain-table'],
-      PLAIN_TAILWIND_PORT: ports['plain-tailwind'],
+    // The scenarios that cross the hub most, over the WebSocket transport.
+    {
+      name: 'plain-ws',
+      testMatch: [
+        /\/collaboration\.spec\.js$/,
+        /\/cursors\.spec\.js$/,
+        /\/presence\.spec\.js$/,
+        /\/draft-states\.spec\.js$/,
+      ],
+      use: { baseURL: `http://127.0.0.1:${ports['plain-ws']}` },
     },
-  },
+  ],
+  webServer: [
+    {
+      command: `${process.env.FRANKENPHP || 'frankenphp'} run --config tests/Application/Caddyfile`,
+      url: `http://127.0.0.1:${ports.limits}/login`,
+      reuseExistingServer: !process.env.CI,
+      stdout: 'ignore',
+      stderr: 'pipe',
+      env: {
+        PLAIN_PORT: ports.plain,
+        EASYADMIN_PORT: ports.easyadmin,
+        LIMITS_PORT: ports.limits,
+        HOST_PORT: ports.host,
+        PLAIN_DIV_PORT: ports['plain-div'],
+        PLAIN_TABLE_PORT: ports['plain-table'],
+        PLAIN_TAILWIND_PORT: ports['plain-tailwind'],
+        PLAIN_WS_PORT: ports['plain-ws'],
+        COLLABORATE_HUB_RUN: hubRun,
+      },
+    },
+    {
+      command: `${process.env.PHP || 'php'} tests/Application/bin/console.php collaborate:hub:serve`,
+      // Through FrankenPHP: the hub's private side answers its health check on a unix socket.
+      url: `http://127.0.0.1:${ports['plain-ws']}/_hub/health`,
+      reuseExistingServer: !process.env.CI,
+      stdout: 'ignore',
+      stderr: 'pipe',
+      env: { COLLABORATE_APP: 'plain', APP_ENV: 'e2e_ws', COLLABORATE_HUB_RUN: hubRun },
+    },
+  ],
 });

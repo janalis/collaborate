@@ -164,7 +164,7 @@ holds the draft) is answered with a `303` redirect back to the form and a
 
 Render the form with any stock Symfony form theme: `form_div_layout`,
 `form_table_layout`, Bootstrap 3, 4 and 5 (horizontal included),
-Foundation 5 and 6, Tailwind 2 or daisyUI 5. Plain `{{ form(form) }}` or
+Foundation 5 and 6, Tailwind 2 or daisyUI 5. Plain <code v-pre>{{ form(form) }}</code> or
 `form_row()` calls work: peers' field marks outline a field's row, label
 included, and collections stay in sync, with no markup of your own.
 

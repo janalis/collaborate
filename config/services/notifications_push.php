@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Symfony\Component\DependencyInjection\Loader\Configurator;
 
 use Janalis\Collaborate\Hub\Topics;
+use Janalis\Collaborate\Hub\Transport\PresenceProbeInterface;
 use Janalis\Collaborate\Notification\NotificationCatalog;
 use Janalis\Collaborate\Notification\NotificationRepository;
 use Janalis\Collaborate\Notification\Push\OnlineRecipients;
@@ -42,12 +43,10 @@ return static function (ContainerConfigurator $container): void {
     ]);
 
     $services->set(OnlineRecipients::class)->args([
-        service('janalis_collaborate.hub'),
+        service(PresenceProbeInterface::class),
         service(Topics::class),
-        service('logger'),
-        service('http_client')->nullOnInvalid(),
         param('collaborate.notifications.web_push.skip_online'),
-    ])->tag('monolog.logger', ['channel' => 'collaborate']);
+    ]);
 
     $services
         ->set(PushDispatcher::class)

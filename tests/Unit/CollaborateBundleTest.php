@@ -7,6 +7,7 @@ namespace Janalis\Collaborate\Tests\Unit;
 use EasyCorp\Bundle\EasyAdminBundle\EasyAdminBundle;
 use Janalis\Collaborate\Access\DraftAccessCheckerInterface;
 use Janalis\Collaborate\CollaborateBundle;
+use Janalis\Collaborate\Command\HubServeCommand;
 use Janalis\Collaborate\Controller\CursorController;
 use Janalis\Collaborate\Controller\HubController;
 use Janalis\Collaborate\Cursor\PageGrant;
@@ -17,12 +18,19 @@ use Janalis\Collaborate\EasyAdmin\UpdatesSubscriber;
 use Janalis\Collaborate\Form\FormContextInterface;
 use Janalis\Collaborate\Hub\HubGuard;
 use Janalis\Collaborate\Hub\RenewSubscriber;
+use Janalis\Collaborate\Hub\Transport\HubTransportInterface;
+use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
+use Janalis\Collaborate\Hub\Transport\PresenceProbeInterface;
+use Janalis\Collaborate\Hub\Transport\WebSocket\Keys;
+use Janalis\Collaborate\Hub\Transport\WebSocket\WebSocketTransport;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Tests\Fixtures\Arrays;
 use Janalis\Collaborate\Twig\CollaborateExtension;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\IgnoreDeprecations;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
+use Symfony\Bundle\MercureBundle\MercureBundle;
 use Symfony\Component\Config\Resource\FileResource;
 use Symfony\Component\DependencyInjection\Compiler\MergeExtensionConfigurationPass;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -39,10 +47,19 @@ final class CollaborateBundleTest extends TestCase
     {
         $container = $this->load([
             'colors' => ['red', 'green'],
-            'hub' => ['name' => 'collaboration', 'max_drafts' => 4],
+            'hub' => [
+                'mercure' => ['name' => 'collaboration'],
+                'max_drafts' => 4,
+                'websocket' => [
+                    'secret' => 'current-websocket-secret',
+                    'previous_secret' => 'previous-websocket-secret',
+                ],
+            ],
             'drafts' => ['compact' => ['idle' => 30]],
         ]);
         self::assertSame(['red', 'green'], $container->getParameter('collaborate.colors'));
+        self::assertSame('collaboration', $container->getParameter('collaborate.hub.mercure.name'));
+        // The name hosts read before 0.4.
         self::assertSame('collaboration', $container->getParameter('collaborate.hub.name'));
         self::assertSame(4, $container->getParameter('collaborate.hub.max_drafts'));
         self::assertSame(30, $container->getParameter('collaborate.drafts.compact.idle'));
@@ -51,7 +68,12 @@ final class CollaborateBundleTest extends TestCase
         self::assertSame([], $container->getParameter('collaborate.drafts.rich_text.block_prefixes'));
         self::assertFalse($container->hasParameter('collaborate.colors.0'));
         $hub = Arrays::at($container->getParameter('collaborate.hub'));
-        self::assertSame('collaboration', $hub['name']);
+        self::assertSame(['name' => 'collaboration'], $hub['mercure']);
+        // The secrets of the WebSocket hub are no parameters.
+        self::assertNull($container->getParameter('collaborate.hub.websocket.secret'));
+        self::assertNull($container->getParameter('collaborate.hub.websocket.previous_secret'));
+        $parameters = serialize($container->getParameterBag()->all());
+        self::assertStringNotContainsString('websocket-secret', $parameters);
         $root = Arrays::at($container->getParameter('collaborate'));
         self::assertSame('ROLE_ADMIN', $root['role']);
         self::assertNull($container->getParameter('collaborate.drafts.rich_text.schema_option'));
@@ -104,13 +126,20 @@ final class CollaborateBundleTest extends TestCase
         $container = $this->load([
             'identity' => 'app.collaborators',
             'access' => 'app.draft_access',
-            'hub' => ['name' => 'collaboration'],
+            'hub' => ['mercure' => ['name' => 'collaboration']],
             'drafts' => ['grant_cache' => 'cache.grants'],
         ]);
         self::assertSame('app.collaborators', (string) $container->getAlias(CollaboratorProviderInterface::class));
         self::assertSame('app.draft_access', (string) $container->getAlias(DraftAccessCheckerInterface::class));
         self::assertSame('cache.grants', (string) $container->getAlias('janalis_collaborate.grant_cache'));
-        self::assertSame('mercure.hub.collaboration', (string) $container->getAlias('janalis_collaborate.hub'));
+        self::assertSame('mercure.hub.collaboration', (string) $container->getAlias('janalis_collaborate.mercure_hub'));
+        self::assertFalse($container->hasAlias('janalis_collaborate.hub'));
+        self::assertSame(MercureTransport::class, (string) $container->getAlias(HubTransportInterface::class));
+        self::assertSame(MercureTransport::class, (string) $container->getAlias(PresenceProbeInterface::class));
+        self::assertEquals(
+            new Reference('janalis_collaborate.mercure_hub'),
+            $container->getDefinition(MercureTransport::class)->getArgument(0),
+        );
         self::assertFalse($container->hasAlias('janalis_collaborate.limiter.cursors'));
         self::assertFalse($container->hasAlias('janalis_collaborate.limiter.drafts'));
     }
@@ -185,13 +214,27 @@ final class CollaborateBundleTest extends TestCase
 
     public function testImportsTheEasyAdminServicesOnlyWhenItsBundleIsRegistered(): void
     {
-        $registered = $this->load([], ['EasyAdminBundle' => EasyAdminBundle::class]);
-        foreach (['core.php', 'hub.php', 'cursors.php', 'drafts.php', 'easyadmin.php', 'gedmo.php'] as $file) {
+        $registered = $this->load([], [
+            'EasyAdminBundle' => EasyAdminBundle::class,
+            'MercureBundle' => MercureBundle::class,
+        ]);
+        foreach ([
+            'core.php',
+            'hub.php',
+            'hub_mercure.php',
+            'cursors.php',
+            'drafts.php',
+            'easyadmin.php',
+            'gedmo.php',
+        ] as $file) {
             self::assertContains($file, $this->files($registered));
         }
         self::assertTrue($registered->hasDefinition(EasyAdminFormContext::class));
         // Installed (a dev dependency here) but not registered: no adapter, no form context.
-        foreach ([$this->load([], ['FrameworkBundle' => FrameworkBundle::class]), $this->load([])] as $plain) {
+        foreach ([
+            $this->load([], ['FrameworkBundle' => FrameworkBundle::class, 'MercureBundle' => MercureBundle::class]),
+            $this->load([]),
+        ] as $plain) {
             self::assertNotContains('easyadmin.php', $this->files($plain));
             self::assertFalse($plain->hasDefinition(EasyAdminFormContext::class));
             self::assertFalse($plain->hasAlias(FormContextInterface::class));
@@ -200,6 +243,59 @@ final class CollaborateBundleTest extends TestCase
             self::assertTrue($plain->getDefinition(ChangeCollector::class)->hasTag('doctrine.event_listener'));
             self::assertTrue($plain->getDefinition(UpdatesSubscriber::class)->hasTag('kernel.event_subscriber'));
         }
+    }
+
+    public function testTheMercureTransportNeedsMercureBundleRegistered(): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage(
+            'The mercure transport of collaborate.hub needs symfony/mercure-bundle: require and register it, or set collaborate.hub.transport to websocket.',
+        );
+        $this->load([], ['FrameworkBundle' => FrameworkBundle::class]);
+    }
+
+    public function testTheWebSocketTransportNeedsNoMercureAndKeepsItsSecretsOutOfTheParameters(): void
+    {
+        $secret = 'a-secret-of-thirty-two-bytes-ok!';
+        $previous = 'the-previous-secret-of-32-bytes!';
+        // No MercureBundle registered: the websocket transport does not need it.
+        $container = $this->load([
+            'hub' => [
+                'transport' => 'websocket',
+                'websocket' => [
+                    'public_url' => '/collaborate-hub',
+                    'secret' => $secret,
+                    'previous_secret' => $previous,
+                ],
+            ],
+        ], ['FrameworkBundle' => FrameworkBundle::class]);
+
+        self::assertContains('hub_websocket.php', $this->files($container));
+        self::assertNotContains('hub_mercure.php', $this->files($container));
+        self::assertFalse($container->hasAlias('janalis_collaborate.mercure_hub'));
+        self::assertSame(WebSocketTransport::class, (string) $container->getAlias(HubTransportInterface::class));
+        self::assertSame(WebSocketTransport::class, (string) $container->getAlias(PresenceProbeInterface::class));
+        self::assertSame([$secret, $previous], $container->getDefinition(Keys::class)->getArguments());
+        self::assertTrue($container->getDefinition(HubServeCommand::class)->hasTag('console.command'));
+        self::assertSame(
+            '%collaborate.hub.websocket%',
+            $container->getDefinition(HubServeCommand::class)->getArgument(7),
+        );
+        $parameters = (string) json_encode($container->getParameterBag()->all());
+        self::assertStringNotContainsString($secret, $parameters);
+        self::assertStringNotContainsString($previous, $parameters);
+        self::assertNull($container->getParameter('collaborate.hub.websocket.secret'));
+    }
+
+    #[IgnoreDeprecations]
+    public function testTheHubNameOfBeforeStillNamesTheMercureHub(): void
+    {
+        $this->expectUserDeprecationMessage(
+            'Since janalis/collaborate 0.4: The "collaborate.hub.name" option is deprecated, use "collaborate.hub.mercure.name" instead.',
+        );
+        $container = $this->load(['hub' => ['name' => 'collaboration']]);
+        self::assertSame('collaboration', $container->getParameter('collaborate.hub.name'));
+        self::assertSame('mercure.hub.collaboration', (string) $container->getAlias('janalis_collaborate.mercure_hub'));
     }
 
     /** A container as a kernel starts it; Symfony 7.4.0 reads the environment while loading a bundle extension. */

@@ -18,13 +18,16 @@ keep it current when you change one.
 | `translations/` | The `collaborate` domain, English and French; keys are the English strings. |
 | `assets/` | Native ES modules and Sass partials, served by AssetMapper as `@janalis/collaborate`. |
 | `docs/schema.sql` | Reference DDL of the three tables. |
+| `docs/deploy/` | Copy-ready proxy, process-manager and platform files for the WebSocket hub. |
 
 ## Service files
 
 | File | Loaded | Defines |
 |---|---|---|
 | `core.php` | always | The default identity and access services, `Topics`, `PageGrant`, `DraftAccess`. |
-| `hub.php` | always | `HubPublisher`, `HubGuard`, `HubController`, `RenewSubscriber`, the Twig extension. |
+| `hub.php` | always | `HubPublisher`, `HubGuard`, `HubSessions`, `HubController`, `RenewSubscriber`, the Twig extension. |
+| `hub_mercure.php` | with `hub.transport: mercure` (MercureBundle must be registered) | `MercureTransport`, on `mercure.hub.<hub.mercure.name>`; `HubTransportInterface` and `PresenceProbeInterface` aliased to it. |
+| `hub_websocket.php` | with `hub.transport: websocket` | `Keys` (its secrets set by `CollaborateBundle`, not parameters), `RequestSigner`, `SubscriberToken`, `WebSocketTransport` (aliased as both interfaces), `HubServeCommand`. Nothing in it names a ReactPHP type. |
 | `cursors.php` | always | `CursorController` (it answers 404 when cursors are disabled). |
 | `drafts.php` | always | `DraftText`, `DraftJournal`, `DraftSave`, the field-key resolver, the form type extension, `DraftController`, `PurgeDraftsCommand`, and the saved-view collection and announcement (`ChangeCollector`, `UpdatesSubscriber`). |
 | `easyadmin.php` | when EasyAdminBundle is registered | `EasyAdminFormContext` (aliased as `FormContextInterface`), `DraftRefreshSubscriber`, `SaveSubscriber`. |
@@ -40,7 +43,11 @@ read `collaborate.*.enabled` and stay inert when their feature is off.
 | `Identity\` | `CollaboratorProviderInterface` and its default, `SecurityCollaboratorProvider`. |
 | `Access\` | `DraftAccessCheckerInterface` and its default, `RoleDraftAccessChecker`. |
 | `Grant` | The authorization hash every grant carries. |
-| `Hub\` | `Topics`, `HubPublisher` (publishes on `kernel.terminate`, pauses after a failure), `HubGuard` (the checks every hub request passes), `RenewSubscriber` (keeps flash messages across a background renewal). |
+| `Hub\` | `Topics`, `Notice` (one or more topics and a JSON payload), `HubPublisher` (defers notices, publishes them on `kernel.terminate` in one transport call, pauses after a failure), `HubGuard` (the checks every hub request passes), `HubSessions` and `HubSession` (the topics, resends and refusals of a session request, whatever the transport), `RenewSubscriber` (keeps flash messages across a background renewal). |
+| `Hub\Transport\` | `HubTransportInterface` (`publish(list<Notice>)`, `subscribe(HubSession, Request): Subscription`), `PresenceProbeInterface` (`listening($topic)`), `Subscription`, `PublishFailedException`. |
+| `Hub\Transport\Mercure\` | `MercureTransport`: private updates, the subscriber JWT, the subscriptions API. |
+| `Hub\Transport\WebSocket\` | Shared by the application and the server, with no ReactPHP type: `WebSocketTransport` (signed publish and presence requests, token minting), `Keys` (HKDF derivation and rotation), `SubscriberToken`, `TokenClaims`, `RequestSigner`, `Origin`. |
+| `Hub\Server\` | The ReactPHP server, never a container service: `ServerConfig`, `ServerFactory`, `Server` (listeners, signals, shutdown, the shared timer), `BrowserEndpoint` (handshake and subscribe protocol), `PublishEndpoint` (`/publish`, `/subscriptions`, `/health`), `Router` (topic to connections), `Connection`, `ClientAddress`, `Sockets`, `Limits`, `Timings`. |
 | `Cursor\` | `PageGrant` (rooms and page grants), `CursorEvent` and `CursorPosition` (validation of what clients send). |
 | `Controller\` | `HubController` (session), `CursorController` (events), `DraftController` (draft actions). |
 | `Draft\` | `DraftAccess` (field grants and their cache), `DraftJournal` (the journal: one class per protocol, MariaDB/MySQL SQL), `DraftText` (plain-text operations on the server), `DraftSave` (the locked save), field-key resolvers. |
@@ -49,7 +56,7 @@ read `collaborate.*.enabled` and stay inert when their feature is off.
 | `EasyAdmin\` | The adapter, and `UpdatesSubscriber` (the response half of saved-view updates). |
 | `Gedmo\` | Per-locale field keys and the translation-to-record mapping. |
 | `Entity\` | `Draft`, `DraftField`, `DraftEvent`: the mapping of the three tables. |
-| `Command\` | `collaborate:purge`. |
+| `Command\` | `collaborate:purge`, `collaborate:push:setup`, `collaborate:hub:serve` (checks the server's packages, then builds and runs it). |
 | `Twig\` | `collaborate_layer()`, `collaborate_presence()`, `collaborate_enabled()`, `collaborate_grant()`. |
 
 ## JavaScript
@@ -57,7 +64,8 @@ read `collaborate.*.enabled` and stay inert when their feature is off.
 | Module | Role |
 |---|---|
 | `easyadmin.js` | Entry point: starts cursors, updates and drafts; re-exports `sessionFor` and `addRowInitializer`. |
-| `hub.js` | One Mercure stream per page; members join by `channel` (`cursors`, `updates`, `draft`); renewal, resend of unknown grant signatures, background renewal of the page grant. |
+| `hub.js` | One hub stream per page, whatever the transport; members join by `channel` (`cursors`, `updates`, `draft`, `notifications`); renewal (in place on a WebSocket), backoff with jitter, resend of unknown grant signatures, background renewal of the page grant. |
+| `hub/mercure.js`, `hub/websocket.js` | The two sources `hub.js` loads on demand, after the session names its `transport`: a Mercure stream through `@microsoft/fetch-event-source`, or a WebSocket with its subscribe and acknowledgement messages. |
 | `cursors/cursors.js`, `carets.js`, `geometry.js`, `presence.js`, `marks.js`, `turn.js` | Pointers, carets, field marks, header avatars or menu, markers, edge arrows, popup lines, the turn of a tab. |
 | `cursors/shapes.js` | The platform cursor shapes, re-exported by `geometry.js`. |
 | `updates.js` | Saved-list and saved-detail refresh. |
@@ -78,7 +86,7 @@ why the entry point must load before them.
    field grant and renders `data-collaborate`.
 2. `hub.js` posts the page grant and the field grants to the session
    endpoint and opens one stream for the returned topics with the minted
-   JWT.
+   token, over the `transport` the answer names.
 3. `DraftSession` joins the draft (`collaborate/join`): the journal creates
    or reads it under its named lock and answers the field states and events.
 4. An edit becomes CKEditor model operations (or a value), batched and sent

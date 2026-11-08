@@ -6,7 +6,10 @@ namespace Janalis\Collaborate\Tests\Unit\Notification;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Janalis\Collaborate\Hub\HubPublisher;
+use Janalis\Collaborate\Hub\Notice;
 use Janalis\Collaborate\Hub\Topics;
+use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
+use Janalis\Collaborate\Hub\Transport\PublishFailedException;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Notification\Entity\Notification;
 use Janalis\Collaborate\Notification\Messenger\SendNotification;
@@ -25,6 +28,9 @@ use Symfony\Component\Messenger\MessageBusInterface;
 
 #[CoversClass(Notifier::class)]
 #[UsesClass(HubPublisher::class)]
+#[UsesClass(Notice::class)]
+#[UsesClass(MercureTransport::class)]
+#[UsesClass(PublishFailedException::class)]
 #[UsesClass(Topics::class)]
 #[UsesClass(Notification::class)]
 #[UsesClass(SendNotification::class)]
@@ -131,7 +137,10 @@ final class NotifierTest extends TestCase
             new Preferences($em, $catalog, $clock),
             new NotificationRepository($em),
             $this->createStub(CollaboratorProviderInterface::class),
-            new HubPublisher($this->createStub(HubInterface::class), $this->createStub(LoggerInterface::class)),
+            new HubPublisher(
+                new MercureTransport($this->createStub(HubInterface::class)),
+                $this->createStub(LoggerInterface::class),
+            ),
             new Topics(),
             $clock,
             bus: $bus,

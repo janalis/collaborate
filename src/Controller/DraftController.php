@@ -7,13 +7,13 @@ namespace Janalis\Collaborate\Controller;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Hub\HubPublisher;
+use Janalis\Collaborate\Hub\Notice;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
-use Symfony\Component\Mercure\Update;
 use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 use Symfony\Component\Security\Csrf\CsrfToken;
@@ -110,8 +110,8 @@ final readonly class DraftController
                 $notice += ['generation' => $event['generation'], 'revision' => $result['revision']];
             }
             $this->publisher->defer(
-                new Update($this->access->topic($id), json_encode($notice, \JSON_THROW_ON_ERROR), true),
-                'Collaborate draft Mercure publication failed.',
+                new Notice($this->access->topic($id), json_encode($notice, \JSON_THROW_ON_ERROR)),
+                'Collaborate draft hub publication failed.',
             );
         }
 

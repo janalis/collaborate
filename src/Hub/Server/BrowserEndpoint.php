@@ -282,10 +282,12 @@ final class BrowserEndpoint
             || $connection->subscribed && $claims->sub !== $connection->user
         ) {
             // A failed renewal keeps the subscription; a failed first subscribe ends the connection: 1008 (back
-            // off) when the user has too many, 4401 (get a new session) otherwise.
-            $connection->send(self::reply('error', $id), $now);
+            // off) when the user has too many, 4401 (get a new session) otherwise. The reply carries that code: the
+            // page settles on it before the close arrives.
+            $code = $crowded ? Frame::CLOSE_POLICY : self::CLOSE_SESSION;
+            $connection->send(self::reply('error', $id, $code), $now);
             if (!$connection->subscribed) {
-                $connection->close($crowded ? Frame::CLOSE_POLICY : self::CLOSE_SESSION, $now);
+                $connection->close($code, $now);
             }
 
             return;
@@ -394,9 +396,11 @@ final class BrowserEndpoint
         return (\ord($payload[0]) << 8) | \ord($payload[1]);
     }
 
-    private static function reply(string $hub, int $id): string
+    private static function reply(string $hub, int $id, ?int $code = null): string
     {
-        return new Frame(json_encode(['hub' => $hub, 'id' => $id], \JSON_THROW_ON_ERROR))->getContents();
+        $reply = null === $code ? ['hub' => $hub, 'id' => $id] : ['hub' => $hub, 'id' => $id, 'code' => $code];
+
+        return new Frame(json_encode($reply, \JSON_THROW_ON_ERROR))->getContents();
     }
 
     private function now(): float

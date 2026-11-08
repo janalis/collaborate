@@ -118,7 +118,7 @@ final class BrowserEndpointTest extends ServerTestCase
         $this->until(static fn(): bool => 3 === \count($client->messages));
 
         self::assertSame(
-            ['{"hub":"error","id":2}', '{"hub":"error","id":3}', '{"hub":"error","id":4}'],
+            ['{"hub":"error","id":2,"code":4401}', '{"hub":"error","id":3,"code":4401}', '{"hub":"error","id":4,"code":4401}'],
             $client->messages,
         );
         self::assertSame(204, $this->publish([self::notice([self::A], '{"n":"a"}')]));
@@ -135,7 +135,7 @@ final class BrowserEndpointTest extends ServerTestCase
         $client->subscribe(3, $this->token([self::A]));
         $this->until(static fn(): bool => 2 === \count($client->messages));
 
-        self::assertSame(['{"hub":"subscribed","id":2}', '{"hub":"error","id":3}'], $client->messages);
+        self::assertSame(['{"hub":"subscribed","id":2}', '{"hub":"error","id":3,"code":4401}'], $client->messages);
         self::assertSame(204, $this->publish([self::notice([self::B], '{"n":"b"}')]));
         $this->until(static fn(): bool => 3 === \count($client->messages));
         self::assertFalse($client->closed);
@@ -198,7 +198,7 @@ final class BrowserEndpointTest extends ServerTestCase
         $client->subscribe(5, $token($this));
         $this->until(static fn(): bool => $client->closed);
 
-        self::assertSame(['{"hub":"error","id":5}'], $client->messages);
+        self::assertSame(['{"hub":"error","id":5,"code":4401}'], $client->messages);
         self::assertSame(4401, $client->code);
     }
 
@@ -446,7 +446,7 @@ final class BrowserEndpointTest extends ServerTestCase
         $second->subscribe(1, $this->token([self::A]));
         $this->until(static fn(): bool => $second->closed);
 
-        self::assertSame(['{"hub":"error","id":1}'], $second->messages);
+        self::assertSame(['{"hub":"error","id":1,"code":1008}'], $second->messages);
         self::assertSame(1008, $second->code);
         $this->subscriber([self::A], 2);
         $first->socket->close();

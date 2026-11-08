@@ -129,12 +129,14 @@ export function websocketSource(url, { signal, token, onopen, onmessage, WebSock
         socket.send(JSON.stringify({ hub: 'subscribe', id, token }));
       });
 
-    /** @param {{ hub: unknown, id?: unknown }} control */
+    /** @param {{ hub: unknown, id?: unknown, code?: unknown }} control */
     const answer = (control) => {
       const ack = acks.get(/** @type {number} */ (control.id));
       if (!ack) return;
       if (control.hub === 'subscribed') ack.resolve();
-      else if (control.hub === 'error') ack.reject(failure('Collaborate hub subscription refused.', 4401));
+      // The code the hub closes with, or will: 1008 backs off, 4401 asks for a new session.
+      else if (control.hub === 'error')
+        ack.reject(failure('Collaborate hub subscription refused.', control.code === 1008 ? 1008 : 4401));
     };
 
     /**

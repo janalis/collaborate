@@ -58,7 +58,8 @@ const settled = async (promise) => {
   await vi.advanceTimersByTimeAsync(0);
   return outcome;
 };
-const acknowledge = (hub = 'subscribed', id = socket().sent.at(-1).id) => socket().frame({ hub, id });
+const acknowledge = (hub = 'subscribed', id = socket().sent.at(-1).id, extra = {}) =>
+  socket().frame({ hub, id, ...extra });
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -137,6 +138,15 @@ test('fails with 4401 when the first subscription is refused', async () => {
   expect(outcome.state).toBe('rejected');
   expect(outcome.error.code).toBe(4401);
   expect(socket().closed).toBe(1000);
+});
+
+test('fails with 1008 when the hub refuses a user with too many connections', async () => {
+  const done = connect();
+  socket().open();
+  acknowledge('error', undefined, { code: 1008 });
+  const outcome = await settled(done);
+  expect(outcome.state).toBe('rejected');
+  expect(outcome.error.code).toBe(1008);
 });
 
 test('hands notices to the reader, and keeps the hub answers and binary frames from it', async () => {

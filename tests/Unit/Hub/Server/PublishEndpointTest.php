@@ -151,17 +151,23 @@ final class PublishEndpointTest extends ServerTestCase
     {
         $this->start();
         $body = json_encode(['notices' => [self::notice([self::A])]], \JSON_THROW_ON_ERROR);
-        // Signed 60 seconds ahead of the server's clock: still valid two minutes later.
-        $signature = $this->signer->sign('POST', '/publish', $body, $this->now() + 60);
+        $nonce = str_repeat('ab', 16);
+        // Signed 60 seconds ahead of the server's clock: still valid two minutes later, in the same whole second.
+        $signature = $this->signer->sign('POST', '/publish', $body, $this->now() + 60, $nonce);
 
         self::assertSame(204, $this->request('POST', '/publish', $body, $signature)->getStatusCode());
         self::assertSame(401, $this->request('POST', '/publish', $body, $signature)->getStatusCode());
-        $this->clock->sleep(120);
+        $this->clock->sleep(120.5);
         $this->wait(0.02);
         self::assertSame(401, $this->request('POST', '/publish', $body, $signature)->getStatusCode());
+        // Its nonce is remembered until 121 seconds after it was first seen, and forgotten after.
+        $this->clock->sleep(0.5);
+        $this->wait(0.02);
+        $again = $this->signer->sign('POST', '/publish', $body, $this->now(), $nonce);
+        self::assertSame(401, $this->request('POST', '/publish', $body, $again)->getStatusCode());
         $this->clock->sleep(0.001);
         $this->wait(0.02);
-        self::assertSame(204, $this->request('POST', '/publish', $body, $signature)->getStatusCode());
+        self::assertSame(204, $this->request('POST', '/publish', $body, $again)->getStatusCode());
     }
 
     public function testANonceIsAcceptedOnceWhateverItsTime(): void

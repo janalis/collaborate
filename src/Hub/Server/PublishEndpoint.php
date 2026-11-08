@@ -104,11 +104,15 @@ final class PublishEndpoint
         return 'GET /subscriptions' === $route ? $this->subscriptions($request, $now) : $this->publish($body, $now);
     }
 
-    /** Forgets the nonces of signatures too old to verify again. */
+    /**
+     * Forgets the nonces of signatures too old to verify again. A signature verifies while the whole seconds of
+     * the clock are within {@see RequestSigner::WINDOW} of its time, so one first seen at the start of its window
+     * stays valid until 2 × WINDOW + 1 seconds later: its nonce is kept that long.
+     */
     public function prune(float $now): void
     {
         foreach ($this->seen as $nonce => $time) {
-            if ($time >= ($now - (2 * RequestSigner::WINDOW))) {
+            if ($time >= ($now - (2 * RequestSigner::WINDOW) - 1)) {
                 continue;
             }
             unset($this->seen[$nonce]);

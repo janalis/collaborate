@@ -281,6 +281,11 @@ final class CollaborateBundleTest extends TestCase
             '%collaborate.hub.websocket%',
             $container->getDefinition(HubServeCommand::class)->getArgument(7),
         );
+        // The page learns which way to send its cursor events from the transport: `cursor_events` reaches both.
+        self::assertSame(
+            '%collaborate.hub.websocket.cursor_events%',
+            $container->getDefinition(WebSocketTransport::class)->getArgument(8),
+        );
         $parameters = (string) json_encode($container->getParameterBag()->all());
         self::assertStringNotContainsString($secret, $parameters);
         self::assertStringNotContainsString($previous, $parameters);

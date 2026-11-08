@@ -38,6 +38,7 @@ return static function (ContainerConfigurator $container): void {
         param('collaborate.hub.websocket.publish_socket'),
         service('logger'),
         service('clock'),
+        param('collaborate.hub.websocket.cursor_events'),
     ])->tag('monolog.logger', ['channel' => 'collaborate']);
     $services->alias(HubTransportInterface::class, WebSocketTransport::class);
     $services->alias(PresenceProbeInterface::class, WebSocketTransport::class);

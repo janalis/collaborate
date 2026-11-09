@@ -274,16 +274,15 @@ class DraftJournal implements ResetInterface
             throw new HttpException(413, 'Collaborate update is too large.');
         }
         $field = self::stringOrNull($event['field'] ?? null);
-        $definition = null !== $field && !FieldDefinitions::prototype($field)
-            ? new FieldDefinitions($allowed)->definition($field)
-            : null;
-        if (null !== $field && null === $definition) {
+        if (null === $field) {
+            throw new BadRequestHttpException('Invalid Collaborate event.');
+        }
+        $definition = FieldDefinitions::prototype($field) ? null : new FieldDefinitions($allowed)->definition($field);
+        if (null === $definition) {
             throw new BadRequestHttpException(\sprintf('Collaborate field "%s" is not in this form.', $field));
         }
         if (
-            null === $field
-            || null === $definition
-            || !\is_string($event['id'] ?? null)
+            !\is_string($event['id'] ?? null)
             || !\is_int($event['generation'] ?? null)
             || !\is_int($event['version'] ?? null)
             || !\is_int($event['seen'] ?? null)

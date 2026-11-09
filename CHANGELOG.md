@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-09
+
 ### Added
 
 - A page that stops following its draft as incompatible reports why: the
@@ -364,7 +366,8 @@ versions follow [Semantic Versioning](https://semver.org/).
   `FormContextInterface` (which record a page edits).
 - English and French translations.
 
-[Unreleased]: https://github.com/janalis/collaborate/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/janalis/collaborate/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/janalis/collaborate/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/janalis/collaborate/compare/v0.3.4...v0.4.0
 [0.3.4]: https://github.com/janalis/collaborate/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/janalis/collaborate/compare/v0.3.2...v0.3.3

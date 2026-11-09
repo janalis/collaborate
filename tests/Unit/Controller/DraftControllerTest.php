@@ -124,6 +124,7 @@ final class DraftControllerTest extends TestCase
             $tokens,
             'ROLE_ADMIN',
             $this->limiter,
+            $this->logger,
         );
         $request = new Request(content: json_encode($body + ['grant' => $this->grant], \JSON_THROW_ON_ERROR));
         if (null !== $csrf) {
@@ -336,6 +337,67 @@ final class DraftControllerTest extends TestCase
         $this->expectException(BadRequestHttpException::class);
         $this->expectExceptionMessage('Collaborate request is too large.');
         $this->handle('append', ['padding' => str_repeat('x', $padding + 1)]);
+    }
+
+    public function testAHaltTheReportNamesIsLoggedWithItsDraftAndEditorAndTouchesNoJournal(): void
+    {
+        $this->journal->expects($this->never())->method(self::anything());
+        $this->hub->expects($this->never())->method('publish');
+        $this->logger
+            ->expects($this->once())
+            ->method('error')
+            ->with('Collaborate page stopped following its draft: {cause}.', [
+                'cause' => 'refused',
+                'draft' => 'record',
+                'user' => 7,
+                'field' => 'Record[items][n1][book]',
+                'status' => 400,
+                'detail' => str_repeat('é', 500),
+            ]);
+
+        $response = $this->handle('report', [
+            'cause' => 'refused',
+            'field' => 'Record[items][n1][book]',
+            'status' => 400,
+            'detail' => str_repeat('é', 501),
+        ]);
+
+        self::assertSame(204, $response->getStatusCode());
+        self::assertSame('', $response->getContent());
+    }
+
+    public function testAReportKeepsOnlyTheStringsAndStatusItCanLog(): void
+    {
+        $this->logger
+            ->expects($this->once())
+            ->method('error')
+            ->with(self::anything(), [
+                'cause' => 'prototype',
+                'draft' => 'record',
+                'user' => 7,
+                'field' => null,
+                'status' => null,
+                'detail' => null,
+            ]);
+
+        self::assertSame(
+            204,
+            $this->handle('report', [
+                'cause' => 'prototype',
+                'field' => ['x'],
+                'status' => '400',
+                'detail' => 3,
+            ])->getStatusCode(),
+        );
+    }
+
+    public function testAReportNamesAKnownCause(): void
+    {
+        $this->logger->expects($this->never())->method('error');
+        $this->expectException(BadRequestHttpException::class);
+        $this->expectExceptionMessage('Invalid Collaborate halt cause.');
+
+        $this->handle('report', ['cause' => 'other']);
     }
 
     public function testRateLimitDoesNotTouchTheJournal(): void

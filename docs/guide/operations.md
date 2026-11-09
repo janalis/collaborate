@@ -108,7 +108,15 @@ MySQL: it uses named locks (`GET_LOCK`), `INSERT IGNORE`,
 - **CKEditor upgrades** change field schemas: see
   [Schema compatibility](./shared-drafts#schema-compatibility).
 - **Logs.** Hub failures, oversize forms and failed checkpoints are logged
-  on the `collaborate` Monolog channel.
+  on the `collaborate` Monolog channel, at error level, with every page
+  that stops following its draft as incompatible: its draft, editor and
+  cause (`refused`: the server refused a batch, with its HTTP status and
+  field; `version`: an editor initialized from another model version than
+  the draft stored; `replay`: an event the page could not apply; `schema`:
+  a field's schema changed; `prototype`: a collection entry arrived with no
+  prototype to render it), and the page's console names it too. A refused
+  batch also leaves the request's own error, which names a field outside
+  the form's grant.
 - **WebSocket hub.** Run `collaborate:hub:serve` as one supervised
   process, restarted on every deployment, behind the application's proxy:
   see [Deployment](./websocket-hub#deployment).

@@ -1190,6 +1190,56 @@ test('fails closed on quota errors and retains the local input for recovery', as
   expect(input.value).toBe('unsent');
 });
 
+// The halts a page reported, in order: what the server logs of them.
+const reports = (fetcher) =>
+  fetcher.mock.calls.filter(([url]) => url === '/report').map(([, options]) => JSON.parse(options.body));
+
+test('reports an incompatible halt once per cause and field, with a short grant once acknowledged, and ignores a failed report', async () => {
+  const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const { session, fetcher, configuration } = fixture();
+  await session.ready;
+  fetcher.mockImplementation(async (url) => {
+    if (url === '/report') throw new TypeError('offline');
+    return Response.json({});
+  });
+  session.report('version', 'Record[name]', 'editor 2, draft 1');
+  session.report('version', 'Record[name]', 'again');
+  session.acknowledged = null;
+  session.report('replay', 'Record[name]', 7, 400);
+  session.report('prototype');
+  await vi.waitFor(() => expect(reports(fetcher)).toHaveLength(3));
+  const [version, replay, prototype] = reports(fetcher);
+  expect(version).toEqual({
+    grant: 'signature',
+    cause: 'version',
+    field: 'Record[name]',
+    status: null,
+    detail: 'editor 2, draft 1',
+  });
+  expect(replay).toEqual({
+    grant: configuration.grant,
+    cause: 'replay',
+    field: 'Record[name]',
+    status: 400,
+    detail: '7',
+  });
+  expect(prototype).toMatchObject({ cause: 'prototype', field: null, detail: null, status: null });
+  const [url, options] = fetcher.mock.calls.find(([called]) => called === '/report');
+  expect(url).toBe('/report');
+  expect(options).toMatchObject({
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': 'csrf' },
+  });
+  expect(error).toHaveBeenCalledTimes(3);
+  expect(error).toHaveBeenCalledWith('Collaborate: this page stopped following the shared draft (version).', {
+    field: 'Record[name]',
+    status: null,
+    detail: 'editor 2, draft 1',
+  });
+  error.mockRestore();
+});
+
 test('rejects changed identities, schemas and corrupt operation history while retaining input', async () => {
   const first = fixture();
   await first.session.ready;
@@ -1203,6 +1253,11 @@ test('rejects changed identities, schemas and corrupt operation history while re
   second.state.fields['Record[name]'].schema = 'v2';
   await expect(second.session.pull()).rejects.toThrow('schema');
   expect(second.form.dataset.collaborateState).toBe('incompatible');
+  await vi.waitFor(() =>
+    expect(reports(second.fetcher)).toEqual([
+      expect.objectContaining({ cause: 'schema', field: 'Record[name]', detail: 'v1 → v2' }),
+    ])
+  );
   const third = fixture();
   await third.session.ready;
   third.session.remember({ field: 'Record[name]', kind: 'operations', version: 100 });
@@ -1214,11 +1269,31 @@ test('rejects changed identities, schemas and corrupt operation history while re
     })
   ).toThrow('corrupt');
   expect(third.form.dataset.collaborateState).toBe('incompatible');
+  await vi.waitFor(() =>
+    expect(reports(third.fetcher)).toEqual([
+      expect.objectContaining({ cause: 'replay', field: 'Record[name]', detail: 'corrupt' }),
+    ])
+  );
   const fourth = fixture();
   await fourth.session.ready;
   fourth.state.events.push({ field: 'Record[name]', version: 100, revision: 1, operations: [] });
   await expect(fourth.session.pull()).rejects.toThrow('gap');
   expect(fourth.form.dataset.collaborateState).toBe('incompatible');
+  await vi.waitFor(() =>
+    expect(reports(fourth.fetcher)).toEqual([expect.objectContaining({ cause: 'replay', field: 'Record[name]' })])
+  );
+});
+
+test('reports an editor initialized from another version than the draft stored', async () => {
+  const { session, fetcher } = fixture();
+  await session.ready;
+  session.state.fields['Record[name]'].initialVersion = 1;
+  expect(() => session.register('Record[name]', { version: 3, receive() {} })).toThrow('initialization');
+  await vi.waitFor(() =>
+    expect(reports(fetcher)).toEqual([
+      expect.objectContaining({ cause: 'version', field: 'Record[name]', detail: 'editor 3, draft 1' }),
+    ])
+  );
 });
 
 test('updates only CSRF metadata on baseline refresh and stops when the saved record becomes inaccessible', async () => {
@@ -1314,9 +1389,33 @@ test('stops sending a batch the server refused', async () => {
   await vi.advanceTimersByTimeAsync(150);
   expect(form.dataset.collaborateState).toBe('incompatible');
   expect(session.stopped).toBe(true);
+  expect(reports(fetcher)).toEqual([expect.objectContaining({ cause: 'refused', field: null, status: 400 })]);
   const calls = fetcher.mock.calls.length;
   await vi.advanceTimersByTimeAsync(5000);
   expect(fetcher.mock.calls.length).toBe(calls);
+});
+
+test('reports a refused batch with its status and the field it was for', async () => {
+  const { session, form, fetcher } = fixture();
+  await session.ready;
+  const transport = fetcher.getMockImplementation();
+  fetcher.mockImplementation(async (url, options) =>
+    url === '/append' ? new Response('{}', { status: 400 }) : transport(url, options)
+  );
+  const input = form.querySelector('input');
+  input.value = 'refused';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  await vi.waitFor(() => expect(form.dataset.collaborateState).toBe('incompatible'));
+  await vi.waitFor(() =>
+    expect(reports(fetcher)).toEqual([
+      expect.objectContaining({
+        cause: 'refused',
+        field: 'Record[name]',
+        status: 400,
+        detail: 'Collaborate append: 400',
+      }),
+    ])
+  );
 });
 
 test('waits a second behind a busy draft without reporting a lost connection', async () => {
@@ -1498,6 +1597,9 @@ test('pauses an in-flight replay when IME composition begins and refuses schema 
   const grant = `${btoa(JSON.stringify({ fields: { 'Record[name]': { type: 'text', initial: '', schema: 'v2' } } }))}.signature`;
   await session.refreshConfiguration({ ...configuration, grant });
   expect(form.dataset.collaborateState).toBe('incompatible');
+  expect(reports(fetcher)).toEqual([
+    expect.objectContaining({ cause: 'schema', field: 'Record[name]', detail: 'v1 → v2' }),
+  ]);
   await session.refreshRecord();
 });
 

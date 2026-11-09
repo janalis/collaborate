@@ -230,7 +230,8 @@ so:
   selects the reduced build in
   [`drafts.rich_text.schema_option`](./configuration#drafts-rich-text).
 - A corrupt or incompatible model pauses synchronization and Save and keeps
-  the page readable, so unsent content can be copied.
+  the page readable, so unsent content can be copied. The page reports why
+  to the server, which logs it (see [Operations](./operations)).
 
 Deploy a CKEditor upgrade like a schema migration: preferably when drafts
 are saved, and expect open pages on the old version to stop following

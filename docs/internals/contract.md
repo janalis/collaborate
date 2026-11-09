@@ -22,7 +22,7 @@ How the parts of the bundle talk to each other. Every name here is fixed: PHP, T
 | `Hub\RenewSubscriber` | Puts back the flash messages a `X-Collaborate-Renew: 1` render read. |
 | `Controller\HubController` | `POST <prefix>/cursors/session`, route `collaborate_session`: the page's one subscription, JSON `{transport, url, topics, token, userId, resend, denied, cursorEvents}`; `transport` is `mercure` or `websocket`; `cursorEvents`, whether the page sends its cursor events over its WebSocket. |
 | `Controller\CursorController` | `POST <prefix>/cursors/events`, route `collaborate_cursor_events`. |
-| `Controller\DraftController` | `POST <prefix>/collaborate/{action}`, route `collaborate_draft`, `action` ∈ join, replay, append, discard, reconcile. |
+| `Controller\DraftController` | `POST <prefix>/collaborate/{action}`, route `collaborate_draft`, `action` ∈ join, replay, append, discard, reconcile, report. |
 | `Twig\CollaborateExtension` | `collaborate_layer()`, `collaborate_presence()`, `collaborate_enabled()`, `collaborate_grant()`. |
 | `Draft\DraftJournal`, `DraftText`, `DraftSave` | The journal (MariaDB/MySQL SQL), plain-text operations, the locked save; a host without EasyAdmin calls `DraftSave::completed($record)` once it has persisted the record. |
 | `Form\CollaborateFormExtension` + `Form\FormContextInterface` | Field schema, member keys, the `data-collaborate` attribute; the context says which record the root form edits. |

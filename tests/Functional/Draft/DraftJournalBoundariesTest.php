@@ -770,6 +770,23 @@ final class DraftJournalBoundariesTest extends TestCase
         }
     }
 
+    public function testAnEventWithoutAFieldIsInvalid(): void
+    {
+        $event = $this->event();
+        unset($event['field']);
+
+        $this->expectException(BadRequestHttpException::class);
+        $this->expectExceptionMessage('Invalid Collaborate event.');
+        $this->journal->append('record', $this->fields, $event, 1, 'Alice');
+    }
+
+    public function testAnEventForAFieldOutsideTheFormNamesThatField(): void
+    {
+        $this->expectException(BadRequestHttpException::class);
+        $this->expectExceptionMessage('Collaborate field "missing" is not in this form.');
+        $this->journal->append('record', $this->fields, $this->event(['field' => 'missing']), 1, 'Alice');
+    }
+
     public function testAMembershipNeedsAFlagAndAnOrder(): void
     {
         $this->journal->join('members', self::COLLECTION);

@@ -9,6 +9,8 @@ use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Hub\HubPublisher;
 use Janalis\Collaborate\Hub\Notice;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -25,6 +27,9 @@ use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
  */
 final readonly class DraftController
 {
+    /** Why a page stops following its draft as incompatible, as `session.js` names it. */
+    private const array HALTS = ['refused', 'version', 'replay', 'schema', 'prototype'];
+
     public function __construct(
         private DraftAccess $access,
         private DraftJournal $journal,
@@ -34,6 +39,7 @@ final readonly class DraftController
         private CsrfTokenManagerInterface $csrf,
         private string $role = 'ROLE_ADMIN',
         private ?RateLimiterFactoryInterface $limiter = null,
+        private LoggerInterface $logger = new NullLogger(),
     ) {}
 
     public function handle(string $action, Request $request): Response
@@ -66,6 +72,11 @@ final readonly class DraftController
         $label = $this->collaborators->label($user);
         $event = $data;
         unset($event['grant']);
+        if ('report' === $action) {
+            $this->report($id, $userId, $data);
+
+            return new Response(null, Response::HTTP_NO_CONTENT, ['Cache-Control' => 'no-store']);
+        }
         $result = match ($action) {
             'join' => $this->journal->join($id, $fields, $scope['requestedAt'] ?? 0.0),
             'replay' => \is_string($data['stamp'] ?? null)
@@ -116,6 +127,33 @@ final readonly class DraftController
         }
 
         return new JsonResponse($result, headers: ['Cache-Control' => 'no-store']);
+    }
+
+    /**
+     * A page halts as incompatible on its own (an editor or a replay it cannot apply) or on a refusal it will
+     * not send again: the server keeps no other trace of the first, so the page reports both.
+     *
+     * @param array<string, mixed> $data
+     */
+    private function report(string $id, int $userId, array $data): void
+    {
+        $cause = \is_string($data['cause'] ?? null) ? $data['cause'] : '';
+        if (!\in_array($cause, self::HALTS, true)) {
+            throw new BadRequestHttpException('Invalid Collaborate halt cause.');
+        }
+        $this->logger->error('Collaborate page stopped following its draft: {cause}.', [
+            'cause' => $cause,
+            'draft' => $id,
+            'user' => $userId,
+            'field' => self::text($data['field'] ?? null),
+            'status' => \is_int($data['status'] ?? null) ? $data['status'] : null,
+            'detail' => self::text($data['detail'] ?? null),
+        ]);
+    }
+
+    private static function text(mixed $value): ?string
+    {
+        return \is_string($value) ? mb_substr($value, 0, 500) : null;
     }
 
     /** @param array<string, mixed> $data */

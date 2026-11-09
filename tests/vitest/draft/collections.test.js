@@ -39,6 +39,7 @@ function fixture(existing = true) {
     initializeControls: vi.fn(),
     schedule: vi.fn(),
     setStatus: vi.fn(),
+    report: vi.fn(),
     ensureField(name) {
       this.state.fields[name] ||= { type: 'member', initial: { alive: false, order: 0, recordId: null } };
       return this.state.fields[name];
@@ -310,6 +311,7 @@ test.each([
   session.state.fields['Record[title]'] = { type: 'text', value: 'unchanged' };
   document.dispatchEvent(new Event('ea.collection.item-added'));
   if (kind !== 'parent') expect(session.setStatus).toHaveBeenCalledWith('incompatible');
+  if (kind !== 'parent') expect(session.report).toHaveBeenCalledWith('prototype', 'Record[items]');
   stop();
 });
 
@@ -398,6 +400,7 @@ function positioned(positions, values = {}) {
     initializeControls: vi.fn(),
     schedule: vi.fn(),
     setStatus: vi.fn(),
+    report: vi.fn(),
     ensureField(name) {
       return this.state.fields[name];
     },
@@ -551,6 +554,7 @@ test('projects the memberships a reopened page replays only once every member ha
     initializeControls: vi.fn(),
     schedule: vi.fn(),
     setStatus: vi.fn(),
+    report: vi.fn(),
     ensureField(name) {
       return this.state.fields[name];
     },
@@ -591,6 +595,7 @@ function stockSession(form) {
     initializeControls: vi.fn(),
     schedule: vi.fn(),
     setStatus: vi.fn(),
+    report: vi.fn(),
     ensureField(name) {
       this.state.fields[name] ||= { type: 'member', initial: { alive: false, order: 0, recordId: null } };
       return this.state.fields[name];

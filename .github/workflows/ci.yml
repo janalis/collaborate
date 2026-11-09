@@ -205,26 +205,5 @@ jobs:
       FRANKENPHP: /usr/local/bin/frankenphp
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
-        with:
-          php-version: '8.5'
-          extensions: pdo_mysql, mbstring, intl, pcntl
-          coverage: none
-          tools: composer:v2
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24
-          cache: npm
-      - run: composer install --no-interaction --prefer-dist
-      - run: npm ci
-      # The static build embeds PHP (with pdo_mysql) and the Mercure hub module. The plain application's
-      # `e2e_ws` environment runs without Mercure: Playwright starts collaborate:hub:serve on the runner's PHP.
-      - name: Install FrankenPHP
-        run: |
-          sudo curl -fsSL -o "$FRANKENPHP" \
-            "https://github.com/php/frankenphp/releases/download/${FRANKENPHP_VERSION}/frankenphp-linux-x86_64"
-          sudo chmod +x "$FRANKENPHP"
-          "$FRANKENPHP" version
-          "$FRANKENPHP" list-modules | grep -x http.handlers.mercure
-      - run: npx playwright install --with-deps chromium
+      - uses: ./.github/actions/browser-setup
       - run: make e2e

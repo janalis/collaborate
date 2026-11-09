@@ -25,6 +25,10 @@
   <a href="https://janalis.github.io/collaborate/guide/easyadmin">EasyAdmin</a>
 </p>
 
+<p align="center">
+  <img src="docs/public/screenshots/hero.png" alt="Alice's edit page in EasyAdmin: Bob's avatar in the header, his pointer, his selection in the summary he is editing, and the bar telling of unsaved changes" width="800">
+</p>
+
 ---
 
 `janalis/collaborate` is a Symfony bundle that lets several people work on

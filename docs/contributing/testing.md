@@ -282,3 +282,34 @@ instead:
 | Avatars from `avatarUrl()` | The test accounts have none. |
 | `share_stream` over HTTP/1.1, `distinct_colors`, `silent_alone`'s hello resent | One context per reader holds its own locks; colour picking and lost hellos are Vitest's (`tests/vitest/cursors/host.*`). The host project runs with them on. |
 | An accessibility scan (axe) of the presence menu and a popup's line | `@axe-core/playwright` is not a dependency of the bundle. |
+
+## Screenshots
+
+The screenshots of the guide and the README (`docs/public/screenshots/`)
+are taken in the test applications, by the scenes of `tests/screenshots/`
+(one directory per application: `easyadmin`, `plain`, `host`), with the
+fixtures of the Playwright scenarios. `playwright.screenshots.config.js`
+reuses the scenarios' projects and server, at 1280×800 and twice the pixel
+density.
+
+```sh
+make screenshots                       # app-setup, then rewrite the images that changed
+make screenshots ARGS="-g hero"        # one scene
+```
+
+A scene ends in `expect(page).toHaveScreenshot('name.png')`, which writes
+`docs/public/screenshots/name.png`; a page refers to it as
+`/screenshots/name.png`, the README as `docs/public/screenshots/name.png`.
+An image is rewritten only when more than 1% of its pixels differ, so a
+scene must show the same thing on every run: fixed titles and contents,
+nothing that tells the time, and its waits on what the picture shows (a
+peer's avatar, pointer or mark, the state of the bar).
+
+On every push to `main` that touches the pages, their assets or the scenes,
+the `screenshots` workflow runs `make screenshots` on Ubuntu and opens a
+pull request (`screenshots/refresh`) with the images that changed. Its
+Chromium and fonts are the reference: images taken on another system differ
+in their pixels, so commit the ones the workflow takes, not your own. The
+workflow can also be run by hand (`workflow_dispatch`). The repository must
+let GitHub Actions create pull requests, and a pull request opened with
+`GITHUB_TOKEN` starts no workflow: close and reopen it to run CI on it.

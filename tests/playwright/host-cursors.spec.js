@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { layer, signedIn as reader } from './lib/host.js';
 
 // A host whose pages are no forms (tests/Application/Host): the readers of a folder of a library see each
 // other's pointers on its records, whatever the view, the address or the scroll, in a popup of a record, and
@@ -6,19 +7,6 @@ import { expect, test } from '@playwright/test';
 
 const BOB = 16;
 
-/** A reader: a browser context signed in as `username`, on a folder of the library. */
-async function reader(browser, baseURL, username, path = '/admin/library/music', options = {}) {
-  const context = await browser.newContext({ baseURL, ...options });
-  const page = await context.newPage();
-  await page.goto('/login');
-  await page.getByLabel('Username').fill(username);
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await page.waitForURL((url) => !url.pathname.startsWith('/login'));
-  await page.goto(path);
-  return { context, page };
-}
-
-const layer = (page) => page.locator('[data-collaborate-layer]');
 const record = (page, key) => page.locator(`#listing [data-key="${key}"]`);
 const cursorOf = (page, userId = BOB) => layer(page).locator(`.collaborate-cursor[data-user-id="${userId}"]`);
 const toggle = (page) => page.locator('.collaborate-presence__toggle');

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { layer, notify, signedIn } from './lib/host.js';
 
 // Notifications in the host library (tests/Application/Host): the bell of a page counts what its reader is
 // told at once, over the stream the page already holds; a reader leaves a topic and is told nothing more of
@@ -7,34 +8,12 @@ import { expect, test } from '@playwright/test';
 const ALICE = 15;
 const READER = 17;
 
-/** A browser context signed in as `username`, on `path`. */
-async function signedIn(browser, baseURL, username, path = '/admin/library/music', options = {}) {
-  const context = await browser.newContext({ baseURL, ...options });
-  const page = await context.newPage();
-  await page.goto('/login');
-  await page.getByLabel('Username').fill(username);
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await page.waitForURL((url) => !url.pathname.startsWith('/login'));
-  await page.goto(path);
-  return { context, page };
-}
-
 const toggle = (page) => page.locator('.collaborate-notifications__toggle');
 const count = (page) => page.locator('.collaborate-notifications__count');
-const layer = (page) => page.locator('[data-collaborate-layer]');
 
 /** The stream of a page is open: the hub answered it (a bare layer runs no cursors, which mark it connected). */
 const streaming = (page) =>
   page.waitForResponse((response) => response.url().includes('/.well-known/mercure') && response.status() === 200);
-
-/** The library tells somebody something, as its own code would. */
-async function notify(request, to, record, type = 'record_shared') {
-  const parameters = type === 'record_shared' ? { '%name%': 'Bob', '%record%': record } : { '%text%': record };
-  const response = await request.post('/e2e/notify', {
-    data: { to, type, parameters, url: '/admin/library/films' },
-  });
-  expect(response.ok()).toBeTruthy();
-}
 
 test.describe('notifications', () => {
   // The scenarios of the cursors revoke a folder: the library is whole again for these.

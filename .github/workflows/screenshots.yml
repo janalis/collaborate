@@ -1,0 +1,70 @@
+name: screenshots
+# Retakes the screenshots of the documentation and the README (docs/public/screenshots/) in the test
+# applications, and opens a pull request with those that changed (`make screenshots`). Ubuntu's Chromium
+# and fonts are the reference renderer: a screenshot taken elsewhere differs in its pixels.
+#
+# The repository must let GitHub Actions create pull requests (Settings → Actions → General). A pull request
+# opened with GITHUB_TOKEN runs no workflow: close and reopen it to run CI on it.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "assets/**"
+      - "src/**"
+      - "templates/**"
+      - "translations/**"
+      - "tests/Application/**"
+      - "tests/playwright/lib/**"
+      - "tests/screenshots/**"
+      - "playwright.config.js"
+      - "playwright.screenshots.config.js"
+      - ".github/actions/browser-setup/**"
+      - ".github/workflows/screenshots.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: screenshots
+  cancel-in-progress: true
+jobs:
+  screenshots:
+    name: Retake the screenshots
+    # Playwright 1.59 installs its browsers on Ubuntu 24.04 at most.
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+    services:
+      database:
+        image: mariadb:11.4
+        env:
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: '1'
+          MARIADB_DATABASE: collaborate_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      COLLABORATE_DATABASE_URL: mysql://root@127.0.0.1:3306/collaborate_test?serverVersion=10.11.0-MariaDB
+      FRANKENPHP_VERSION: v1.13.4
+      FRANKENPHP: /usr/local/bin/frankenphp
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/browser-setup
+      - run: make screenshots
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: screenshots-test-results
+          path: test-results/
+          retention-days: 7
+      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          add-paths: docs/public/screenshots/*.png
+          branch: screenshots/refresh
+          delete-branch: true
+          commit-message: Retake the screenshots of the documentation
+          title: Retake the screenshots of the documentation
+          body: |
+            The screenshots in `docs/public/screenshots/` no longer match the test applications, as of ${{ github.sha }}.
+            Retaken by the [screenshots workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) (`make screenshots`).

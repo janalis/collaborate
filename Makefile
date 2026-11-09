@@ -25,7 +25,7 @@ EDITORCONFIG ?= go run github.com/editorconfig-checker/editorconfig-checker/v3/c
 ACTIONLINT ?= go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 BUMP ?= patch
 
-.PHONY: help install fmt fmt-check lint analyze validate test test-unit test-functional test-integration test-js lint-js coverage infection app-setup e2e verify clean
+.PHONY: help install fmt fmt-check lint analyze validate test test-unit test-functional test-integration test-js lint-js coverage infection app-setup e2e screenshots verify clean
 .PHONY: docs docs-dev lint-md fmt-md lint-editorconfig lint-actions test-tools release-notes
 
 help: ## List the targets
@@ -92,6 +92,9 @@ app-setup: ## Prepare the test applications for the browser: assets, EasyAdmin's
 
 e2e: app-setup ## Run the Playwright scenarios against the three applications under FrankenPHP and the WebSocket hub (ARGS="--project=plain …")
 	npx playwright test $(ARGS)
+
+screenshots: app-setup ## Retake the screenshots of the docs and the README (docs/public/screenshots/) that changed
+	npx playwright test -c playwright.screenshots.config.js --update-snapshots=changed $(ARGS)
 
 verify: validate fmt-check lint analyze test lint-js test-js ## Everything CI checks, but the browser and mutation runs
 

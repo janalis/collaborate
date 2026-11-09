@@ -9,6 +9,8 @@ scripts that write into fields.
 The page creates its own CKEditor 5 instances; the bundle provides a
 plugin, `Collaborate`, and the draft's configuration for each field.
 
+![A CKEditor field shared by Alice and Bob: Bob's selection of the sentence he just typed, and the mark of the field he is in](/screenshots/rich-text.png)
+
 ### 1. Mark the fields
 
 List the form types rendered as rich text in

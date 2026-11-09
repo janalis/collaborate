@@ -6,6 +6,8 @@ drafts work on any Symfony form page once the bundle knows which record the
 page edits, and once the page's controller plays its part in Save. This page
 lists what EasyAdmin's adapter otherwise does for you.
 
+![The same shared draft on a page rendered by Symfony's Bootstrap 5 form theme, without EasyAdmin](/screenshots/plain.png)
+
 ## The form context
 
 Implement `Janalis\Collaborate\Form\FormContextInterface` and alias the

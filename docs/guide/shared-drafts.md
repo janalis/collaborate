@@ -38,6 +38,8 @@ Above each shared form, a bar shows the draft's state in its own color and
 icon. A visually hidden live region announces each state once, except the
 synchronization every send passes through.
 
+![The state bar of a draft holding a change Bob made to the title: unsaved changes, kept automatically, with Save and Discard changes](/screenshots/shared-draft.png)
+
 The bar's actions follow its state, and an action a state does not offer is
 hidden. While the draft holds changes the record does not (unsaved,
 synchronizing, interrupted, changed meanwhile), the bar offers **Save**
@@ -157,6 +159,8 @@ When the record is saved outside the draft (by another form, a script, an
 import, a save without JavaScript), open edit pages hear of it on their
 draft's topic and compare again, once a second at most. Differences appear
 under **Differences with the saved record**:
+
+![The review of a record saved elsewhere: the bar in its warning color, and the summary's saved and draft versions with the changed word marked](/screenshots/conflict-review.png)
 
 - each conflicting field is named by its label (a collection entry's after
   its collection's) and shows both versions as read: a choice by its

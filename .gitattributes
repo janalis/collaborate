@@ -21,3 +21,6 @@
 /tsconfig.json export-ignore
 /typings/ export-ignore
 /vitest.config.mjs export-ignore
+
+# Screenshots are compared and replaced whole, never merged.
+*.png binary

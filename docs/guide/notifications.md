@@ -8,6 +8,8 @@ through [web push](#web-push). Each notification belongs to a
 [topic](#topics) its reader may unsubscribe from. Notifications are off
 until `notifications` is configured, and every part of them is optional.
 
+![The bell of a page open on three unread notifications: an announcement and two records shared by Bob](/screenshots/notifications.png)
+
 ## Setting them up
 
 ```yaml

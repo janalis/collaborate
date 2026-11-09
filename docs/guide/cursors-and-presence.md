@@ -5,6 +5,8 @@ shows its other collaborators, as long as
 [`cursors.enabled`](./configuration#cursors) is on (the default). No cursor
 state is written to the database.
 
+![Bob, seen from Alice's page: his avatar in the header, his pointer over the summary, and his selection in the content field he is in](/screenshots/presence-cursors.png)
+
 ## Rooms
 
 Collaborators see each other when they are on the same **room**: the same

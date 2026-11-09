@@ -70,3 +70,11 @@
 .vp-doc table code {
   white-space: nowrap;
 }
+
+/* The screenshots of the test applications, framed as pictures of a screen. */
+.vp-doc img[src*="/screenshots/"] {
+  margin: 16px 0;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+  box-shadow: var(--vp-shadow-2);
+}

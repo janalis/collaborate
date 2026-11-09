@@ -1,0 +1,34 @@
+name: Browser setup
+description: >-
+  PHP, Node, the dependencies, FrankenPHP and Chromium: what the browser scenarios and the documentation's
+  screenshots need to run the test applications. The job provides the database and FRANKENPHP_VERSION and
+  FRANKENPHP (where to install it) in its environment.
+runs:
+  using: composite
+  steps:
+    - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+      with:
+        php-version: '8.5'
+        extensions: pdo_mysql, mbstring, intl, pcntl
+        coverage: none
+        tools: composer:v2
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version: 24
+        cache: npm
+    - run: composer install --no-interaction --prefer-dist
+      shell: bash
+    - run: npm ci
+      shell: bash
+    # The static build embeds PHP (with pdo_mysql) and the Mercure hub module. The plain application's
+    # `e2e_ws` environment runs without Mercure: Playwright starts collaborate:hub:serve on the runner's PHP.
+    - name: Install FrankenPHP
+      shell: bash
+      run: |
+        sudo curl -fsSL -o "$FRANKENPHP" \
+          "https://github.com/php/frankenphp/releases/download/${FRANKENPHP_VERSION}/frankenphp-linux-x86_64"
+        sudo chmod +x "$FRANKENPHP"
+        "$FRANKENPHP" version
+        "$FRANKENPHP" list-modules | grep -x http.handlers.mercure
+    - run: npx playwright install --with-deps chromium
+      shell: bash

@@ -51,3 +51,5 @@ features:
     link: /guide/easyadmin
     linkText: EasyAdmin adapter
 ---
+
+![Alice's edit page in EasyAdmin: Bob's avatar in the header, his pointer, his selection in the summary he is editing, and the bar telling of unsaved changes](/screenshots/hero.png)

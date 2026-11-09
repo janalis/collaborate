@@ -15,6 +15,8 @@ people use at the same time. It adds three things:
 - **Saved-view refresh.** Lists and detail pages reload when a save
   elsewhere changes what they show. See [Saved-view refresh](./saved-views).
 
+![Alice's edit page in EasyAdmin: Bob's avatar in the header, his pointer, his selection in the summary he is editing, and the bar telling of unsaved changes](/screenshots/hero.png)
+
 The bundle is a framework-level **core** (forms, Twig, controllers, the
 journal) plus an **EasyAdmin adapter**, loaded when EasyAdminBundle is
 registered. Without EasyAdmin, one small service tells the bundle which

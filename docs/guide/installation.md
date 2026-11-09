@@ -50,7 +50,7 @@ This adds three `POST` routes:
 |---|---|---|
 | `collaborate_session` | `<prefix>/cursors/session` | The page's subscriber token and its topics. |
 | `collaborate_cursor_events` | `<prefix>/cursors/events` | Pointer, caret and presence events (404 when cursors are disabled). |
-| `collaborate_draft` | `<prefix>/collaborate/{action}` | Draft requests; `action` is `join`, `replay`, `append`, `discard` or `reconcile`. |
+| `collaborate_draft` | `<prefix>/collaborate/{action}` | Draft requests; `action` is `join`, `replay`, `append`, `discard`, `reconcile` or `report`. |
 
 The prefix may hold a locale (`/{_locale}/admin`): the locale does not
 separate cursor rooms. The routes must sit behind the firewall that signs in

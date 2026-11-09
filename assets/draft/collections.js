@@ -78,6 +78,7 @@ export function initializeCollections(session) {
           prototype ??= prototypeOf(container);
           if (!prototype) {
             session.setStatus('incompatible');
+            session.report('prototype', path);
             continue;
           }
           placeholder ??= placeholderOf(container);

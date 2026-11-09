@@ -5,6 +5,21 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- A page that stops following its draft as incompatible reports why: the
+  `report` draft action logs its cause (`refused`, `version`, `replay`,
+  `schema` or `prototype`), field, HTTP status and detail with its draft
+  and editor at error level on the `collaborate` channel, and the page's
+  console names it. Halts the page decided itself left no trace on the
+  server.
+
+### Changed
+
+- An append for a field outside the form's grant is refused as
+  `Collaborate field "<name>" is not in this form.` instead of the generic
+  invalid-event message.
+
 ## [0.4.0] - 2026-11-08
 
 ### Added

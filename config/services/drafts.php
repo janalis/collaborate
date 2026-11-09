@@ -89,8 +89,10 @@ return static function (ContainerConfigurator $container): void {
             service('security.csrf.token_manager'),
             param('collaborate.role'),
             service('janalis_collaborate.limiter.drafts')->nullOnInvalid(),
+            service('logger'),
         ])
-        ->tag('controller.service_arguments');
+        ->tag('controller.service_arguments')
+        ->tag('monolog.logger', ['channel' => 'collaborate']);
 
     $services
         ->set(PurgeDraftsCommand::class)

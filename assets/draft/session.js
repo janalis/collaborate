@@ -49,6 +49,7 @@ export class DraftSession {
     this.hub = hub;
     this.adapters = new Map();
     this.history = new Map();
+    this.reported = new Set();
     // Typed Markdown source not yet applied to its editor's model: flush() applies it before sending.
     this.sources = new Map();
     this.revision = 0;
@@ -334,14 +335,14 @@ export class DraftSession {
       state.initialVersion !== undefined &&
       buffer.version !== state.initialVersion
     ) {
-      this.incompatible();
+      this.incompatible('version', name, `editor ${buffer.version}, draft ${state.initialVersion}`);
       throw new Error('Collaborate editor initialization differs from the stored draft.');
     }
     this.adapters.set(name, buffer);
     try {
       for (const event of this.history.get(name) || []) buffer.receive(event);
     } catch (error) {
-      this.incompatible();
+      this.incompatible('replay', name, error?.message);
       throw error;
     }
     return () => this.adapters.delete(name);
@@ -356,9 +357,38 @@ export class DraftSession {
   }
 
   // Save stays paused, but the page must remain readable so unsent content can be copied.
-  incompatible() {
+  incompatible(cause, field, detail) {
     this.halt('incompatible');
+    this.report(cause, field, detail);
     this.releaseControls();
+  }
+
+  /**
+   * Tells the server why this page stopped following the draft as incompatible, once per cause and field: nothing
+   * else records a halt the page decides itself, and the bar only asks the editor to reload.
+   */
+  report(cause, field = null, detail = null, status = null) {
+    const key = `${cause}:${field}`;
+    if (this.reported.has(key)) return;
+    this.reported.add(key);
+    console.error(`Collaborate: this page stopped following the shared draft (${cause}).`, { field, status, detail });
+    const grant = this.configuration.grant;
+    const request = {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': this.configuration.csrf },
+      body: JSON.stringify({
+        grant: this.acknowledged === grant ? grant.split('.')[1] : grant,
+        cause,
+        field,
+        status,
+        detail: detail == null ? null : String(detail),
+      }),
+    };
+    Promise.resolve()
+      .then(() => this.fetcher(this.configuration.url.replace('__action__', 'report'), request))
+      // A report is best effort: the page has already stopped, and nothing waits on it.
+      .catch(() => {});
   }
 
   /** Stops following the draft: no more requests, stream or timers. The form keeps its collaborative Save guard. */
@@ -499,6 +529,7 @@ export class DraftSession {
       const definition = this.definition(name, after.fields);
       if (state.schema && definition?.schema && state.schema !== definition.schema) {
         this.halt('incompatible');
+        this.report('schema', name, `${state.schema} → ${definition.schema}`);
         return;
       }
     }
@@ -580,6 +611,7 @@ export class DraftSession {
         // The server refused this batch: sending it again would be refused again.
         if (error?.status >= 400 && error.status < 500 && ![409, 429].includes(error.status)) {
           this.halt('incompatible');
+          this.report('refused', error.field ?? null, error.message, error.status);
           return;
         }
         // A save holds the draft: the server answers at once, and the edits wait here a moment.
@@ -717,6 +749,7 @@ export class DraftSession {
       const definition = this.definition(name);
       if (field.schema && definition?.schema && field.schema !== definition.schema) {
         this.halt('incompatible');
+        this.report('schema', name, `${definition.schema} → ${field.schema}`);
         throw new Error('Collaborate schema changed.');
       }
       this.state.fields[name] = { ...this.state.fields[name], ...field };
@@ -729,6 +762,7 @@ export class DraftSession {
         this.adapters.get(event.field)?.receive(event);
       } catch (error) {
         this.halt('incompatible');
+        this.report('replay', event.field, error?.message);
         throw error;
       }
       this.remember(event);
@@ -824,6 +858,8 @@ export class DraftSession {
         try {
           await this.request('append', outgoing);
         } catch (error) {
+          // A refusal names its field to the report it may end in.
+          error.field = outgoing.field;
           if (error.status !== 409) throw error;
         }
         await this.pull();

@@ -277,6 +277,9 @@ class DraftJournal implements ResetInterface
         $definition = null !== $field && !FieldDefinitions::prototype($field)
             ? new FieldDefinitions($allowed)->definition($field)
             : null;
+        if (null !== $field && null === $definition) {
+            throw new BadRequestHttpException(\sprintf('Collaborate field "%s" is not in this form.', $field));
+        }
         if (
             null === $field
             || null === $definition

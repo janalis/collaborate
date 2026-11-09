@@ -310,6 +310,8 @@ the `screenshots` workflow runs `make screenshots` on Ubuntu and opens a
 pull request (`screenshots/refresh`) with the images that changed. Its
 Chromium and fonts are the reference: images taken on another system differ
 in their pixels, so commit the ones the workflow takes, not your own. The
-workflow can also be run by hand (`workflow_dispatch`). The repository must
-let GitHub Actions create pull requests, and a pull request opened with
-`GITHUB_TOKEN` starts no workflow: close and reopen it to run CI on it.
+workflow can also be run by hand (`workflow_dispatch`). It opens the pull
+request with the `SCREENSHOTS_TOKEN` secret, a fine-grained token limited to
+this repository with Contents and Pull requests in read and write, so that
+CI runs on it. Without that secret it uses `GITHUB_TOKEN`, whose pull
+requests start no workflow: close and reopen one to run CI on it.

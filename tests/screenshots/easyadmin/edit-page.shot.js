@@ -40,14 +40,13 @@ async function point(bob, target, x = 0.5, y = 0.5) {
 test('hero', async ({ article, editor }) => {
   const { alice, bob } = await together(article, editor);
 
-  // Bob rewrites the summary and selects a word in it; his pointer rests on the title.
+  // Bob adds to the summary and selects its last word; his pointer rests on the title.
   const summary = bob.control('summary');
   await summary.click();
   await summary.press('ControlOrMeta+End');
   await summary.pressSequentially(' Out in March.');
   await expect(alice.control('summary')).toHaveValue(/Out in March\.$/);
-  await summary.press('Shift+ArrowLeft');
-  for (let i = 0; i < 5; i++) await summary.press('Shift+ArrowLeft');
+  for (let i = 0; i < 'March.'.length; i++) await summary.press('Shift+ArrowLeft');
   await point(bob, bob.control('title'), 0.7);
 
   await expectState(alice, 'draft');
@@ -60,8 +59,7 @@ test('presence and cursors', async ({ article, editor }) => {
   const { alice, bob } = await together(article, editor);
 
   await bob.caretRich('end');
-  await bob.page.keyboard.press('Shift+ArrowLeft');
-  for (let i = 0; i < 6; i++) await bob.page.keyboard.press('Shift+ArrowLeft');
+  for (let i = 0; i < 'debuts.'.length; i++) await bob.page.keyboard.press('Shift+ArrowLeft');
   await point(bob, bob.control('summary'), 0.6, 0.4);
 
   await expect(alice.form.locator('[data-peer-focus-label="Bob"]')).toHaveCount(1);
@@ -74,8 +72,7 @@ test('rich text', async ({ article, editor }) => {
 
   await bob.typeRich(' The first ships on 3 March.');
   await expect(alice.richText).toContainText('ships on 3 March.');
-  await bob.page.keyboard.press('Shift+ArrowLeft');
-  for (let i = 0; i < 7; i++) await bob.page.keyboard.press('Shift+ArrowLeft');
+  for (let i = 0; i < '3 March.'.length; i++) await bob.page.keyboard.press('Shift+ArrowLeft');
   // Bob's pointer rests outside the picture.
   await bob.page.mouse.move(5, 400);
 

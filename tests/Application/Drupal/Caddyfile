@@ -1,0 +1,29 @@
+# The Drupal test site's origin: its Mercure hub, and the site itself proxied to PHP's built-in server
+# (DRUPAL_PHP_PORT, 8791, `php -S` with workers; Playwright starts both). FrankenPHP running Drupal itself aborted
+# intermittently (SIGABRT, no PHP error) on macOS: it serves the hub alone.
+#   frankenphp run --config tests/Application/Drupal/Caddyfile   (from the repository root)
+# Port: DRUPAL_PORT (8790). Database: the site's settings.php (`make drupal-install`).
+{
+	auto_https off
+	admin off
+}
+
+:{$DRUPAL_PORT:8790} {
+	bind 127.0.0.1
+	route {
+		mercure {
+			name drupal
+			transport local
+			subscriptions
+			issuer collaborate-drupal {
+				publisher {
+					jwt {$MERCURE_JWT_SECRET:!ChangeThisMercureHubJWTSecretKey!} HS256
+				}
+				subscriber {
+					jwt {$MERCURE_JWT_SECRET:!ChangeThisMercureHubJWTSecretKey!} HS256
+				}
+			}
+		}
+		reverse_proxy 127.0.0.1:{$DRUPAL_PHP_PORT:8791}
+	}
+}

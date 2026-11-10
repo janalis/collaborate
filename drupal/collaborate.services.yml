@@ -1,0 +1,126 @@
+# The module's adapters. The bundle's own services are loaded by CollaborateServiceProvider, and pointed at these
+# by DrupalWiringPass.
+services:
+  _defaults:
+    autowire: false
+
+  logger.channel.collaborate:
+    parent: logger.channel_base
+    arguments: ['collaborate']
+
+  collaborate.clock:
+    class: Symfony\Component\Clock\NativeClock
+
+  collaborate.http_client:
+    class: Symfony\Contracts\HttpClient\HttpClientInterface
+    factory: ['Symfony\Component\HttpClient\HttpClient', 'create']
+
+  Drupal\collaborate\Security\DrupalCurrentUser:
+    arguments: ['@current_user']
+
+  collaborate.csrf:
+    class: Drupal\collaborate\Security\DrupalCsrfTokenManager
+    arguments: ['@csrf_token']
+
+  collaborate.translator:
+    class: Drupal\collaborate\DrupalTranslator
+    arguments: ['@string_translation', '@language_manager']
+
+  collaborate.identity:
+    class: Drupal\collaborate\Security\DrupalCollaboratorProvider
+    arguments: ['@entity_type.manager', '@file_url_generator']
+
+  collaborate.access:
+    class: Drupal\collaborate\Security\DrupalAccessChecker
+    arguments: ['@entity_type.manager']
+
+  collaborate.places:
+    class: Drupal\collaborate\Bridge\DrupalPlaces
+    arguments: ['@access_manager']
+
+  collaborate.locales:
+    class: Drupal\collaborate\Notification\DrupalLocales
+    arguments: ['@entity_type.manager']
+
+  collaborate.record_identifier:
+    class: Drupal\collaborate\Bridge\EntityIdentifier
+
+  # The draft journal's MariaDB or MySQL connection, from Drupal's default database.
+  collaborate.dbal:
+    class: Doctrine\DBAL\Connection
+    factory: ['Drupal\collaborate\Storage\Connections', 'dbal']
+
+  # The notifications' entity manager, on the same connection.
+  collaborate.entity_manager:
+    class: Doctrine\ORM\EntityManagerInterface
+    factory: ['Drupal\collaborate\Storage\Connections', 'entityManager']
+    arguments: ['@collaborate.dbal']
+
+  # Verified grants, kept across requests in the database as Drupal's caches are.
+  collaborate.grant_cache:
+    class: Symfony\Component\Cache\Adapter\DoctrineDbalAdapter
+    arguments: ['@collaborate.dbal', 'collaborate', 0, { db_table: collaborate_grant_cache }]
+
+  # Notifications and web pushes queued for cron, or for `drush queue:run collaborate`.
+  collaborate.message_bus:
+    class: Drupal\collaborate\Notification\QueueBus
+    arguments: ['@queue']
+
+  collaborate.twig_runtime_loader:
+    class: Twig\RuntimeLoader\ContainerRuntimeLoader
+    arguments: ['@service_container']
+
+  # The bundle's templates (`@JanalisCollaborate/…`) for Drupal's Twig.
+  collaborate.twig_loader:
+    class: Twig\Loader\FilesystemLoader
+    arguments: [[], '%app.root%']
+    calls:
+      - [addPath, ['%collaborate.templates%', 'JanalisCollaborate']]
+    tags:
+      - { name: twig.loader, priority: -100 }
+
+  Drupal\collaborate\Bridge\EntityForms:
+    arguments:
+      - '@Janalis\Collaborate\Draft\FormDraft'
+      - '@Janalis\Collaborate\Draft\DraftAccess'
+      - '@Janalis\Collaborate\Security\CurrentUserInterface'
+      - '@collaborate.identity'
+      - '@collaborate.access'
+      - '@Janalis\Collaborate\Draft\DraftSave'
+      - '@request_stack'
+      - '@csrf_token'
+      - '%collaborate.drafts%'
+      - '%collaborate.role%'
+      - '%collaborate.editor_version%'
+
+  Drupal\collaborate\Page\AssetUrls:
+    arguments: ['@extension.list.module']
+
+  Drupal\collaborate\Page\Pages:
+    arguments:
+      - '@Janalis\Collaborate\Security\CurrentUserInterface'
+      - '@Janalis\Collaborate\Twig\CollaborateExtension'
+      - '@twig'
+      - '@current_route_match'
+      - '@Drupal\collaborate\Page\AssetUrls'
+      - '%collaborate.role%'
+      - '%collaborate.notifications.enabled%'
+
+  Drupal\collaborate\Bridge\EntityChanges:
+    arguments: ['@request_stack', '@Janalis\Collaborate\Draft\DraftAccess', '%collaborate.updates.enabled%']
+
+  Drupal\collaborate\EventSubscriber\AccessDeniedSubscriber:
+    tags:
+      - { name: event_subscriber }
+
+  Drupal\collaborate\EventSubscriber\EnforcedResponseSubscriber:
+    tags:
+      - { name: event_subscriber }
+
+  Drupal\collaborate\EventSubscriber\RefreshSubscriber:
+    tags:
+      - { name: event_subscriber }
+
+  Drupal\collaborate\PathProcessor\AssetPathProcessor:
+    tags:
+      - { name: path_processor_inbound, priority: 200 }

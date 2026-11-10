@@ -1,0 +1,92 @@
+{
+    "name": "janalis/collaborate-drupal-test-site",
+    "description": "The Drupal site the module's kernel, functional and browser tests run on; built by `make drupal-install`.",
+    "type": "project",
+    "license": "MIT",
+    "repositories": [
+        {
+            "type": "composer",
+            "url": "https://packages.drupal.org/8"
+        },
+        {
+            "type": "path",
+            "url": "../../..",
+            "options": {
+                "symlink": true,
+                "versions": {
+                    "janalis/collaborate": "0.5.x-dev"
+                }
+            }
+        },
+        {
+            "type": "path",
+            "url": "../../../drupal",
+            "options": {
+                "symlink": true,
+                "versions": {
+                    "janalis/collaborate_drupal": "0.5.x-dev"
+                }
+            }
+        }
+    ],
+    "require": {
+        "composer/installers": "^2.3",
+        "drupal/core-composer-scaffold": "^11.3",
+        "drupal/core-recommended": "^11.3",
+        "drush/drush": "^13.6",
+        "janalis/collaborate": "0.5.x-dev",
+        "janalis/collaborate_drupal": "0.5.x-dev",
+        "nyholm/psr7": "^1.8",
+        "minishlink/web-push": "^11.0",
+        "ratchet/rfc6455": "^0.4.1",
+        "react/http": "^1.12",
+        "react/socket": "^1.17",
+        "react/stream": "^1.4",
+        "symfony/http-client": "^7.4 || ^8.0",
+        "symfony/mercure": "^0.8 || ^0.9 || ^0.10"
+    },
+    "require-dev": {
+        "drupal/core-dev": "^11.3"
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "composer/installers": true,
+            "dealerdirect/phpcodesniffer-composer-installer": true,
+            "drupal/core-composer-scaffold": true,
+            "php-http/discovery": false,
+            "phpstan/extension-installer": true,
+            "tbachert/spi": false,
+            "symfony/runtime": true,
+            "symfony/flex": false
+        }
+    },
+    "extra": {
+        "drupal-scaffold": {
+            "locations": {
+                "web-root": "web/"
+            },
+            "file-mapping": {
+                "[project-root]/.editorconfig": false,
+                "[project-root]/.gitattributes": false
+            },
+            "gitignore": false
+        },
+        "installer-paths": {
+            "web/core": [
+                "type:drupal-core"
+            ],
+            "web/modules/contrib/{$name}": [
+                "type:drupal-module"
+            ],
+            "web/themes/contrib/{$name}": [
+                "type:drupal-theme"
+            ],
+            "web/modules/custom/{$name}": [
+                "type:drupal-custom-module"
+            ]
+        }
+    }
+}

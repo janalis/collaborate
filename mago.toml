@@ -3,8 +3,9 @@ php-version = "8.4.0"
 [source]
 paths = ["src", "tests", "config", "tools"]
 includes = ["vendor"]
-# Generated files: the reference a debug kernel dumps, the test applications' caches and installed assets.
-excludes = ["config/reference.php", "tests/Application/var", "tests/Application/EasyAdmin/public/bundles"]
+# Generated files: the reference a debug kernel dumps, the test applications' caches and installed assets, and the
+# Drupal test site (`make drupal-install`), with its own Drupal and dependencies.
+excludes = ["config/reference.php", "tests/Application/var", "tests/Application/EasyAdmin/public/bundles", "tests/Application/Drupal"]
 
 [formatter]
 print-width = 120

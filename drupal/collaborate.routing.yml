@@ -1,0 +1,20 @@
+collaborate.settings:
+  path: '/admin/config/content/collaborate'
+  defaults:
+    _form: 'Drupal\collaborate\Form\SettingsForm'
+    _title: 'Collaborate'
+  requirements:
+    _permission: 'administer collaborate'
+
+collaborate.asset:
+  path: '/collaborate-assets/{version}'
+  defaults:
+    _controller: 'Drupal\collaborate\Controller\AssetController'
+  requirements:
+    _access: 'TRUE'
+    version: '[a-f0-9]{12}'
+  options:
+    no_cache: false
+
+route_callbacks:
+  - 'Drupal\collaborate\Routing\Routes::routes'

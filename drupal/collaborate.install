@@ -1,0 +1,26 @@
+<?php
+
+/**
+ * @file
+ * The module's tables, created from the bundle's mapping.
+ */
+
+declare(strict_types=1);
+
+use Drupal\collaborate\Storage\Schema;
+
+/**
+ * Implements hook_install().
+ */
+function collaborate_install(): void
+{
+    Schema::default()->install();
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function collaborate_uninstall(): void
+{
+    Schema::default()->uninstall();
+}

@@ -1,0 +1,10 @@
+name: Collaborate
+type: module
+description: 'Shared drafts of entity forms, presence and cursors, refreshed listings and notifications for the administration, on janalis/collaborate.'
+package: Administration
+core_version_requirement: ^11.3 || ^12
+php: 8.4
+configure: collaborate.settings
+dependencies:
+  - drupal:system
+  - drupal:user

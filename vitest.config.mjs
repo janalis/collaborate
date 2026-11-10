@@ -23,6 +23,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['assets/**/*.js'],
+      exclude: ['assets/vendor/**'],
       reportsDirectory: 'var/coverage-vitest',
       reporter: ['html', 'text'],
       // `npm run test:coverage` fails below full coverage.

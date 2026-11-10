@@ -36,7 +36,19 @@ final class ReleasePrepTest extends TestCase
 
         MD;
 
-    private const string USAGE = 'usage: relprep.php --bump X.Y.Z|patch|minor|major [--date YYYY-MM-DD] [--notes file] [--changelog file] [--git dir]';
+    private const string USAGE = 'usage: relprep.php --bump X.Y.Z|patch|minor|major [--date YYYY-MM-DD] [--notes file] [--changelog file] [--git dir] [--module composer.json]';
+
+    /** The Drupal module's composer.json, as far as the release reads it. */
+    private const string MODULE = <<<'JSON'
+        {
+            "name": "janalis/collaborate_drupal",
+            "require": {
+                "php": "^8.4",
+                "janalis/collaborate": "^0.5@dev"
+            }
+        }
+
+        JSON;
 
     private string $directory;
     private string $previous;
@@ -253,11 +265,41 @@ final class ReleasePrepTest extends TestCase
             $this->directory,
         ]);
 
-        self::assertSame([0, "version=0.2.0\ntag=v0.2.0\n", ''], [$status, $stdout, $stderr]);
+        self::assertSame([0, "version=0.2.0\ntag=v0.2.0\nmodule_tag=0.2.0\n", ''], [$status, $stdout, $stderr]);
         self::assertSame("### Added\n\n- A feature.\n", file_get_contents($this->directory . '/notes.md'));
         self::assertStringContainsString(
             "## [Unreleased]\n\n## [0.2.0] - 2026-10-31\n",
             (string) file_get_contents($this->directory . '/CHANGELOG.md'),
+        );
+    }
+
+    public function testRunMakesTheModuleRequireTheReleasedBundle(): void
+    {
+        $this->git('init', '-q');
+        file_put_contents($this->directory . '/CHANGELOG.md', self::CHANGELOG);
+        file_put_contents($this->directory . '/composer.json', self::MODULE);
+
+        [$status] = $this->relprep(['--bump', '0.6.0', '--module', $this->directory . '/composer.json']);
+
+        self::assertSame(0, $status);
+        self::assertSame(
+            str_replace('"^0.5@dev"', '"^0.6.0"', self::MODULE),
+            file_get_contents($this->directory . '/composer.json'),
+        );
+    }
+
+    public function testRunRewritesOnlyTheModulesRequirementOfTheBundle(): void
+    {
+        $this->git('init', '-q');
+        file_put_contents($this->directory . '/CHANGELOG.md', self::CHANGELOG);
+        $module = self::MODULE . '{"suggest": {"janalis/collaborate": "^0.5@dev"}}' . "\n";
+        file_put_contents($this->directory . '/composer.json', $module);
+
+        $this->relprep(['--bump', '0.6.0', '--module', $this->directory . '/composer.json']);
+
+        self::assertSame(
+            preg_replace('/"\^0\.5@dev"/', '"^0.6.0"', $module, 1),
+            file_get_contents($this->directory . '/composer.json'),
         );
     }
 
@@ -267,7 +309,7 @@ final class ReleasePrepTest extends TestCase
         file_put_contents($this->directory . '/CHANGELOG.md', self::CHANGELOG);
         [$status, $stdout] = $this->relprep(['--bump', '0.2.0']);
 
-        self::assertSame([0, "version=0.2.0\ntag=v0.2.0\n"], [$status, $stdout]);
+        self::assertSame([0, "version=0.2.0\ntag=v0.2.0\nmodule_tag=0.2.0\n"], [$status, $stdout]);
         self::assertStringContainsString(
             '## [0.2.0] - ' . gmdate('Y-m-d') . "\n",
             (string) file_get_contents($this->directory . '/CHANGELOG.md'),
@@ -313,6 +355,11 @@ final class ReleasePrepTest extends TestCase
         ];
         yield 'not a repository' => [['--git', '{dir}/missing'], 'relprep: git tag: '];
         yield 'bad version' => [['--bump', 'next'], 'relprep: bad version "next"'];
+        yield 'missing module' => [['--module', '{dir}/missing.json'], 'relprep: cannot read {dir}/missing.json'];
+        yield 'a module that does not require the bundle' => [
+            ['--module', '{dir}/other.json'],
+            "relprep: the module's composer.json does not require janalis/collaborate",
+        ];
     }
 
     /** @param list<string> $arguments */
@@ -321,6 +368,7 @@ final class ReleasePrepTest extends TestCase
     {
         $this->git('init', '-q');
         file_put_contents($this->directory . '/CHANGELOG.md', self::CHANGELOG);
+        file_put_contents($this->directory . '/other.json', '{"require": {"php": "^8.4"}}');
         $arguments = array_map(fn(string $argument): string => str_replace('{dir}', $this->directory, $argument), [
             '--bump',
             'patch',
@@ -387,7 +435,7 @@ final class ReleasePrepTest extends TestCase
         $this->git('tag', 'v0.3.0');
         file_put_contents($this->directory . '/CHANGELOG.md', self::CHANGELOG);
 
-        self::assertSame([0, "version=0.3.1\ntag=v0.3.1\n", ''], $this->relprep(['--bump', 'patch']));
+        self::assertSame([0, "version=0.3.1\ntag=v0.3.1\nmodule_tag=0.3.1\n", ''], $this->relprep(['--bump', 'patch']));
     }
 
     public function testRunReportsAnUnwritableChangelog(): void

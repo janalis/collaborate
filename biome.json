@@ -13,7 +13,7 @@
       "!tests/Application/*/public/bundles",
       "!tests/Application/Drupal/vendor",
       "!tests/Application/Drupal/web",
-      "!drupal/js/vendor",
+      "!assets/vendor",
       "!drupal/css",
       "!docs/.vitepress/dist",
       "!docs/.vitepress/cache",

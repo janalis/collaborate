@@ -7,16 +7,21 @@ namespace Janalis\Collaborate\Tools;
 /**
  * Prepares a release: resolves the new version (an explicit X.Y.Z, or a patch, minor or major bump of the
  * latest vX.Y.Z tag), turns the changelog's [Unreleased] section into that version's section, keeps the
- * comparison links at the bottom of the changelog current and writes the section as release notes.
- * {@see run()} prints `version=` and `tag=` lines for $GITHUB_OUTPUT.
+ * comparison links at the bottom of the changelog current and writes the section as release notes. With
+ * `--module`, the Drupal module released in lockstep requires that version of the bundle (`^X.Y.Z`).
+ * {@see run()} prints `version=`, `tag=` and `module_tag=` (drupal.org's tags carry no `v`) lines for
+ * $GITHUB_OUTPUT.
  */
 final class ReleasePrep
 {
     public const string UNRELEASED = '## [Unreleased]';
 
-    private const string USAGE = 'usage: relprep.php --bump X.Y.Z|patch|minor|major [--date YYYY-MM-DD] [--notes file] [--changelog file] [--git dir]';
+    private const string USAGE = 'usage: relprep.php --bump X.Y.Z|patch|minor|major [--date YYYY-MM-DD] [--notes file] [--changelog file] [--git dir] [--module composer.json]';
 
-    private const array OPTIONS = ['bump', 'date', 'notes', 'changelog', 'git'];
+    private const array OPTIONS = ['bump', 'date', 'notes', 'changelog', 'git', 'module'];
+
+    /** The bundle, as the module's composer.json requires it. */
+    public const string BUNDLE = 'janalis/collaborate';
 
     /**
      * @param list<string> $arguments the command-line arguments, without the script name
@@ -40,13 +45,14 @@ final class ReleasePrep
                 $options['notes'] ?? null,
                 $options['changelog'] ?? 'CHANGELOG.md',
                 $options['git'] ?? '.',
+                $options['module'] ?? null,
             );
         } catch (\RuntimeException $error) {
             fwrite($stderr, 'relprep: ' . $error->getMessage() . "\n");
 
             return 1;
         }
-        fwrite($stdout, \sprintf("version=%s\ntag=v%s\n", $version, $version));
+        fwrite($stdout, \sprintf("version=%s\ntag=v%s\nmodule_tag=%s\n", $version, $version, $version));
 
         return 0;
     }
@@ -58,6 +64,7 @@ final class ReleasePrep
         ?string $notes,
         string $changelog,
         string $gitDirectory,
+        ?string $module = null,
     ): string {
         $parsed = \DateTimeImmutable::createFromFormat('!Y-m-d', $date);
         if (false === $parsed || $parsed->format('Y-m-d') !== $date) {
@@ -69,6 +76,13 @@ final class ReleasePrep
             throw new \RuntimeException(\sprintf('cannot read %s', $changelog));
         }
         [$updated, $body] = $this->cutChangelog($contents, $version, $date);
+        if (null !== $module) {
+            $composer = is_file($module) ? file_get_contents($module) : false;
+            if (false === $composer) {
+                throw new \RuntimeException(\sprintf('cannot read %s', $module));
+            }
+            $this->write($module, $this->requireBundle($composer, $version));
+        }
         if (null !== $notes) {
             $this->write($notes, $body . "\n");
         }
@@ -150,6 +164,26 @@ final class ReleasePrep
             . ('' === $rest ? '' : "\n" . $rest);
 
         return [$this->links($updated, $version), $body];
+    }
+
+    /**
+     * The module's composer.json requiring the released bundle (`^X.Y.Z`), the rest of the file as written.
+     */
+    private function requireBundle(string $composer, string $version): string
+    {
+        $count = 0;
+        $updated = preg_replace(
+            '/("' . preg_quote(self::BUNDLE, '/') . '"\s*:\s*)"[^"]*"/',
+            '${1}"^' . $version . '"',
+            $composer,
+            1,
+            $count,
+        );
+        if (1 !== $count || null === $updated) {
+            throw new \RuntimeException('the module\'s composer.json does not require ' . self::BUNDLE);
+        }
+
+        return $updated;
     }
 
     /** [Unreleased] now starts at the new tag, which gets its own link from the previous one (or its tag page). */

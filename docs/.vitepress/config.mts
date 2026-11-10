@@ -87,6 +87,7 @@ export default defineConfig({
             { text: 'Architecture', link: '/contributing/architecture' },
             { text: 'Testing', link: '/contributing/testing' },
             { text: 'Releasing', link: '/contributing/releasing' },
+            { text: 'The Drupal module', link: '/contributing/drupal' },
           ],
         },
       ],

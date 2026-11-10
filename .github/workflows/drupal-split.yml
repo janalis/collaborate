@@ -1,0 +1,83 @@
+name: drupal-split
+# The Drupal module (drupal/) as a repository of its own, its history split from this one's: pushed as the
+# `<major>.x` branch to the GitHub split Packagist reads (janalis/collaborate_drupal) and to the drupal.org
+# project (git.drupalcode.org/project/collaborate), and, on a release, with its tag (X.Y.Z, drupal.org's form).
+# The split is deterministic: every push fast-forwards. A target whose deploy key is not set is skipped.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "drupal/**"
+      - ".github/workflows/drupal-split.yml"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Split and check the module, push nothing"
+        type: boolean
+        default: true
+  workflow_call:
+    inputs:
+      tag:
+        description: "The release to tag the split with: X.Y.Z"
+        type: string
+        required: true
+    secrets:
+      SPLIT_DEPLOY_KEY:
+        required: false
+      DRUPALORG_SSH_KEY:
+        required: false
+concurrency: drupal-split
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+jobs:
+  split:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag }}
+      DRY_RUN: ${{ inputs.dry_run == true }}
+      SPLIT_REPOSITORY: git@github.com:janalis/collaborate_drupal.git
+      DRUPALORG_REPOSITORY: git@git.drupal.org:project/collaborate.git
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          # A release splits the commit its tag names.
+          ref: ${{ inputs.tag && format('v{0}', inputs.tag) || '' }}
+      - name: Split drupal/
+        id: split
+        run: |
+          sha=$(git subtree split --prefix=drupal HEAD)
+          version=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo v0.0.0)
+          major=${version#v}
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "branch=${major%%.*}.x" >> "$GITHUB_OUTPUT"
+          git worktree add --detach "$RUNNER_TEMP/module" "$sha"
+      - name: The split is a Drupal module
+        run: |
+          test -f "$RUNNER_TEMP/module/collaborate.info.yml"
+          composer validate --no-check-all --no-check-publish --working-dir="$RUNNER_TEMP/module"
+      - name: Push to the GitHub split
+        if: env.DRY_RUN != 'true'
+        env:
+          KEY: ${{ secrets.SPLIT_DEPLOY_KEY }}
+          SHA: ${{ steps.split.outputs.sha }}
+          BRANCH: ${{ steps.split.outputs.branch }}
+        run: .github/scripts/push-split.sh "$SPLIT_REPOSITORY" github.com
+      - name: Push to drupal.org
+        if: env.DRY_RUN != 'true'
+        env:
+          KEY: ${{ secrets.DRUPALORG_SSH_KEY }}
+          SHA: ${{ steps.split.outputs.sha }}
+          BRANCH: ${{ steps.split.outputs.branch }}
+        run: .github/scripts/push-split.sh "$DRUPALORG_REPOSITORY" git.drupal.org
+      - name: Summary
+        env:
+          SHA: ${{ steps.split.outputs.sha }}
+          BRANCH: ${{ steps.split.outputs.branch }}
+        run: |
+          note=""
+          if [ "$DRY_RUN" = true ]; then note=" (dry run: nothing pushed)"; fi
+          echo "drupal/ split at \`$SHA\` as \`$BRANCH\`${TAG:+, tagged \`$TAG\`}$note." >> "$GITHUB_STEP_SUMMARY"

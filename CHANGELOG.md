@@ -38,6 +38,12 @@ versions follow [Semantic Versioning](https://semver.org/).
   (`collections.entry`, `create`, `remove`) when its collections have no
   prototype, and name the child it numbers after a reorder
   (`collections.position`).
+- The Drupal module is published from `drupal/`, released with the bundle
+  under the same version: a split repository for Packagist
+  (`janalis/collaborate_drupal`) and the drupal.org project
+  (`drupal/collaborate`). Merge requests and issues opened on drupal.org are
+  mirrored to GitHub, where the module is developed
+  ([contributing](https://janalis.github.io/collaborate/contributing/drupal)).
 - `@janalis/collaborate/collaborate.js`, the entry point of any admin, and
   `registerBridge()`, which describes an admin's markup to the scripts.
 - `data-collaborate-page="<entity>:<index|detail|edit|new>"` on a page's

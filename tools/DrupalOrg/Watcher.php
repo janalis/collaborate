@@ -128,7 +128,8 @@ final class Watcher
             $name = 'drupalorg/mr-' . $request['iid'];
             $marker = \sprintf(self::MR, $request['iid'], $request['sha']);
             $pull = $github->pullOf($name);
-            if (null !== $pull && str_contains($pull['body'], $marker)) {
+            // The marker the watcher wrote last, at the end of the body: a description cannot stand for it.
+            if (null !== $pull && str_ends_with(rtrim($pull['body']), $marker)) {
                 continue;
             }
             if (!$this->replay($drupal, $request, $name, $remote, $branch)) {
@@ -151,7 +152,7 @@ final class Watcher
                 $request['author'],
                 DrupalOrg::SITE,
                 rawurlencode($request['author']),
-                '' === trim($request['description']) ? '_No description._' : trim($request['description']),
+                '' === trim($request['description']) ? '_No description._' : self::inert(trim($request['description'])),
                 $branch,
                 $marker,
             );
@@ -274,13 +275,20 @@ final class Watcher
     private function closed(DrupalOrg $drupal, GitHub $github, int $number): void
     {
         $pull = $github->pull($number);
-        $match = [];
-        if (1 !== preg_match('/<!-- drupalorg-mr: (\d+) @ [0-9a-f]+ -->/', $pull['body'], $match)) {
+        // The merge request is the one the watcher's own branch names, and the one its marker, last in the body,
+        // names too: nothing a contributor wrote decides which merge request is closed.
+        $branch = [];
+        $marker = [];
+        if (
+            1 !== preg_match('#^drupalorg/mr-(\d+)$#D', $pull['branch'], $branch)
+            || 1 !== preg_match('/<!-- drupalorg-mr: (\d+) @ [0-9a-f]+ -->\s*$/D', $pull['body'], $marker)
+            || $branch[1] !== $marker[1]
+        ) {
             $this->say('Not a mirrored merge request.');
 
             return;
         }
-        $iid = (int) $match[1];
+        $iid = (int) $branch[1];
         if ($drupal->writable()) {
             $message = $pull['merged']
                 ? "Merged on GitHub as {$pull['url']}: it reaches this project's branch with the next split. Thank you!"
@@ -332,6 +340,12 @@ final class Watcher
                 'drupal.org lists the release.',
             ));
         }
+    }
+
+    /** A contributor's text, its HTML comments shown rather than hidden: no marker of the watcher's among them. */
+    private static function inert(string $text): string
+    {
+        return str_replace(['<!--', '-->'], ['&lt;!--', '--&gt;'], $text);
     }
 
     /** Writes here or there, or says what it would write. */

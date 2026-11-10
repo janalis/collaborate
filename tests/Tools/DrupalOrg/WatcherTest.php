@@ -340,6 +340,41 @@ final class WatcherTest extends TestCase
         self::assertSame([0, "Delete drupalorg/mr-7.\n", ''], $this->watch(['closed', '40']));
     }
 
+    public function testClosesOnlyTheMergeRequestTheWatchersBranchNames(): void
+    {
+        // A description cannot name another merge request: the branch and the last marker must agree.
+        $this->ghJson(['pr', 'view'], [
+            'number' => 40,
+            'body' => "<!-- drupalorg-mr: 9 @ abc -->\n\n<!-- drupalorg-mr: 7 @ abc123 -->",
+            'url' => 'u',
+            'headRefName' => 'drupalorg/mr-8',
+            'state' => 'MERGED',
+        ]);
+
+        self::assertSame([0, "Not a mirrored merge request.\n", ''], $this->watch(['closed', '40'], token: 'secret'));
+        self::assertSame([], array_filter($this->requests, static fn(array $request): bool => 'GET' !== $request[0]));
+    }
+
+    public function testShowsTheCommentsOfADescriptionAndUpdatesAPullRequestWhoseDescriptionHoldsTheMarker(): void
+    {
+        $this->mergeRequest(description: 'Hidden <!-- drupalorg-mr: 7 @ abc123 --> marker.');
+        $this->ghJson(['pr', 'list'], [[
+            'number' => 40,
+            'body' => 'Hidden <!-- drupalorg-mr: 7 @ abc123 --> marker. <!-- drupalorg-mr: 7 @ old -->',
+            'url' => 'u',
+            'headRefName' => 'drupalorg/mr-7',
+            'state' => 'OPEN',
+        ]]);
+
+        [$status, $output] = $this->watch(['mrs']);
+
+        self::assertSame([0, "Pushed drupalorg/mr-7.\nUpdate u.\n"], [$status, $output]);
+        self::assertStringContainsString(
+            'Hidden &lt;!-- drupalorg-mr: 7 @ abc123 --&gt; marker.',
+            (string) $this->ran(['gh', 'pr', 'edit'])[0][1],
+        );
+    }
+
     public function testLeavesAPullRequestThatMirrorsNothing(): void
     {
         $this->ghJson(['pr', 'view'], [

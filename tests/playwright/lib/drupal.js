@@ -11,11 +11,43 @@ export function drush(code) {
   return execFileSync('vendor/bin/drush', ['php:eval', code], { cwd: site, encoding: 'utf8' }).trim();
 }
 
-/** A new article of its own for a scenario: its id. */
-export function article(title, body = '<p>Hello world</p>') {
+/** A new article of its own for a scenario, with its notes (a multi-value field): its id. */
+export function article(title, body = '<p>Hello world</p>', notes = []) {
   return Number(
     drush(`$n = \\Drupal\\node\\Entity\\Node::create(['type' => 'article', 'title' => ${JSON.stringify(title)},
-      'body' => ['value' => ${JSON.stringify(body)}, 'format' => 'basic_html']]); $n->save(); echo $n->id();`)
+      'body' => ['value' => ${JSON.stringify(body)}, 'format' => 'basic_html'],
+      'field_notes' => json_decode(${JSON.stringify(JSON.stringify(notes))}, TRUE)]); $n->save(); echo $n->id();`)
+  );
+}
+
+/** A new article of its own for a scenario, with its parts (`[type, text]` paragraphs): its id. */
+export function articleWithParts(title, parts) {
+  return Number(
+    drush(`$parts = [];
+      foreach (json_decode(${JSON.stringify(JSON.stringify(parts))}, TRUE) as [$type, $text]) {
+        $part = \\Drupal\\paragraphs\\Entity\\Paragraph::create(['type' => $type, 'field_' . $type => $text]);
+        $part->save();
+        $parts[] = $part;
+      }
+      $n = \\Drupal\\node\\Entity\\Node::create(['type' => 'article', 'title' => ${JSON.stringify(title)}, 'field_parts' => $parts]);
+      $n->save(); echo $n->id();`)
+  );
+}
+
+/** The parts an article holds, as saved: `[type, text]` each. */
+export function savedParts(id) {
+  return JSON.parse(
+    drush(`\\Drupal::entityTypeManager()->getStorage('node')->resetCache();
+      echo json_encode(array_map(static fn($part) => [$part->bundle(), $part->get('field_' . $part->bundle())->value],
+        \\Drupal\\node\\Entity\\Node::load(${id})->get('field_parts')->referencedEntities()));`)
+  );
+}
+
+/** The notes an article holds, as saved. */
+export function savedNotes(id) {
+  return JSON.parse(
+    drush(`\\Drupal::entityTypeManager()->getStorage('node')->resetCache();
+      echo json_encode(array_column(\\Drupal\\node\\Entity\\Node::load(${id})->get('field_notes')->getValue(), 'value'));`)
   );
 }
 
@@ -39,6 +71,34 @@ export class Editor {
 
   get body() {
     return this.page.locator('.ck-editor__editable');
+  }
+
+  /** The rows of the article's notes, empty ones included, in the order shown. */
+  get notes() {
+    return this.form.locator('[data-collaborate-collection="field_notes"] tr.draggable');
+  }
+
+  /** The rows of the article's parts, in the order shown. */
+  get parts() {
+    return this.form.locator('[data-collaborate-collection="field_parts"] tr.draggable');
+  }
+
+  /** The text of a part's row. */
+  part(index) {
+    return this.parts.nth(index).locator('input[type="text"]');
+  }
+
+  /** The text of a note's row. */
+  note(index) {
+    return this.notes.nth(index).locator('input[type="text"]');
+  }
+
+  /** Saves the article with the bar's Save, and waits for its page. */
+  async save(id) {
+    await Promise.all([
+      this.page.waitForURL(`**/node/${id}`),
+      this.page.locator('[data-collaborate-bar] [data-collaborate-save]').click(),
+    ]);
   }
 
   /** Opens an article's edit form, and waits for its draft to be joined. */

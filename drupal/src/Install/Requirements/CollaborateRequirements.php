@@ -10,7 +10,7 @@ use Drupal\Core\Extension\InstallRequirementsInterface;
 use Drupal\Core\Extension\Requirement\RequirementSeverity;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 
-/** What the module needs of the site before it installs: a MariaDB or MySQL database, for its journal's SQL. */
+/** What the module needs of the site before it installs: a database its journal speaks to (MariaDB or MySQL, PostgreSQL, SQLite). */
 final class CollaborateRequirements implements InstallRequirementsInterface
 {
     /** @return array<string, array<string, mixed>> */
@@ -55,7 +55,7 @@ final class CollaborateRequirements implements InstallRequirementsInterface
                 'title' => new TranslatableMarkup('Collaborate'),
                 'value' => $driver,
                 'description' => new TranslatableMarkup(
-                    'Collaborate keeps its drafts on MariaDB 10.6+ or MySQL 8: the site\'s database is not one.',
+                    'Collaborate keeps its drafts on MariaDB 10.6+, MySQL 8, PostgreSQL 13+ or SQLite 3.35+: the site\'s database is not one.',
                 ),
                 'severity' => RequirementSeverity::Error,
             ],

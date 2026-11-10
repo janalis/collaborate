@@ -6,8 +6,10 @@ namespace Drupal\collaborate\Hook;
 
 use Drupal\collaborate\Bridge\EntityChanges;
 use Drupal\collaborate\Bridge\EntityForms;
+use Drupal\collaborate\Bridge\ItemKeys;
 use Drupal\collaborate\Install\Requirements\CollaborateRequirements;
 use Drupal\collaborate\Page\Pages;
+use Drupal\Core\Entity\Display\EntityFormDisplayInterface;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Hook\Attribute\Hook;
@@ -19,6 +21,7 @@ final readonly class CollaborateHooks
 {
     public function __construct(
         private EntityForms $forms,
+        private ItemKeys $items,
         private EntityChanges $changes,
         private Pages $pages,
         private DraftJournal $journal,
@@ -31,6 +34,33 @@ final readonly class CollaborateHooks
     public function formAlter(array &$form, FormStateInterface $state, string $id): void
     {
         $this->forms->alter($form, $state);
+    }
+
+    /**
+     * @param array<array-key, mixed> $element
+     * @param array<string, mixed>    $context
+     */
+    #[Hook('field_widget_single_element_form_alter')]
+    public function widgetElementAlter(array &$element, FormStateInterface $state, array $context): void
+    {
+        $this->items->element($element, $state, $context);
+    }
+
+    /**
+     * @param array<array-key, mixed> $form
+     * @param array<string, mixed>    $context
+     */
+    #[Hook('field_widget_complete_form_alter')]
+    public function widgetAlter(array &$form, FormStateInterface $state, array $context): void
+    {
+        $this->items->widget($form, $state, $context);
+    }
+
+    /** @param array<string, mixed> $context */
+    #[Hook('entity_form_display_alter')]
+    public function formDisplayAlter(EntityFormDisplayInterface $display, array $context): void
+    {
+        $this->items->display($display);
     }
 
     #[Hook('entity_insert')]

@@ -39,15 +39,25 @@ jobs:
         options: >-
           --health-cmd="${{ startsWith(matrix.database, 'mysql') && 'mysqladmin ping -h 127.0.0.1 --silent' || 'healthcheck.sh --connect --innodb_initialized' }}"
           --health-interval=5s --health-timeout=5s --health-retries=20
+      # The journal's dialects on PostgreSQL (DraftJournalPlatformsTest); SQLite needs no server.
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: collaborate_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres" --health-interval=5s --health-timeout=5s --health-retries=20
     env:
       # The functional tests own this database; the integration tests create collaborate_<app>_test next to it.
       COLLABORATE_DATABASE_URL: mysql://root@127.0.0.1:3306/collaborate_test?serverVersion=${{ startsWith(matrix.database, 'mysql') && '8.4.0' || '10.11.0-MariaDB' }}
+      COLLABORATE_POSTGRES_URL: postgresql://postgres:postgres@127.0.0.1:5432/collaborate_test?serverVersion=16
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: pdo_mysql, mbstring, intl, pcntl
+          extensions: pdo_mysql, pdo_pgsql, pdo_sqlite, mbstring, intl, pcntl
           coverage: none
           tools: composer:v2, flex
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -79,14 +89,24 @@ jobs:
         options: >-
           --health-cmd="healthcheck.sh --connect --innodb_initialized"
           --health-interval=5s --health-timeout=5s --health-retries=20
+      # The journal's dialects on PostgreSQL (DraftJournalPlatformsTest); SQLite needs no server.
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: collaborate_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres" --health-interval=5s --health-timeout=5s --health-retries=20
     env:
       COLLABORATE_DATABASE_URL: mysql://root@127.0.0.1:3306/collaborate_test?serverVersion=10.11.0-MariaDB
+      COLLABORATE_POSTGRES_URL: postgresql://postgres:postgres@127.0.0.1:5432/collaborate_test?serverVersion=16
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
           php-version: '8.5'
-          extensions: pdo_mysql, mbstring, intl, pcntl
+          extensions: pdo_mysql, pdo_pgsql, pdo_sqlite, mbstring, intl, pcntl
           coverage: pcov
           tools: composer:v2
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -166,14 +186,24 @@ jobs:
         options: >-
           --health-cmd="healthcheck.sh --connect --innodb_initialized"
           --health-interval=5s --health-timeout=5s --health-retries=20
+      # The journal's dialects on PostgreSQL (DraftJournalPlatformsTest); SQLite needs no server.
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: collaborate_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres" --health-interval=5s --health-timeout=5s --health-retries=20
     env:
       COLLABORATE_DATABASE_URL: mysql://root@127.0.0.1:3306/collaborate_test?serverVersion=10.11.0-MariaDB
+      COLLABORATE_POSTGRES_URL: postgresql://postgres:postgres@127.0.0.1:5432/collaborate_test?serverVersion=16
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
           php-version: '8.5'
-          extensions: pdo_mysql, mbstring, intl, pcntl
+          extensions: pdo_mysql, pdo_pgsql, pdo_sqlite, mbstring, intl, pcntl
           coverage: pcov
           tools: composer:v2
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -225,6 +255,15 @@ jobs:
         options: >-
           --health-cmd="healthcheck.sh --connect --innodb_initialized"
           --health-interval=5s --health-timeout=5s --health-retries=20
+      # The module's tests on a PostgreSQL site (Drupal 11 asks for 16+); SQLite needs no server.
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: collaborate_drupal
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres" --health-interval=5s --health-timeout=5s --health-retries=20
     env:
       COLLABORATE_DATABASE_URL: mysql://root@127.0.0.1:3306/collaborate_test?serverVersion=10.11.0-MariaDB
       DRUPAL_DATABASE_URL: mysql://root@127.0.0.1:3306/collaborate_drupal
@@ -246,6 +285,10 @@ jobs:
           "$FRANKENPHP" run --config tests/Application/Drupal/Caddyfile > /tmp/frankenphp.log 2>&1 &
           for _ in $(seq 30); do curl -fs -o /dev/null http://127.0.0.1:8790/user/login && break; sleep 1; done
       - run: make drupal-test
+      - name: The module's tests on PostgreSQL and SQLite sites
+        run: |
+          make drupal-test DRUPAL_TEST_DATABASE_URL=pgsql://postgres:postgres@127.0.0.1:5432/collaborate_drupal
+          make drupal-test DRUPAL_TEST_DATABASE_URL="sqlite://localhost/$RUNNER_TEMP/drupal.sqlite"
       # Playwright starts the test applications' servers too: they need their databases.
       - run: make app-setup
       - run: make drupal-e2e

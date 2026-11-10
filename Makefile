@@ -102,6 +102,8 @@ verify: validate fmt-check lint analyze test lint-js test-js ## Everything CI ch
 DRUPAL := tests/Application/Drupal
 DRUPAL_DATABASE_URL ?= mysql://root@127.0.0.1:3306/collaborate_drupal
 DRUPAL_PORT ?= 8790
+# The database the module's kernel and functional tests install their sites on: the test site's, or a PostgreSQL or SQLite one.
+DRUPAL_TEST_DATABASE_URL ?= $(DRUPAL_DATABASE_URL)
 export DRUPAL_PORT
 
 drupal-assets: ## Build the Drupal module's stylesheet and its copy of fetch-event-source (drupal/css, drupal/js/vendor)
@@ -118,8 +120,9 @@ drupal-install: ## Build the Drupal test site (tests/Application/Drupal) on DRUP
 	cd $(DRUPAL) && vendor/bin/drush php:script bin/fixtures.php
 	cd $(DRUPAL) && vendor/bin/drush cache:rebuild
 
-drupal-test: ## Run the Drupal module's unit, kernel and functional tests (the site serving on DRUPAL_PORT)
-	cd $(DRUPAL) && SIMPLETEST_DB="$(DRUPAL_DATABASE_URL)" SIMPLETEST_BASE_URL="http://127.0.0.1:$(DRUPAL_PORT)" vendor/bin/phpunit -c web/core/phpunit.xml.dist web/modules/contrib/collaborate_drupal/tests $(PHPUNIT_ARGS)
+drupal-test: ## Run the Drupal module's unit, kernel and functional tests (the site serving on DRUPAL_PORT; DRUPAL_TEST_DATABASE_URL=pgsql://…|sqlite://localhost//…)
+	cat $(DRUPAL)/web/core/.deprecation-ignore.txt $(DRUPAL)/deprecation-ignore.txt > $(DRUPAL)/web/sites/deprecation-ignore.txt
+	cd $(DRUPAL) && SYMFONY_DEPRECATIONS_HELPER="ignoreFile=$(CURDIR)/$(DRUPAL)/web/sites/deprecation-ignore.txt" SIMPLETEST_DB="$(DRUPAL_TEST_DATABASE_URL)" SIMPLETEST_BASE_URL="http://127.0.0.1:$(DRUPAL_PORT)" vendor/bin/phpunit -c web/core/phpunit.xml.dist web/modules/contrib/collaborate_drupal/tests $(PHPUNIT_ARGS)
 
 drupal-e2e: ## Run the Playwright scenarios against the Drupal test site under FrankenPHP
 	npx playwright test --project=drupal $(ARGS)

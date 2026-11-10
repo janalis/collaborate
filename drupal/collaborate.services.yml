@@ -45,7 +45,7 @@ services:
   collaborate.record_identifier:
     class: Drupal\collaborate\Bridge\EntityIdentifier
 
-  # The draft journal's MariaDB or MySQL connection, from Drupal's default database.
+  # The draft journal's connection, from Drupal's default database.
   collaborate.dbal:
     class: Doctrine\DBAL\Connection
     factory: ['Drupal\collaborate\Storage\Connections', 'dbal']
@@ -79,6 +79,12 @@ services:
     tags:
       - { name: twig.loader, priority: -100 }
 
+  Drupal\collaborate\Bridge\ItemKeys:
+    arguments:
+      - '@Janalis\Collaborate\Draft\DraftAccess'
+      - '@Janalis\Collaborate\Draft\DraftJournal'
+      - '@Janalis\Collaborate\Security\CurrentUserInterface'
+      - '%collaborate.role%'
   Drupal\collaborate\Bridge\EntityForms:
     arguments:
       - '@Janalis\Collaborate\Draft\FormDraft'
@@ -89,6 +95,8 @@ services:
       - '@Janalis\Collaborate\Draft\DraftSave'
       - '@request_stack'
       - '@csrf_token'
+      - '@entity_type.manager'
+      - '@form_builder'
       - '%collaborate.drafts%'
       - '%collaborate.role%'
       - '%collaborate.editor_version%'

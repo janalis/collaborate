@@ -72,6 +72,40 @@ if (editors?.ckeditor5 && shared()) {
 
 if (shared()) loadDrafts();
 
+// Typing in a multi-value field's empty row makes it an item: the row takes a key of its own and follows the
+// draft from then on. The draft's controls replace what the row shows as they bind: what was typed is put back
+// before the event reaches its control, whose binding sends it.
+let sessions = null;
+const touch = (event) => {
+  const row = event.target instanceof Element ? event.target.closest('[data-collaborate-pending]') : null;
+  const form = row?.closest('form[data-collaborate]');
+  const session = form && sessions ? sessions.sessionFor(event.target) : null;
+  if (!row || !session?.initialized || !session.scanCollections) return;
+  const controls = Array.from(row.querySelectorAll('input, select, textarea'));
+  const typed = controls.map((control) =>
+    control.type === 'checkbox' || control.type === 'radio'
+      ? control.checked
+      : control.multiple
+        ? Array.from(control.selectedOptions, (option) => option.value)
+        : control.value
+  );
+  row.dataset.collaborateTouched = '';
+  session.scanCollections();
+  controls.forEach((control, index) => {
+    if (control.type === 'checkbox' || control.type === 'radio') control.checked = typed[index];
+    else if (control.multiple)
+      for (const option of control.options) option.selected = typed[index].includes(option.value);
+    else control.value = typed[index];
+  });
+};
+if (shared()) {
+  loadDrafts().then((session) => {
+    sessions = session;
+  });
+  document.addEventListener('input', touch, true);
+  document.addEventListener('change', touch, true);
+}
+
 // Form API's AJAX ("Add another item", a widget's rebuild) replaces part of a shared form: its controls follow the
 // draft again, and its collections are scanned for their entries.
 if (globalThis.Drupal) {

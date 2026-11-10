@@ -169,7 +169,7 @@ final class ReleasePrep
     /**
      * The module's composer.json requiring the released bundle (`^X.Y.Z`), the rest of the file as written.
      */
-    public function requireBundle(string $composer, string $version): string
+    private function requireBundle(string $composer, string $version): string
     {
         $count = 0;
         $updated = preg_replace(

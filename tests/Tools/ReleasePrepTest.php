@@ -288,6 +288,21 @@ final class ReleasePrepTest extends TestCase
         );
     }
 
+    public function testRunRewritesOnlyTheModulesRequirementOfTheBundle(): void
+    {
+        $this->git('init', '-q');
+        file_put_contents($this->directory . '/CHANGELOG.md', self::CHANGELOG);
+        $module = self::MODULE . '{"suggest": {"janalis/collaborate": "^0.5@dev"}}' . "\n";
+        file_put_contents($this->directory . '/composer.json', $module);
+
+        $this->relprep(['--bump', '0.6.0', '--module', $this->directory . '/composer.json']);
+
+        self::assertSame(
+            preg_replace('/"\^0\.5@dev"/', '"^0.6.0"', $module, 1),
+            file_get_contents($this->directory . '/composer.json'),
+        );
+    }
+
     public function testRunDefaultsToTodayAndWritesNoNotes(): void
     {
         $this->git('init', '-q');

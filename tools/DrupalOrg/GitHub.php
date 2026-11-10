@@ -9,7 +9,7 @@ namespace Janalis\Collaborate\Tools\DrupalOrg;
  * its credentials. A mirrored merge request's pull request and a mirrored issue are found by the markers their
  * bodies hold, so the watcher keeps no state of its own.
  *
- * @phpstan-type Pull array{number: int, body: string, url: string, branch: string, merged: bool, state: string}
+ * @phpstan-type Pull array{number: int, body: string, url: string, branch: string, merged: bool}
  */
 final class GitHub
 {
@@ -74,10 +74,14 @@ final class GitHub
         $this->gh(['pr', 'edit', (string) $number, '--title', $title, '--body-file', '-'], $body);
     }
 
-    /** The bodies of the issues mirrored so far, open or closed. */
-    public function mirroredIssues(): string
+    /**
+     * The bodies of the issues mirrored so far, open or closed.
+     *
+     * @return list<string>
+     */
+    public function mirroredIssues(): array
     {
-        $bodies = '';
+        $bodies = [];
         foreach ($this->rows([
             'issue',
             'list',
@@ -90,7 +94,9 @@ final class GitHub
             '--json',
             'body',
         ]) as $issue) {
-            $bodies .= (\is_string($issue['body'] ?? null) ? $issue['body'] : '') . "\n";
+            if (\is_string($issue['body'] ?? null)) {
+                $bodies[] = $issue['body'];
+            }
         }
 
         return $bodies;
@@ -116,23 +122,22 @@ final class GitHub
             '--json',
             'number,body',
         ]) as $issue) {
-            $body = \is_string($issue['body'] ?? null) ? $issue['body'] : '';
-            if (str_contains($body, $marker)) {
-                $issues[] = [
-                    'number' => \is_int($issue['number'] ?? null) ? $issue['number'] : 0,
-                    'body' => $body,
-                ];
+            if (
+                \is_int($issue['number'] ?? null)
+                && \is_string($issue['body'] ?? null)
+                && str_contains($issue['body'], $marker)
+            ) {
+                $issues[] = ['number' => $issue['number'], 'body' => $issue['body']];
             }
         }
 
         return $issues;
     }
 
-    public function openIssue(string $title, string $body): string
+    public function openIssue(string $title, string $body): void
     {
         $this->label();
-
-        return trim($this->gh([
+        $this->gh([
             'issue',
             'create',
             '--title',
@@ -141,7 +146,7 @@ final class GitHub
             self::LABEL,
             '--body-file',
             '-',
-        ], $body));
+        ], $body);
     }
 
     public function closeIssue(int $number, string $comment): void
@@ -214,14 +219,16 @@ final class GitHub
     private static function read(mixed $pull): array
     {
         $pull = \is_array($pull) ? $pull : [];
+        if (!\is_int($pull['number'] ?? null)) {
+            throw new \RuntimeException('gh gave a pull request without its number');
+        }
 
         return [
-            'number' => \is_int($pull['number'] ?? null) ? $pull['number'] : 0,
+            'number' => $pull['number'],
             'body' => \is_string($pull['body'] ?? null) ? $pull['body'] : '',
             'url' => \is_string($pull['url'] ?? null) ? $pull['url'] : '',
             'branch' => \is_string($pull['headRefName'] ?? null) ? $pull['headRefName'] : '',
             'merged' => 'MERGED' === ($pull['state'] ?? null),
-            'state' => \is_string($pull['state'] ?? null) ? $pull['state'] : '',
         ];
     }
 }

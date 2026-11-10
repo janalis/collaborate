@@ -4,7 +4,12 @@ declare(strict_types=1);
 
 namespace Janalis\Collaborate\Tools\DrupalOrg;
 
-/** {@see Runner} with proc_open, in the working directory. */
+/**
+ * {@see Runner} with proc_open, in the working directory.
+ *
+ * @infection-ignore-all stream_get_contents() returns false only on a stream it cannot read: the casts that
+ *                       turn that into '' cannot be told apart from the pipes this opens.
+ */
 final class ProcessRunner implements Runner
 {
     public function run(array $command, ?string $input = null): array

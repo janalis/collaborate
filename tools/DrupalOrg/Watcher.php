@@ -74,15 +74,13 @@ final class Watcher
             'remote' => 'origin',
         ];
         $positional = [];
-        for ($index = 0; $index < \count($arguments); ++$index) {
-            $argument = $arguments[$index];
+        $rest = $arguments;
+        while ([] !== $rest) {
+            $argument = array_shift($rest);
             if ('--dry-run' === $argument) {
                 $this->dryRun = true;
-            } elseif (
-                1 === preg_match('/^--(repo|project|branch|remote)$/D', $argument)
-                && isset($arguments[$index + 1])
-            ) {
-                $options[substr($argument, 2)] = $arguments[++$index];
+            } elseif (1 === preg_match('/^--(repo|project|branch|remote)$/D', $argument) && [] !== $rest) {
+                $options[substr($argument, 2)] = array_shift($rest);
             } elseif (str_starts_with($argument, '--')) {
                 $positional = [];
                 break;
@@ -253,7 +251,7 @@ final class Watcher
         $mirrored = $github->mirroredIssues();
         foreach (array_reverse($issues) as $issue) {
             $marker = \sprintf(self::ISSUE, $issue['nid']);
-            if (str_contains($mirrored, $marker)) {
+            if (array_any($mirrored, static fn(string $body): bool => str_contains($body, $marker))) {
                 continue;
             }
             $excerpt = trim((string) preg_replace('/\s+/', ' ', strip_tags($issue['body'])));
@@ -281,7 +279,7 @@ final class Watcher
         $marker = [];
         if (
             1 !== preg_match('#^drupalorg/mr-(\d+)$#D', $pull['branch'], $branch)
-            || 1 !== preg_match('/<!-- drupalorg-mr: (\d+) @ [0-9a-f]+ -->\s*$/D', $pull['body'], $marker)
+            || 1 !== preg_match('/<!-- drupalorg-mr: (\d+) @ [0-9a-f]+ -->\s*$/', $pull['body'], $marker)
             || $branch[1] !== $marker[1]
         ) {
             $this->say('Not a mirrored merge request.');

@@ -495,6 +495,506 @@ final class WatcherTest extends TestCase
         self::assertStringStartsWith($message, $error);
     }
 
+    /** @return iterable<string, array{list<string>}> */
+    public static function malformedArguments(): iterable
+    {
+        yield 'an option inside an argument' => [['mrs', 'x--repo', 'other/repo']];
+        yield 'an option name with a suffix' => [['mrs', '--repox', 'other/repo']];
+        yield 'an option name with a line break' => [['mrs', "--repo\n", 'other/repo']];
+        yield 'a command after an unknown option' => [['--force', 'mrs']];
+    }
+
+    /** @param list<string> $arguments */
+    #[DataProvider('malformedArguments')]
+    public function testPrintsItsUsageExactlyForAMalformedOption(array $arguments): void
+    {
+        [$status, $output, $error] = $this->watch($arguments);
+
+        self::assertSame([2, ''], [$status, $output]);
+        self::assertSame(
+            "usage: drupalorg.php mrs|issues|releases|closed <pr>|release-issue <version> <notes> [--repo owner/name] [--project name] [--branch 0.x] [--remote origin] [--dry-run]\n",
+            $error,
+        );
+        self::assertSame([], $this->ran);
+    }
+
+    public function testTakesAnOptionGivenLast(): void
+    {
+        $this->project();
+        $this->respond('GET', self::ISSUES, ['list' => []]);
+
+        self::assertSame([0, '', ''], $this->watch(['issues', '--repo', 'other/repo'], repository: ''));
+        self::assertSame(
+            [
+                'gh',
+                'issue',
+                'list',
+                '--state',
+                'all',
+                '--label',
+                'drupal.org',
+                '--limit',
+                '500',
+                '--json',
+                'body',
+                '--repo',
+                'other/repo',
+            ],
+            $this->ran[0][0],
+        );
+    }
+
+    public function testRunsEachStepOfAMirrorExactly(): void
+    {
+        $this->mergeRequest(description: "  It rings twice.\n");
+        $this->respond('GET', self::PROJECT . '/merge_requests/7/notes?per_page=100', []);
+        $this->respond('POST', self::PROJECT . '/merge_requests/7/notes', [], 201);
+        $this->ghJson(['pr', 'list'], []);
+        $this->command(['git', 'merge-base'], "base\n");
+        $this->command(['git', 'format-patch'], 'PATCH');
+        $this->command(['gh', 'pr', 'create'], "https://github.com/janalis/collaborate/pull/40\n");
+
+        self::assertSame(0, $this->watch(['mrs'], token: 'secret')[0]);
+
+        $bot = [
+            '-c',
+            'user.name=github-actions[bot]',
+            '-c',
+            'user.email=41898282+github-actions[bot]@users.noreply.github.com',
+        ];
+        $body = "Mirrored from drupal.org merge request [!7](https://git.drupalcode.org/project/collaborate/-/merge_requests/7) by **alice** ([drupal.org profile](https://www.drupal.org/u/alice)), its commits replayed under `drupal/` with their authors.\n\nIt rings twice.\n\n---\n\nReview happens here. Once merged, the change reaches drupal.org's `0.x` through the split, and the merge request is closed with a link back.\n\n<!-- drupalorg-mr: 7 @ abc123 -->\n";
+        self::assertSame(
+            [
+                [
+                    [
+                        'gh',
+                        'pr',
+                        'list',
+                        '--state',
+                        'open',
+                        '--head',
+                        'drupalorg/mr-7',
+                        '--json',
+                        'number,body,url,headRefName,state',
+                        '--repo',
+                        'janalis/collaborate',
+                    ],
+                    null,
+                ],
+                [['git', 'fetch', '--quiet', '--no-tags', 'origin', 'main'], null],
+                [
+                    [
+                        'git',
+                        'fetch',
+                        '--quiet',
+                        '--no-tags',
+                        '--force',
+                        'https://git.drupalcode.org/project/collaborate.git',
+                        '+0.x:refs/drupalorg/target',
+                    ],
+                    null,
+                ],
+                [
+                    [
+                        'git',
+                        'fetch',
+                        '--quiet',
+                        '--no-tags',
+                        '--force',
+                        'https://git.drupalcode.org/issue/collaborate-1.git',
+                        '+feature:refs/drupalorg/mr-7',
+                    ],
+                    null,
+                ],
+                [['git', 'merge-base', 'refs/drupalorg/target', 'refs/drupalorg/mr-7'], null],
+                [['git', 'format-patch', '--stdout', 'base..refs/drupalorg/mr-7'], null],
+                [['git', 'worktree', 'add', '--quiet', '--detach', '{work}', 'origin/main'], null],
+                [['git', '-C', '{work}', ...$bot, 'am', '--quiet', '-3', '--directory=drupal'], 'PATCH'],
+                [
+                    ['git', '-C', '{work}', 'push', '--quiet', '--force', 'origin', 'HEAD:refs/heads/drupalorg/mr-7'],
+                    null,
+                ],
+                [['git', 'worktree', 'remove', '--force', '{work}'], null],
+                [['git', 'update-ref', '-d', 'refs/drupalorg/target'], null],
+                [['git', 'update-ref', '-d', 'refs/drupalorg/mr-7'], null],
+                [
+                    [
+                        'gh',
+                        'label',
+                        'create',
+                        'drupal.org',
+                        '--force',
+                        '--color',
+                        '0678BE',
+                        '--description',
+                        "Mirrored from the module's drupal.org project",
+                        '--repo',
+                        'janalis/collaborate',
+                    ],
+                    null,
+                ],
+                [
+                    [
+                        'gh',
+                        'pr',
+                        'create',
+                        '--head',
+                        'drupalorg/mr-7',
+                        '--base',
+                        'main',
+                        '--title',
+                        '[drupal.org !7] Fix the bell',
+                        '--label',
+                        'drupal.org',
+                        '--body-file',
+                        '-',
+                        '--repo',
+                        'janalis/collaborate',
+                    ],
+                    $body,
+                ],
+            ],
+            $this->commands($this->temporary),
+        );
+        self::assertSame(
+            [
+                ['GET', self::MRS, ['PRIVATE-TOKEN' => 'secret'], []],
+                ['GET', 'https://git.drupalcode.org/api/v4/projects/123', [], []],
+                ['GET', self::PROJECT . '/merge_requests/7/notes?per_page=100', ['PRIVATE-TOKEN' => 'secret'], []],
+                [
+                    'POST',
+                    self::PROJECT . '/merge_requests/7/notes',
+                    ['PRIVATE-TOKEN' => 'secret'],
+                    [
+                        'body' => "Mirrored to https://github.com/janalis/collaborate/pull/40: this project is developed on GitHub, and reviewed there. New commits here update it.\n\n<!-- github-mirror -->",
+                    ],
+                ],
+            ],
+            $this->requests,
+        );
+    }
+
+    public function testReplaysInTheSystemsTemporaryDirectoryByDefault(): void
+    {
+        $this->mergeRequest();
+        $this->ghJson(['pr', 'list'], []);
+
+        $this->watch(['mrs'], temporary: '');
+
+        self::assertMatchesRegularExpression(
+            '#^' . preg_quote(sys_get_temp_dir(), '#') . '/drupalorg-mr-7-[0-9a-f]{8}$#D',
+            $this->ran(['git', 'worktree', 'add'])[0][0][5],
+        );
+    }
+
+    public function testCleansUpAndGoesOnAfterAMergeRequestWhoseCommitsDoNotApply(): void
+    {
+        $this->mergeRequests([$this->mergeRequestOf(7), $this->mergeRequestOf(8, sha: 'def456')]);
+        $this->respond('GET', self::PROJECT . '/merge_requests/7/notes?per_page=100', []);
+        $this->respond('GET', self::PROJECT . '/merge_requests/8/notes?per_page=100', []);
+        $this->respond('POST', self::PROJECT . '/merge_requests/7/notes', [], 201);
+        $this->respond('POST', self::PROJECT . '/merge_requests/8/notes', [], 201);
+        $this->ghJson(['pr', 'list'], []);
+        $this->command(['gh', 'pr', 'create'], "u\n");
+        $this->command(
+            ['git', '-C'],
+            '',
+            1,
+            static fn(array $command): bool => (
+                \in_array('am', $command, true)
+                && \in_array('-3', $command, true)
+                && str_contains(implode(' ', $command), 'mr-7-')
+            ),
+        );
+
+        [$status, $output] = $this->watch(['mrs'], token: 'secret');
+
+        self::assertSame([
+            0,
+            "Comment on !7: its commits do not apply.\nPushed drupalorg/mr-8.\nOpen a pull request for !8.\nTell !8 where it is reviewed.\n",
+        ], [$status, $output]);
+        $commands = $this->commands($this->temporary);
+        self::assertContains([['git', '-C', '{work}', 'am', '--abort'], null], $commands);
+        self::assertCount(2, array_filter(
+            $commands,
+            static fn(array $call): bool => ['git', 'worktree', 'remove', '--force', '{work}'] === $call[0],
+        ));
+        self::assertCount(4, $this->ran(['git', 'update-ref', '-d']));
+        self::assertSame(
+            [
+                'body' => "Its commits do not apply on GitHub's `main`: please rebase this merge request on `0.x`.\n\n<!-- github-mirror-conflict: abc123 -->",
+            ],
+            $this->request('POST', self::PROJECT . '/merge_requests/7/notes')[3],
+        );
+    }
+
+    public function testGoesOnAfterAMergeRequestWhosePullRequestIsCurrent(): void
+    {
+        $this->mergeRequests([$this->mergeRequestOf(7), $this->mergeRequestOf(8, sha: 'def456')]);
+        $this->command(
+            ['gh', 'pr', 'list', '--state', 'open', '--head', 'drupalorg/mr-7'],
+            json_encode(
+                [
+                    'junk',
+                    [
+                        'number' => 40,
+                        'body' => "x\n\n<!-- drupalorg-mr: 7 @ abc123 -->\n",
+                        'url' => 'u',
+                        'headRefName' => 'drupalorg/mr-7',
+                    ],
+                ],
+                \JSON_THROW_ON_ERROR,
+            ),
+        );
+        $this->command(['gh', 'pr', 'list', '--state', 'open', '--head', 'drupalorg/mr-8'], '[]');
+        $this->command(['gh', 'pr', 'create'], "u\n");
+
+        self::assertSame([0, "Pushed drupalorg/mr-8.\nOpen a pull request for !8.\n", ''], $this->watch(['mrs']));
+    }
+
+    public function testAsksForTheSourceOfAMergeRequestWithoutOne(): void
+    {
+        $this->mergeRequests([['iid' => '3', 'sha' => 'f00', 'source_branch' => 'b']]);
+        $this->ghJson(['pr', 'list'], []);
+
+        $this->watch(['mrs', '--dry-run']);
+
+        self::assertSame('https://git.drupalcode.org/api/v4/projects/0', $this->requests[1][1]);
+    }
+
+    public function testMirrorsAMergeRequestWithoutADescriptionAndANumberForTitle(): void
+    {
+        $this->mergeRequests([['title' => 42, 'description' => " \n "] + $this->mergeRequestOf(9)]);
+        $this->ghJson(['pr', 'list'], [[
+            'number' => 41,
+            'body' => '<!-- drupalorg-mr: 9 @ old -->',
+            'url' => 'u',
+            'headRefName' => 'drupalorg/mr-9',
+        ]]);
+
+        self::assertSame(0, $this->watch(['mrs'])[0]);
+
+        $edit = $this->ran(['gh', 'pr', 'edit'])[0];
+        self::assertSame(
+            [
+                'gh',
+                'pr',
+                'edit',
+                '41',
+                '--title',
+                '[drupal.org !9] 42',
+                '--body-file',
+                '-',
+                '--repo',
+                'janalis/collaborate',
+            ],
+            $edit[0],
+        );
+        self::assertStringContainsString("with their authors.\n\n_No description._\n\n---", (string) $edit[1]);
+    }
+
+    public function testFindsAnIssueMirroredAfterOthers(): void
+    {
+        $this->project();
+        $this->respond('GET', self::ISSUES, ['list' => [['nid' => 2, 'title' => 'Mirrored']]]);
+        $this->ghJson(['issue', 'list', '--state', 'all'], [
+            ['body' => 'Other.'],
+            ['body' => 'x <!-- drupalorg-issue: 2 -->'],
+        ]);
+
+        self::assertSame([0, '', ''], $this->watch(['issues']));
+    }
+
+    public function testWritesTheIssueExactly(): void
+    {
+        $this->respond('GET', self::NID, ['list' => ['not a project', ['nid' => 99]]]);
+        $this->respond('GET', self::ISSUES, [
+            'list' => [
+                ['nid' => 5, 'title' => 'Long', 'body' => ['value' => str_repeat('é', 1501)]],
+                ['nid' => 4, 'title' => 'Exact', 'body' => ['value' => str_repeat('é', 1500)]],
+                ['nid' => 3, 'title' => 'Short', 'body' => ['value' => "<p>  Seen  </p>\n"]],
+                ['nid' => 2, 'title' => 'Mirrored'],
+            ],
+        ]);
+        $this->ghJson(['issue', 'list', '--state', 'all'], [
+            ['body' => 'x <!-- drupalorg-issue: 2 -->'],
+            ['body' => 'Other.'],
+            ['nobody' => true],
+        ]);
+
+        self::assertSame(0, $this->watch(['issues'])[0]);
+
+        $created = $this->ran(['gh', 'issue', 'create']);
+        self::assertCount(3, $created);
+        $body = static fn(
+            int $nid,
+            string $excerpt,
+        ): string => "Reported on drupal.org: https://www.drupal.org/node/{$nid}\n\n{$excerpt}\n\n---\n\nIts status on drupal.org is not synced: answer there, and link this issue's fix.\n\n<!-- drupalorg-issue: {$nid} -->\n";
+        self::assertSame(
+            [
+                'gh',
+                'issue',
+                'create',
+                '--title',
+                '[drupal.org #3] Short',
+                '--label',
+                'drupal.org',
+                '--body-file',
+                '-',
+                '--repo',
+                'janalis/collaborate',
+            ],
+            $created[0][0],
+        );
+        self::assertSame($body(3, '> Seen'), $created[0][1]);
+        self::assertSame($body(4, '> ' . str_repeat('é', 1500)), $created[1][1]);
+        self::assertSame($body(5, '> ' . str_repeat('é', 1500) . '…'), $created[2][1]);
+    }
+
+    public function testWritesTheReleaseChecklistExactlyAndClosesEveryListedRelease(): void
+    {
+        file_put_contents($this->temporary . '/notes.md', "\n\n### Added\n\n- A feature.\n\n");
+        $this->ghJson(['issue', 'list', '--state', 'open'], []);
+
+        $this->watch(['release-issue', '0.6.0', $this->temporary . '/notes.md']);
+
+        self::assertSame(
+            "The tag `0.6.0` is pushed to drupal.org. drupal.org creates a release by hand:\n\n1. Open https://www.drupal.org/project/collaborate/releases and click **Add new release**.\n2. Choose the tag `0.6.0`.\n3. Paste the notes below as its release notes, and save.\n\nThis issue closes once drupal.org lists the release.\n\n<details><summary>Release notes</summary>\n\n### Added\n\n- A feature.\n</details>\n\n<!-- drupalorg-release: 0.6.0 -->\n",
+            $this->ran(['gh', 'issue', 'create'])[0][1],
+        );
+
+        $this->ran = [];
+        $this->project();
+        foreach (['0.6.0' => [['nid' => 5]], '0.6.1' => [['nid' => 6]], '0.7.0' => []] as $version => $list) {
+            $this->respond(
+                'GET',
+                'https://www.drupal.org/api-d7/node.json?type=project_release&field_release_project=99&field_release_version='
+                . $version,
+                ['list' => $list],
+            );
+        }
+        $this->ghJson(['issue', 'list', '--state', 'open'], [
+            ['number' => 6, 'body' => '<!-- drupalorg-release: 0.7.0 -->'],
+            ['number' => 4, 'body' => '<!-- drupalorg-release: 0.6.0 -->'],
+            ['number' => 5, 'body' => '<!-- drupalorg-release: 0.6.1 -->'],
+            ['body' => '<!-- drupalorg-release: 0.6.0 -->'],
+        ]);
+
+        self::assertSame(
+            [0, "Close the release checklist of 0.6.0.\nClose the release checklist of 0.6.1.\n", ''],
+            $this->watch(['releases']),
+        );
+    }
+
+    public function testClosesNoChecklistBeforeTheProjectExists(): void
+    {
+        // Were the project's lookup skipped, this answer would close it.
+        $this->respond(
+            'GET',
+            'https://www.drupal.org/api-d7/node.json?type=project_release&field_release_project=&field_release_version=0.6.0',
+            ['list' => [['nid' => 1]]],
+        );
+        $this->ghJson(['issue', 'list', '--state', 'open'], [[
+            'number' => 4,
+            'body' => '<!-- drupalorg-release: 0.6.0 -->',
+        ]]);
+
+        self::assertSame([0, '', ''], $this->watch(['releases']));
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function foreignPulls(): iterable
+    {
+        yield 'a branch with a prefix' => ['xdrupalorg/mr-7', '<!-- drupalorg-mr: 7 @ abc123 -->'];
+        yield 'a branch with a suffix' => ['drupalorg/mr-7x', '<!-- drupalorg-mr: 7 @ abc123 -->'];
+        yield 'a branch with a line break' => ["drupalorg/mr-7\n", '<!-- drupalorg-mr: 7 @ abc123 -->'];
+        yield 'a marker that is not the last' => ['drupalorg/mr-7', "<!-- drupalorg-mr: 7 @ abc123 -->\n\nMore."];
+    }
+
+    #[DataProvider('foreignPulls')]
+    public function testLeavesAPullRequestTheWatcherDidNotOpen(string $branch, string $body): void
+    {
+        $this->ghJson(['pr', 'view'], [
+            'number' => 40,
+            'body' => $body,
+            'url' => 'u',
+            'headRefName' => $branch,
+            'state' => 'MERGED',
+        ]);
+
+        self::assertSame([0, "Not a mirrored merge request.\n", ''], $this->watch(['closed', '40'], token: 'secret'));
+    }
+
+    public function testClosesTheMergeRequestOfAPullRequestWhoseBodyEndsWithItsMarker(): void
+    {
+        $this->closedPull(true);
+        $this->ghJson(['pr', 'view'], [
+            'number' => 40,
+            'body' => "x\n<!-- drupalorg-mr: 7 @ abc123 -->\n",
+            'url' => 'u',
+            'headRefName' => 'drupalorg/mr-7',
+            'state' => 'CLOSED',
+        ]);
+        $this->respond('POST', self::PROJECT . '/merge_requests/7/notes', [], 201);
+        $this->respond('PUT', self::PROJECT . '/merge_requests/7', []);
+
+        self::assertSame(
+            [0, "Tell !7 and close it.\nDelete drupalorg/mr-7.\n", ''],
+            $this->watch(['closed', '40'], token: 'secret'),
+        );
+        self::assertSame(
+            ['gh', 'pr', 'view', '40', '--json', 'number,body,url,headRefName,state', '--repo', 'janalis/collaborate'],
+            $this->ran[0][0],
+        );
+    }
+
+    /** @return iterable<string, array{\Closure(self): list<string>, string}> */
+    public static function exactFailures(): iterable
+    {
+        yield 'a failing gh' => [
+            static function (self $test): array {
+                $test->command(['gh'], '', 1, error: "not found\n");
+
+                return ['closed', '40'];
+            },
+            "drupalorg: gh pr view 40 --json number,body,url,headRefName,state: not found\n",
+        ];
+        yield 'a failing git' => [
+            static function (self $test): array {
+                $test->mergeRequest();
+                $test->ghJson(['pr', 'list'], []);
+                $test->command(['git', 'fetch'], '', 128, error: "denied\n");
+
+                return ['mrs'];
+            },
+            "drupalorg: git fetch --quiet --no-tags origin main: denied\n",
+        ];
+        yield 'a redirected note' => [
+            static function (self $test): array {
+                $test->closedPull(true);
+                $test->respond('POST', self::PROJECT . '/merge_requests/7/notes', [], 300);
+
+                return ['closed', '40'];
+            },
+            "drupalorg: POST /merge_requests/7/notes: HTTP 300\n",
+        ];
+        yield 'a pull request without its number' => [
+            static function (self $test): array {
+                $test->ghJson(['pr', 'view'], ['body' => '', 'headRefName' => 'drupalorg/mr-7']);
+
+                return ['closed', '40'];
+            },
+            "drupalorg: gh gave a pull request without its number\n",
+        ];
+    }
+
+    /** @param \Closure(self): list<string> $setUp */
+    #[DataProvider('exactFailures')]
+    public function testReportsWhatFailedExactly(\Closure $setUp, string $message): void
+    {
+        self::assertSame([1, '', $message], $this->watch($setUp($this), token: 'secret'));
+    }
+
     public function testRunsItsCommandsInTheWorkingDirectory(): void
     {
         self::assertSame(
@@ -549,6 +1049,35 @@ final class WatcherTest extends TestCase
         $this->respond('GET', 'https://git.drupalcode.org/api/v4/projects/0', null, 404);
     }
 
+    /**
+     * A merge request from alice's issue fork, its iid as GitLab's JSON gives it.
+     *
+     * @return array<string, mixed>
+     */
+    public function mergeRequestOf(int $iid, string $sha = 'abc123'): array
+    {
+        $this->respond('GET', 'https://git.drupalcode.org/api/v4/projects/123', [
+            'http_url_to_repo' => 'https://git.drupalcode.org/issue/collaborate-1.git',
+        ]);
+
+        return [
+            'iid' => (string) $iid,
+            'title' => 'Change ' . $iid,
+            'description' => '',
+            'sha' => $sha,
+            'author' => ['username' => 'alice'],
+            'web_url' => 'https://git.drupalcode.org/project/collaborate/-/merge_requests/' . $iid,
+            'source_project_id' => 123,
+            'source_branch' => 'feature-' . $iid,
+        ];
+    }
+
+    /** @param list<array<string, mixed>> $requests */
+    public function mergeRequests(array $requests): void
+    {
+        $this->respond('GET', self::MRS, $requests);
+    }
+
     /** Pull request #40, the mirror of !7, merged or closed. */
     public function closedPull(bool $merged): void
     {
@@ -578,13 +1107,18 @@ final class WatcherTest extends TestCase
      * @param list<string>                         $prefix
      * @param (\Closure(list<string>): bool)|null  $when
      */
-    public function command(array $prefix, string $output, int $status = 0, ?\Closure $when = null): void
-    {
+    public function command(
+        array $prefix,
+        string $output,
+        int $status = 0,
+        ?\Closure $when = null,
+        string $error = 'failed',
+    ): void {
         array_unshift($this->commands, [
             $prefix,
             /** @param list<string> $command */
             static fn(array $command): array => (
-                null === $when || $when($command) ? [$status, $output, 'failed'] : [0, '', '']
+                null === $when || $when($command) ? [$status, $output, $error] : [0, '', '']
             ),
         ]);
     }
@@ -599,6 +1133,7 @@ final class WatcherTest extends TestCase
         string $repository = 'janalis/collaborate',
         #[\SensitiveParameter]
         string $token = '',
+        ?string $temporary = null,
     ): array {
         $test = $this;
         $http = new class($test) implements Http {
@@ -628,7 +1163,11 @@ final class WatcherTest extends TestCase
         $stdout = fopen('php://memory', 'w+');
         $stderr = fopen('php://memory', 'w+');
         \assert(false !== $stdout && false !== $stderr);
-        $status = new Watcher($http, $runner, $environment, $this->temporary)->run($arguments, $stdout, $stderr);
+        $status = new Watcher($http, $runner, $environment, $temporary ?? $this->temporary)->run(
+            $arguments,
+            $stdout,
+            $stderr,
+        );
         rewind($stdout);
         rewind($stderr);
 
@@ -663,6 +1202,26 @@ final class WatcherTest extends TestCase
         }
 
         return [0, '', ''];
+    }
+
+    /**
+     * Every command run, and its input, a worktree of the watcher's named `{work}`.
+     *
+     * @return list<array{list<string>, ?string}>
+     */
+    private function commands(string $temporary): array
+    {
+        return array_map(static fn(array $call): array => [
+            array_map(
+                static fn(string $part): string => (string) preg_replace(
+                    '#^' . preg_quote($temporary, '#') . '/drupalorg-mr-\d+-[0-9a-f]{8}$#D',
+                    '{work}',
+                    $part,
+                ),
+                $call[0],
+            ),
+            $call[1],
+        ], $this->ran);
     }
 
     /**

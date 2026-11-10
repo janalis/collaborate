@@ -6,7 +6,7 @@ namespace Janalis\Collaborate\Draft;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
+use Janalis\Collaborate\Draft\Dialect\JournalDialect;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -68,6 +68,8 @@ class DraftJournal implements ResetInterface
     /** @var array<string, int> */
     private array $held = [];
 
+    private ?JournalDialect $dialect = null;
+
     /**
      * @param string $systemLabel the name of the writes no editor made (a compaction, a reconciliation)
      * @param array{max_update_bytes?: int, max_draft_bytes?: int, max_fields?: int, max_value_depth?: int, label_length?: int, compact?: array{bytes?: int, fields?: int, idle?: int, ...}, locks?: array{save?: int, writer?: int, ...}, purge?: array{clean_days?: int, unsaved_days?: int, ...}, ...} $limits
@@ -104,10 +106,11 @@ class DraftJournal implements ResetInterface
         $this->exclusive($id, function () use ($id, $fields, $definitions): void {
             // A draft recreated after purge() must not reuse a generation a page left open still holds:
             // that page would take the new revisions for ones it has seen. Half the INT range leaves room for ++.
-            $this->db()->executeStatement(
-                'INSERT IGNORE INTO collaborate_draft (id, generation, revision, saved_revision, bytes, updated_at) VALUES (?, ?, 0, 0, 0, ?)',
-                [$id, $this->firstGeneration ?? $this->randomGeneration(), $this->now()],
-            );
+            $this->db()->executeStatement($this->dialect()->createDraft(), [
+                $id,
+                $this->firstGeneration ?? $this->randomGeneration(),
+                $this->now(),
+            ]);
             $draft = $this->read($id, true);
             $compacted = false;
             // Rebasing breaks every open editor's model-version chain: peers on the old
@@ -750,11 +753,7 @@ class DraftJournal implements ResetInterface
      */
     public function lock(string $id, ?int $seconds = null): void
     {
-        $acquired = $this->db()->fetchOne('SELECT GET_LOCK(?, ?)', [
-            $this->lockName($id),
-            $seconds ?? $this->lockSeconds,
-        ]);
-        if (1 !== (int) $acquired) {
+        if (!$this->dialect()->lock($this->db(), $this->lockName($id), $seconds ?? $this->lockSeconds)) {
             throw new ServiceUnavailableHttpException(1, 'Collaborate draft is busy.');
         }
         $this->held[$id] = ($this->held[$id] ?? 0) + 1;
@@ -765,7 +764,7 @@ class DraftJournal implements ResetInterface
         if (!isset($this->held[$id])) {
             return;
         }
-        $this->db()->fetchOne('SELECT RELEASE_LOCK(?)', [$this->lockName($id)]);
+        $this->dialect()->unlock($this->db(), $this->lockName($id));
         if (0 === --$this->held[$id]) {
             unset($this->held[$id]);
         }
@@ -776,7 +775,7 @@ class DraftJournal implements ResetInterface
     {
         foreach ($this->held as $id => $count) {
             foreach (range(1, $count) as $_) {
-                $this->db()->fetchOne('SELECT RELEASE_LOCK(?)', [$this->lockName($id)]);
+                $this->dialect()->unlock($this->db(), $this->lockName($id));
             }
         }
         $this->held = [];
@@ -810,22 +809,21 @@ class DraftJournal implements ResetInterface
         return isset($this->held[$id]) ? $this->db()->transactional($work) : $this->exclusive($id, $work);
     }
 
-    /** The SQL is MariaDB's and MySQL's: named locks, INSERT IGNORE, REPLACE and FOR UPDATE. */
+    /** The connection, once its platform is one the journal speaks ({@see JournalDialect}). */
     private function db(): Connection
     {
-        // The connection keeps its platform: asking again costs nothing.
-        $platform = $this->connection->getDatabasePlatform();
-        if (!$platform instanceof AbstractMySQLPlatform) {
-            throw new \LogicException(\sprintf(
-                'The shared-draft journal needs a MariaDB or MySQL connection; %s is not supported.',
-                $platform::class,
-            ));
-        }
+        $this->dialect();
 
         return $this->connection;
     }
 
-    /** Named locks are global to the MariaDB server, and a record's draft id is the same in every database;
+    /** The SQL of the connection's platform for what standard SQL leaves out: upserts, row and named locks. */
+    private function dialect(): JournalDialect
+    {
+        return $this->dialect ??= JournalDialect::for($this->connection);
+    }
+
+    /** Named locks are global to the database server, and a record's draft id is the same in every database;
      * the hashed database name keeps environments and test instances apart under the 64-character cap.
      */
     private function lockName(string $id): string
@@ -895,7 +893,7 @@ class DraftJournal implements ResetInterface
     {
         $row = $this->db()->fetchAssociative(
             'SELECT generation, revision, saved_revision, bytes, record_id, saved_by, saved_by_label, updated_at FROM collaborate_draft WHERE id = ?'
-            . ($lock ? ' FOR UPDATE' : ''),
+            . ($lock ? $this->dialect()->forUpdate() : ''),
             [$id],
         );
         if (false === $row) {
@@ -983,12 +981,7 @@ class DraftJournal implements ResetInterface
                 $field = $draft['fields'][$name];
                 array_push($parameters, $id, (string) $name, $field['type'], json_encode($field, \JSON_THROW_ON_ERROR));
             }
-            $this->db()->executeStatement(
-                // Every column is written: REPLACE needs neither MySQL's row alias nor its deprecated VALUES().
-                'REPLACE INTO collaborate_draft_field (draft_id, name, type, state) VALUES '
-                    . implode(', ', array_map(static fn(): string => '(?, ?, ?, ?)', $chunk)),
-                $parameters,
-            );
+            $this->db()->executeStatement($this->dialect()->writeFields(\count($chunk)), $parameters);
         }
     }
 

@@ -10,7 +10,10 @@ use Janalis\Collaborate\Controller\PushController;
 use Janalis\Collaborate\Cursor\PageGrant;
 use Janalis\Collaborate\DependencyInjection\Configuration;
 use Janalis\Collaborate\Doctrine\ChangeCollector;
+use Janalis\Collaborate\Doctrine\PortableSchema;
 use Janalis\Collaborate\Doctrine\RecordIdentifier;
+use Janalis\Collaborate\Draft\Dialect\JournalDialect;
+use Janalis\Collaborate\Draft\Dialect\MySqlDialect;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftSave;
@@ -105,6 +108,9 @@ use Symfony\Component\Messenger\Worker;
 #[UsesClass(PublishFailedException::class)]
 #[UsesClass(SymfonyCurrentUser::class)]
 #[UsesClass(FormDraft::class)]
+#[UsesClass(JournalDialect::class)]
+#[UsesClass(MySqlDialect::class)]
+#[UsesClass(PortableSchema::class)]
 final class NotificationsMessengerTest extends NotificationsTestCase
 {
     protected static function kernel(): string

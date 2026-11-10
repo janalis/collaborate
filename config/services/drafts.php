@@ -8,6 +8,7 @@ use Janalis\Collaborate\Access\DraftAccessCheckerInterface;
 use Janalis\Collaborate\Command\PurgeDraftsCommand;
 use Janalis\Collaborate\Controller\DraftController;
 use Janalis\Collaborate\Doctrine\ChangeCollector;
+use Janalis\Collaborate\Doctrine\PortableSchema;
 use Janalis\Collaborate\Doctrine\RecordIdentifier;
 use Janalis\Collaborate\Doctrine\TranslationMapperInterface;
 use Janalis\Collaborate\Draft\DraftAccess;
@@ -125,6 +126,9 @@ return static function (ContainerConfigurator $container): void {
         service(TranslationMapperInterface::class)->nullOnInvalid(),
         param('collaborate.drafts.enabled'),
     ])->tag('doctrine.event_listener', ['event' => 'onFlush']);
+
+    // The bundle's tables on PostgreSQL and SQLite: their mapping is MariaDB's and MySQL's.
+    $services->set(PortableSchema::class)->tag('doctrine.event_listener', ['event' => 'loadClassMetadata']);
 
     $services
         ->set(UpdatesSubscriber::class)

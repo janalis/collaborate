@@ -21,6 +21,15 @@
  * @property {string[]} containers where a collection without entries appends them, after its widget
  * @property {string | null} added the document event a row added is announced with, `detail.newElement`
  * @property {string[]} changed document events after which the collections are scanned again
+ * @property {string} [position] an entry's child the page numbers in the order shown once rows move (`position`)
+ * @property {(node: HTMLElement, key: string) => boolean | null | undefined} [entry] what a row its controls key
+ *   `key` is: true, the entry of that key (keys the server keeps); false, no entry yet (a host's empty row);
+ *   otherwise an entry the page added, which takes a key of its own
+ * @property {(container: HTMLElement, key: string, rekey: (node: HTMLElement, from: string) => void) =>
+ *   HTMLElement | null | Promise<HTMLElement | null>} [create] adds a peer's entry when the collection has no
+ *   prototype: a row of the host's, its controls renamed from `from` to the key by `rekey`
+ * @property {(node: HTMLElement, container: HTMLElement) => void} [remove] removes an entry a peer removed, in
+ *   place of taking its row out of the page
  */
 
 /**

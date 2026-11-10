@@ -7,6 +7,8 @@
     <php>
         <!-- MariaDB (or MySQL 8) database the functional journal tests own; they create their tables. -->
         <env name="COLLABORATE_DATABASE_URL" value="mysql://root@127.0.0.1:3306/collaborate_test?serverVersion=10.11.0-MariaDB" force="false"/>
+        <!-- The journal on PostgreSQL too (DraftJournalPlatformsTest), when set; SQLite needs no server. -->
+        <env name="COLLABORATE_POSTGRES_URL" value="" force="false"/>
     </php>
     <testsuites>
         <testsuite name="unit"><directory>tests/Unit</directory></testsuite>

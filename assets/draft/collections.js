@@ -15,7 +15,7 @@ export function initializeCollections(session) {
       for (const container of session.form.querySelectorAll('[data-collaborate-collection]')) {
         const path = container.dataset.collaborateCollection;
         if (!collections.has(path)) collections.set(path, collection(container, path));
-        collections.get(path).scan();
+        collections.get(path).scan(container);
       }
       session.initializeControls();
     } finally {
@@ -23,17 +23,61 @@ export function initializeCollections(session) {
     }
   }
 
-  function collection(container, path) {
+  /** Renames an entry's controls, and the paths of the collections it holds, from one key to another. */
+  function rekey(node, path, from, to) {
+    const before = `${path}[${from}]`;
+    const after = `${path}[${to}]`;
+    for (const control of node.querySelectorAll('[name]')) control.name = control.name.replace(before, after);
+    for (const nested of node.querySelectorAll('[data-collaborate-collection]'))
+      nested.dataset.collaborateCollection = nested.dataset.collaborateCollection.replace(before, after);
+    for (const nested of node.querySelectorAll('[data-collaborate-entries]'))
+      nested.dataset.collaborateEntries = nested.dataset.collaborateEntries.replace(before, after);
+    for (const nested of node.querySelectorAll('[data-prototype]'))
+      nested.dataset.prototype = nested.dataset.prototype.replaceAll(before, after);
+    delete node.dataset.collaboratePending;
+  }
+
+  function collection(initial, path) {
+    let container = initial;
     const members = new Map();
     const nodes = new Map();
+    // Entries the host is still adding (`collections.create`), and those it added since the last render.
+    const creating = new Set();
+    const arrived = [];
+    // Entries the host could not add: asking again would fail again.
+    const failed = new Set();
     let bootstrapping = true;
     let renderedOrder = [];
     const ownNodes = () =>
       Array.from(container.querySelectorAll(entrySelector())).filter(
         (node) =>
           node.closest('[data-collaborate-collection]') === container &&
-          node.parentElement.closest(entrySelector())?.closest('[data-collaborate-collection]') !== container
+          node.parentElement.closest(entrySelector())?.closest('[data-collaborate-collection]') !== container &&
+          !('collaborateRemoved' in node.dataset)
       );
+
+    /**
+     * What the host says of an entry its controls name `key`: true, an entry under that key; false, a row that
+     * is no entry yet (Drupal's empty row); undefined or null, an entry the page added, which takes a key of its own.
+     */
+    function verdict(node, key) {
+      const answer = bridge().collections.entry?.(node, key);
+      if (answer === false) node.dataset.collaboratePending = '';
+      else delete node.dataset.collaboratePending;
+      return answer;
+    }
+
+    /** The entries a collection rendered (again: a host may replace its whole widget) take the keys they name. */
+    function adopt() {
+      nodes.clear();
+      for (const node of ownNodes()) {
+        const key = keyOf(node);
+        if (key && verdict(node, key) !== false) {
+          node.dataset.collaborateItem = key;
+          nodes.set(key, node);
+        }
+      }
+    }
 
     function keyOf(node) {
       const control = Array.from(node.querySelectorAll('[name]')).find((input) => input.name.startsWith(`${path}[`));
@@ -49,8 +93,50 @@ export function initializeCollections(session) {
         }
       }
       for (const root of node.querySelectorAll('.ck-editor__editable')) root.ckeditorInstance?.destroy();
-      node.remove();
+      const { remove } = bridge().collections;
+      if (remove) {
+        // The host removes it (Drupal, on the server): until then it is no entry.
+        node.dataset.collaborateRemoved = '';
+        remove(node, container);
+      } else node.remove();
       nodes.delete(key);
+    }
+
+    /** The host could not add an entry: the page cannot follow the collection. */
+    function unrenderable(key) {
+      failed.add(key);
+      session.setStatus('incompatible');
+      session.report('prototype', path);
+    }
+
+    /**
+     * Asks the host for an entry it adds itself, its collections having no prototype: the entry, or null while
+     * the host adds it (Drupal asks its server for a row).
+     */
+    function create(key) {
+      if (creating.has(key) || failed.has(key)) return null;
+      const made = bridge().collections.create(container, key, (node, from) => rekey(node, path, from, key));
+      if (!(made instanceof Promise)) {
+        if (!made) unrenderable(key);
+        return made;
+      }
+      creating.add(key);
+      made
+        .then((node) => {
+          if (!node) {
+            unrenderable(key);
+            return;
+          }
+          node.dataset.collaborateItem = key;
+          nodes.set(key, node);
+          arrived.push(node);
+        })
+        .catch(() => unrenderable(key))
+        .finally(() => {
+          creating.delete(key);
+          if (!session.stopped) render();
+        });
+      return null;
     }
 
     function render() {
@@ -69,11 +155,20 @@ export function initializeCollections(session) {
           .collections.containers.map((selector) => container.querySelector(selector))
           .find(Boolean);
       if (!parent) return;
-      const added = [];
+      const added = arrived.splice(0).filter((node) => node.isConnected);
       let prototype;
       let placeholder;
       for (const [key] of ordered) {
         let node = nodes.get(key);
+        if (!node && bridge().collections.create) {
+          node = create(key);
+          if (!node) continue;
+          node.dataset.collaborateItem = key;
+          parent.append(node);
+          nodes.set(key, node);
+          added.push(node);
+          continue;
+        }
         if (!node) {
           prototype ??= prototypeOf(container);
           if (!prototype) {
@@ -92,7 +187,8 @@ export function initializeCollections(session) {
       }
       const rows = ordered.map(([key]) => nodes.get(key)).filter((node) => node?.parentElement === parent);
       const focused = rows.find((node) => node.contains(document.activeElement));
-      let before = null;
+      // What follows the entries stays after them: a row that is no entry yet (Drupal's empty one).
+      let before = Array.from(parent.children).findLast((child) => rows.includes(child))?.nextElementSibling ?? null;
       // Keep the active row attached: moving it blurs native controls and editors.
       // Place only misplaced siblings around it, leaving unchanged orders untouched.
       for (const node of rows.toReversed()) {
@@ -120,13 +216,15 @@ export function initializeCollections(session) {
       // The host builds its widgets on each row added, once the row's own controls follow the draft.
       for (const node of added) initializeRow(nodes.get(node.dataset.collaborateItem));
       renderedOrder = ownNodes().map(keyOf);
-      // A hidden `position` child is posted from the page, not the draft: once rows move, number it in the order shown.
+      // An entry's position (a hidden `position` child, Drupal's `_weight`) is posted from the page, not the
+      // draft: once rows move, number it in the order shown.
       if (renderedOrder.join() === shown) return;
+      const { position: child = 'position' } = bridge().collections;
       let position = 0;
       for (const node of ownNodes()) {
-        const name = `${path}[${keyOf(node)}][position]`;
-        const input = Array.from(node.querySelectorAll('input[type="hidden"]')).find((item) => item.name === name);
-        if (input) input.value = ++position;
+        const name = `${path}[${keyOf(node)}][${child}]`;
+        const input = Array.from(node.querySelectorAll('input, select')).find((item) => item.name === name);
+        if (input) input.value = String(++position);
       }
     }
 
@@ -160,13 +258,7 @@ export function initializeCollections(session) {
       return adapter;
     }
 
-    for (const node of ownNodes()) {
-      const key = keyOf(node);
-      if (key) {
-        node.dataset.collaborateItem = key;
-        nodes.set(key, node);
-      }
-    }
+    adopt();
     for (const [name, state] of Object.entries(session.state.fields)) {
       if (state.type === 'member' && name.startsWith(`${path}[@`) && !name.slice(path.length + 2, -1).includes(']')) {
         member(name.slice(path.length + 2, -1), state.value);
@@ -176,7 +268,11 @@ export function initializeCollections(session) {
     render();
 
     return {
-      scan() {
+      scan(rendered) {
+        if (rendered !== container) {
+          container = rendered;
+          adopt();
+        }
         for (const [name, state] of Object.entries(session.state.fields)) {
           if (state.type !== 'member' || !name.startsWith(`${path}[@`)) continue;
           const key = name.slice(path.length + 2, -1);
@@ -195,16 +291,10 @@ export function initializeCollections(session) {
           if (!key) {
             const old = keyOf(node);
             if (!old) continue;
-            key = `n${crypto.randomUUID()}`;
-            const before = `${path}[${old}]`;
-            const after = `${path}[${key}]`;
-            for (const control of node.querySelectorAll('[name]')) control.name = control.name.replace(before, after);
-            for (const nested of node.querySelectorAll('[data-collaborate-collection]'))
-              nested.dataset.collaborateCollection = nested.dataset.collaborateCollection.replace(before, after);
-            for (const nested of node.querySelectorAll('[data-collaborate-entries]'))
-              nested.dataset.collaborateEntries = nested.dataset.collaborateEntries.replace(before, after);
-            for (const nested of node.querySelectorAll('[data-prototype]'))
-              nested.dataset.prototype = nested.dataset.prototype.replaceAll(before, after);
+            const answer = verdict(node, old);
+            if (answer === false) continue;
+            key = answer === true ? old : `n${crypto.randomUUID()}`;
+            if (key !== old) rekey(node, path, old, key);
             node.dataset.collaborateItem = key;
             nodes.set(key, node);
           }
@@ -216,7 +306,8 @@ export function initializeCollections(session) {
             value.change({ ...value.value, alive: true, order });
         }
         for (const [key, value] of members) {
-          if (!seen.has(key) && value.value.alive) value.change({ ...value.value, alive: false });
+          if (!seen.has(key) && !creating.has(key) && !failed.has(key) && value.value.alive)
+            value.change({ ...value.value, alive: false });
         }
         renderedOrder = ownNodes().map(keyOf);
       },

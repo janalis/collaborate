@@ -21,7 +21,10 @@ use Janalis\Collaborate\Cursor\CursorPosition;
 use Janalis\Collaborate\Cursor\PageGrant;
 use Janalis\Collaborate\DependencyInjection\Configuration;
 use Janalis\Collaborate\Doctrine\ChangeCollector;
+use Janalis\Collaborate\Doctrine\PortableSchema;
 use Janalis\Collaborate\Doctrine\RecordIdentifier;
+use Janalis\Collaborate\Draft\Dialect\JournalDialect;
+use Janalis\Collaborate\Draft\Dialect\MySqlDialect;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftSave;
@@ -111,6 +114,9 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(PublishFailedException::class)]
 #[UsesClass(SymfonyCurrentUser::class)]
 #[UsesClass(FormDraft::class)]
+#[UsesClass(JournalDialect::class)]
+#[UsesClass(MySqlDialect::class)]
+#[UsesClass(PortableSchema::class)]
 final class EasyAdminApplicationTest extends CollaborationTestCase
 {
     protected static function kernel(): string

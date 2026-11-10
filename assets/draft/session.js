@@ -479,14 +479,16 @@ export class DraftSession {
   }
 
   initializeControls() {
+    // A row that is no entry yet, or one its host is removing, follows no draft.
+    const outside = (element) => element.closest('[data-collaborate-pending], [data-collaborate-removed]');
     for (const control of this.form.elements) {
-      if (control.name && !this.state.fields[this.fieldKey(control.name)])
+      if (control.name && !outside(control) && !this.state.fields[this.fieldKey(control.name)])
         this.ensureField(this.fieldKey(control.name));
     }
     for (const [name, state] of Object.entries(this.state.fields)) {
       const control = this.form.elements.namedItem(this.formName(name));
       const element = control instanceof RadioNodeList ? control[0] : control;
-      if (!element || !['text', 'value'].includes(state.type) || this.bound.has(element)) continue;
+      if (!element || !['text', 'value'].includes(state.type) || this.bound.has(element) || outside(element)) continue;
       this.bound.add(element);
       if (state.type === 'text' && control instanceof HTMLElement) {
         initializeText(this, control, name, state);

@@ -6,11 +6,14 @@ namespace Janalis\Collaborate\Tests\Functional\Draft;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Platforms\SQLServerPlatform;
 use Doctrine\DBAL\Tools\DsnParser;
 use Doctrine\Persistence\ManagerRegistry;
 use Doctrine\Persistence\Mapping\ClassMetadata;
 use Doctrine\Persistence\ObjectManager;
 use Janalis\Collaborate\Doctrine\RecordIdentifier;
+use Janalis\Collaborate\Draft\Dialect\JournalDialect;
+use Janalis\Collaborate\Draft\Dialect\MySqlDialect;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftSave;
@@ -61,6 +64,8 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 #[CoversClass(DraftSave::class)]
 #[UsesClass(RecordIdentifier::class)]
 #[UsesClass(DraftText::class)]
+#[CoversClass(JournalDialect::class)]
+#[CoversClass(MySqlDialect::class)]
 final class DraftJournalTest extends TestCase
 {
     use JsonAssertions;
@@ -201,12 +206,16 @@ final class DraftJournalTest extends TestCase
         return $article;
     }
 
-    public function testRefusesAConnectionThatIsNeitherMariaDbNorMySql(): void
+    public function testRefusesAConnectionOnAPlatformItDoesNotSpeak(): void
     {
-        $journal = new DraftJournal(DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]));
+        $connection = $this->createStub(Connection::class);
+        $connection->method('getDatabasePlatform')->willReturn(new SQLServerPlatform());
+        $journal = new DraftJournal($connection);
 
         $this->expectException(\LogicException::class);
-        $this->expectExceptionMessage('The shared-draft journal needs a MariaDB or MySQL connection');
+        $this->expectExceptionMessage(
+            'The shared-draft journal needs a MariaDB, MySQL, PostgreSQL or SQLite connection',
+        );
         $journal->replay('record', [], 0);
     }
 

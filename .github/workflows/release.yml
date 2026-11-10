@@ -1,7 +1,9 @@
 name: release
 # Actions → release → Run workflow (on main). Verifies, moves CHANGELOG's [Unreleased] section to the new
-# version, commits and tags it, then publishes the GitHub release with that section as its notes, pings
-# Packagist (janalis/collaborate, from the tag) and refreshes the documentation site.
+# version, makes the Drupal module require it (drupal/composer.json), commits and tags it, then publishes the
+# GitHub release with that section as its notes, pings Packagist (janalis/collaborate, from the tag), pushes the
+# module's split with the same version (drupal-split.yml: janalis/collaborate_drupal, drupal.org), opens the
+# issue that hands drupal.org's "Create release" to a maintainer, and refreshes the documentation site.
 on:
   workflow_dispatch:
     inputs:
@@ -26,6 +28,7 @@ jobs:
     outputs:
       version: ${{ steps.relprep.outputs.version }}
       tag: ${{ steps.relprep.outputs.tag }}
+      module_tag: ${{ steps.relprep.outputs.module_tag }}
     services:
       database:
         image: mariadb:11.4
@@ -59,7 +62,7 @@ jobs:
       - id: relprep
         env:
           BUMP: ${{ inputs.version }}
-        run: php tools/relprep.php --bump "$BUMP" --notes "$RUNNER_TEMP/notes.md" | tee -a "$GITHUB_OUTPUT"
+        run: php tools/relprep.php --bump "$BUMP" --notes "$RUNNER_TEMP/notes.md" --module drupal/composer.json | tee -a "$GITHUB_OUTPUT"
       - run: git diff
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -100,15 +103,53 @@ jobs:
       - env:
           PACKAGIST_USERNAME: ${{ secrets.PACKAGIST_USERNAME }}
           PACKAGIST_TOKEN: ${{ secrets.PACKAGIST_TOKEN }}
+        run: .github/scripts/packagist-update.sh "https://github.com/$GITHUB_REPOSITORY"
+
+  # The Drupal module, released with the bundle: its split tagged X.Y.Z on GitHub and drupal.org.
+  drupal:
+    needs: [prepare, publish]
+    if: ${{ !inputs.dry_run }}
+    uses: ./.github/workflows/drupal-split.yml
+    with:
+      tag: ${{ needs.prepare.outputs.module_tag }}
+    secrets:
+      SPLIT_DEPLOY_KEY: ${{ secrets.SPLIT_DEPLOY_KEY }}
+      DRUPALORG_SSH_KEY: ${{ secrets.DRUPALORG_SSH_KEY }}
+
+  # Packagist reads the split's tag; drupal.org's release page is created by hand, from the issue opened here.
+  drupal-publish:
+    needs: [prepare, drupal]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-notes
+          path: ${{ runner.temp }}
+      - env:
+          PACKAGIST_USERNAME: ${{ secrets.PACKAGIST_USERNAME }}
+          PACKAGIST_TOKEN: ${{ secrets.PACKAGIST_TOKEN }}
+        run: .github/scripts/packagist-update.sh https://github.com/janalis/collaborate_drupal
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+        with:
+          php-version: '8.5'
+          extensions: curl, mbstring
+          coverage: none
+      - name: drupal.org release checklist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HAS_DRUPALORG: ${{ secrets.DRUPALORG_SSH_KEY != '' }}
+          TAG: ${{ needs.prepare.outputs.module_tag }}
         run: |
-          if [ -z "$PACKAGIST_USERNAME" ] || [ -z "$PACKAGIST_TOKEN" ]; then
-            echo "Packagist secrets not set; relying on the GitHub hook"
+          if [ "$HAS_DRUPALORG" != true ]; then
+            echo "::notice::No drupal.org deploy key: the tag is not on drupal.org, no checklist to open."
             exit 0
           fi
-          curl -fsS -X POST -H 'Content-Type: application/json' \
-            -H "Authorization: Bearer $PACKAGIST_USERNAME:$PACKAGIST_TOKEN" \
-            -d "{\"repository\":{\"url\":\"https://github.com/$GITHUB_REPOSITORY\"}}" \
-            https://packagist.org/api/update-package
+          php tools/drupalorg.php release-issue "$TAG" "$RUNNER_TEMP/notes.md"
 
   # Refresh the documentation site (changelog, version in the nav).
   docs:

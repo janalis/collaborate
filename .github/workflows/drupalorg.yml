@@ -1,0 +1,77 @@
+name: drupalorg
+# Watches the Drupal module's drupal.org project (tools/drupalorg.php): its merge requests become pull requests
+# here (drupalorg/mr-<iid>, their commits replayed under drupal/), its issues become issues here, and the
+# checklists of the module's releases close once drupal.org lists them. When a mirrored pull request closes,
+# its merge request is told and closed. Until the project exists on drupal.org, each run notes it and does
+# nothing.
+#
+# DRUPALORG_GITLAB_TOKEN (a git.drupalcode.org token with the `api` scope) lets it write to the merge requests.
+# DRUPALORG_MIRROR_TOKEN (a GitHub App or fine-grained token with contents, pull requests and issues) pushes
+# the mirrored branches and opens their pull requests: GitHub runs no workflow, CI included, for what the
+# workflow's own token pushes or opens.
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Print what would be written, write nothing"
+        type: boolean
+        default: false
+  pull_request:
+    types: [closed]
+concurrency: drupalorg
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+defaults:
+  run:
+    shell: bash
+jobs:
+  watch:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.DRUPALORG_MIRROR_TOKEN || secrets.GITHUB_TOKEN }}
+      DRUPALORG_GITLAB_TOKEN: ${{ secrets.DRUPALORG_GITLAB_TOKEN }}
+      DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.DRUPALORG_MIRROR_TOKEN || secrets.GITHUB_TOKEN }}
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+        with:
+          php-version: '8.5'
+          extensions: curl, mbstring
+          coverage: none
+      - name: Merge requests
+        run: php tools/drupalorg.php mrs ${DRY_RUN:+"$DRY_RUN"}
+      - name: Issues
+        run: php tools/drupalorg.php issues ${DRY_RUN:+"$DRY_RUN"}
+      - name: Release checklists
+        run: php tools/drupalorg.php releases ${DRY_RUN:+"$DRY_RUN"}
+
+  closed:
+    # The watcher's own branches only, not a fork's of the same name.
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && startsWith(github.event.pull_request.head.ref, 'drupalorg/mr-')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.DRUPALORG_MIRROR_TOKEN || secrets.GITHUB_TOKEN }}
+      DRUPALORG_GITLAB_TOKEN: ${{ secrets.DRUPALORG_GITLAB_TOKEN }}
+      NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      # The base branch's tools: a mirrored pull request only changes drupal/.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+        with:
+          php-version: '8.5'
+          extensions: curl, mbstring
+          coverage: none
+      - run: php tools/drupalorg.php closed "$NUMBER"

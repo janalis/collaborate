@@ -6,6 +6,8 @@
 
 <!-- Tests added or changed (PHPUnit, Vitest, Playwright), commands run, browsers used. -->
 
+<!-- A pull request mirrored from a drupal.org merge request (`drupalorg/mr-*`) keeps this description: review it as any other. -->
+
 ## Checklist
 
 - [ ] `make verify` passes (Composer validation, Mago format, lint and analysis, PHPUnit, Vitest)

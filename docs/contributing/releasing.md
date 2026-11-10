@@ -23,7 +23,12 @@ publishing. The workflow (`.github/workflows/release.yml`):
 4. creates the GitHub release from the tag with the extracted notes;
 5. asks Packagist to update `janalis/collaborate` (when its secrets are
    set; Packagist's GitHub hook picks the tag up anyway);
-6. rebuilds and deploys this documentation site, so the changelog and the
+6. releases the [Drupal module](./drupal) with the same version: makes it
+   require the released bundle (in the release commit), pushes its split
+   tagged `X.Y.Z` to GitHub and drupal.org, asks Packagist to update
+   `janalis/collaborate_drupal`, and opens the issue that hands drupal.org's
+   *Create release* to a maintainer;
+7. rebuilds and deploys this documentation site, so the changelog and the
    version in the navigation bar are current.
 
 A failed publish can be retried with *Re-run failed jobs*; the tag is

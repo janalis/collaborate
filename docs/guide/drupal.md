@@ -32,7 +32,7 @@ administration, on Claro or Gin:
 ## Install
 
 ```sh
-composer require janalis/collaborate_drupal
+composer require drupal/collaborate   # or janalis/collaborate_drupal, from Packagist
 drush pm:install collaborate
 ```
 

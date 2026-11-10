@@ -21,6 +21,8 @@ final class ItemKeysTest extends UnitTestCase
                 'nabc' => ['value' => 'Third', ItemKeys::KEY => '', ItemKeys::DELTA => '2'],
                 'p0' => ['value' => 'First', ItemKeys::KEY => 'p0', ItemKeys::DELTA => '0'],
                 't3' => ['value' => '', ItemKeys::KEY => '', ItemKeys::DELTA => '3'],
+                // A name no key could be is kept as none.
+                'bad key!' => ['value' => 'Fifth', ItemKeys::KEY => '', ItemKeys::DELTA => '4'],
                 'add_more' => 'Add another item',
             ],
             // A paragraph's own items, below the paragraph's key.
@@ -42,6 +44,8 @@ final class ItemKeysTest extends UnitTestCase
         self::assertSame('Second', $input['field_notes'][1]['value']);
         self::assertSame('nabc', $input['field_notes'][2][ItemKeys::KEY]);
         self::assertSame('', $input['field_notes'][3][ItemKeys::KEY]);
+        self::assertSame('Fifth', $input['field_notes'][4]['value']);
+        self::assertSame('', $input['field_notes'][4][ItemKeys::KEY]);
         self::assertSame('Add another item', $input['field_notes']['add_more']);
         self::assertSame([['value' => 'Kept']], $input['title']);
         self::assertSame('Line', $input['field_parts'][0]['subform']['field_lines'][0]['value']);

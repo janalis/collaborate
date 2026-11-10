@@ -123,12 +123,43 @@ final class JournalDialectTest extends TestCase
         $second->unlock($connection, 'draft');
         $second->unlock($connection, 'never taken');
 
-        // A directory it cannot write to locks nothing.
+        // A directory it cannot write to locks nothing; nor does a lock file that is a link.
         self::assertFalse(new SqliteDialect($directory . '/missing')->lock($connection, 'draft', 0));
-        self::assertTrue(new SqliteDialect()->lock($connection, 'default directory', 0));
+        symlink($directory . '/elsewhere', $directory . '/.collaborate-' . md5('linked') . '.lock');
+        self::assertFalse($first->lock($connection, 'linked', 0));
+        unlink($directory . '/.collaborate-' . md5('linked') . '.lock');
 
-        $files = glob($directory . '/*.lock');
+        // An in-memory database's locks: in the user's own directory, which no one else may enter.
+        $private = sys_get_temp_dir() . '/' . SqliteDialect::PRIVATE . '-' . (string) getmyuid();
+        if (is_dir($private)) {
+            $locks = glob($private . '/.collaborate-*.lock');
+            array_map(unlink(...), false === $locks ? [] : $locks);
+            rmdir($private);
+        }
+        self::assertTrue(new SqliteDialect()->lock($connection, 'default directory', 0));
+        chmod($private, 0o777);
+        self::assertFalse(new SqliteDialect()->lock($connection, 'shared directory', 0));
+        chmod($private, 0o700);
+
+        $files = glob($directory . '/.collaborate-*.lock');
         array_map(unlink(...), false === $files ? [] : $files);
+        rmdir($directory);
+    }
+
+    public function testSqliteKeepsItsLocksNextToItsDatabase(): void
+    {
+        $directory = sys_get_temp_dir() . '/collaborate-database-' . bin2hex(random_bytes(4));
+        mkdir($directory);
+        $file = $this->createStub(Connection::class);
+        $file->method('getParams')->willReturn(['path' => $directory . '/app.sqlite']);
+        $memory = $this->createStub(Connection::class);
+        $memory->method('getParams')->willReturn(['memory' => true]);
+
+        self::assertTrue(SqliteDialect::of($file)->lock($file, 'draft', 0));
+        self::assertFileExists($directory . '/.collaborate-' . md5('draft') . '.lock');
+        self::assertTrue(SqliteDialect::of($memory)->lock($memory, 'draft', 0));
+
+        unlink($directory . '/.collaborate-' . md5('draft') . '.lock');
         rmdir($directory);
     }
 

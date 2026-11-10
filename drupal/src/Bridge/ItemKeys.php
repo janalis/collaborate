@@ -85,7 +85,7 @@ final class ItemKeys
         }
         $item = $items->get($delta);
         $key = $item?->{self::KEY};
-        if (!\is_string($key) || '' === $key) {
+        if (!\is_string($key) || self::KEYS !== preg_match(self::PATTERN, $key)) {
             $key = match (true) {
                 null === $item || $item->isEmpty() => '',
                 $state->isRebuilding() => 'n' . bin2hex(random_bytes(8)),
@@ -281,7 +281,10 @@ final class ItemKeys
             }
             $delta = \is_array($value) ? $value[self::DELTA] ?? null : null;
             if (\is_string($delta) && ctype_digit($delta) && !\is_int($key)) {
-                $value[self::KEY] = preg_match('/^t\d+$/D', $key) ? '' : $key;
+                // An empty row's name is none; a name no key could be, nothing the draft may record.
+                $value[self::KEY] = self::KEYS !== preg_match(self::PATTERN, $key) || preg_match('/^t\d+$/D', $key)
+                    ? ''
+                    : $key;
                 $map[self::path([...$prefix, $key])] = (int) $delta;
                 $rekeyed[(int) $delta] = $value;
                 continue;
@@ -408,7 +411,7 @@ final class ItemKeys
         $keys = [];
         foreach ($items as $item) {
             $key = $item->{self::KEY};
-            if (!\is_string($key) || '' === $key) {
+            if (!\is_string($key) || self::KEYS !== preg_match(self::PATTERN, $key)) {
                 return null;
             }
             $keys[] = $key;
@@ -452,7 +455,9 @@ final class ItemKeys
             $count += $item->isEmpty() ? 0 : 1;
         }
 
-        return \count($keys) === $count && isset($keys[$delta]) ? $keys[$delta] : 'p' . $delta;
+        $key = \count($keys) === $count ? $keys[$delta] ?? null : null;
+
+        return \is_string($key) && self::KEYS === preg_match(self::PATTERN, $key) ? $key : 'p' . $delta;
     }
 
     /** @param list<string> $segments */

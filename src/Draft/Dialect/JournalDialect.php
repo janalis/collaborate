@@ -26,7 +26,7 @@ abstract class JournalDialect
         return match (true) {
             $platform instanceof AbstractMySQLPlatform => new MySqlDialect(),
             $platform instanceof PostgreSQLPlatform => new PostgreSqlDialect(),
-            $platform instanceof SQLitePlatform => new SqliteDialect(),
+            $platform instanceof SQLitePlatform => SqliteDialect::of($connection),
             default => throw new \LogicException(\sprintf(
                 'The shared-draft journal needs a MariaDB, MySQL, PostgreSQL or SQLite connection; %s is not supported.',
                 $platform::class,

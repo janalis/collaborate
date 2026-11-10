@@ -5,8 +5,6 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [0.4.1] - 2026-11-09
-
 ### Added
 
 - **Bridges**, the admin the pages belong to
@@ -55,12 +53,6 @@ versions follow [Semantic Versioning](https://semver.org/).
   `Draft\FormDraft` (a form's draft whatever builds the form), and the
   `collaborate_trans` filter and `collaborate_csrf()` function the bundle's
   templates now use, for hosts other than a Symfony kernel.
-- A page that stops following its draft as incompatible reports why: the
-  `report` draft action logs its cause (`refused`, `version`, `replay`,
-  `schema` or `prototype`), field, HTTP status and detail with its draft
-  and editor at error level on the `collaborate` channel, and the page's
-  console names it. Halts the page decided itself left no trace on the
-  server.
 
 ### Changed
 
@@ -78,9 +70,6 @@ versions follow [Semantic Versioning](https://semver.org/).
   (Symfony's security helper, `SymfonyCurrentUser`), and `DraftSave` the
   record's id through `RecordIdentifierInterface`.
 - `_cursors.scss` loads EasyAdmin's header rules from `_easyadmin.scss`.
-- An append for a field outside the form's grant is refused as
-  `Collaborate field "<name>" is not in this form.` instead of the generic
-  invalid-event message.
 
 ### Deprecated
 
@@ -107,6 +96,23 @@ versions follow [Semantic Versioning](https://semver.org/).
 - A host that overrides the bundle's templates replaces `|trans({}, 'collaborate')`
   with `|collaborate_trans` and `csrf_token()` with `collaborate_csrf()`, or
   keeps Symfony's.
+
+## [0.4.1] - 2026-11-09
+
+### Added
+
+- A page that stops following its draft as incompatible reports why: the
+  `report` draft action logs its cause (`refused`, `version`, `replay`,
+  `schema` or `prototype`), field, HTTP status and detail with its draft
+  and editor at error level on the `collaborate` channel, and the page's
+  console names it. Halts the page decided itself left no trace on the
+  server.
+
+### Changed
+
+- An append for a field outside the form's grant is refused as
+  `Collaborate field "<name>" is not in this form.` instead of the generic
+  invalid-event message.
 
 ## [0.4.0] - 2026-11-08
 

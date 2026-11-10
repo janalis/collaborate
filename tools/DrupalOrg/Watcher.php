@@ -310,7 +310,7 @@ final class Watcher
             return;
         }
         $body = \sprintf(
-            "The tag `%s` is pushed to drupal.org. drupal.org creates a release by hand:\n\n1. Open %s and click **Add new release**.\n2. Choose the tag `%s`.\n3. Paste the notes below as its release notes, and save.\n\nThis issue closes once drupal.org lists the release.\n\n<details><summary>Release notes</summary>\n\n%s\n</details>\n\n%s\n",
+            "The tag `%s` is pushed to drupal.org. drupal.org creates a release by hand:\n\n1. Open %s and click **Add new release**.\n2. Choose the tag `%s`.\n3. Paste the notes below as its release notes, and save. Pasted as HTML, `<code>` keeps `<` and `>` as they are: drupal.org escapes a code span itself, so `&lt;` would show as written.\n4. For a new series (a new minor or major), tick it **Supported** under the project's **Administer releases**, or drupal.org shows the release as unsupported.\n\nThis issue closes once drupal.org lists the release.\n\n<details><summary>Release notes</summary>\n\n%s\n</details>\n\n%s\n",
             $version,
             $drupal->releasePage(),
             $version,

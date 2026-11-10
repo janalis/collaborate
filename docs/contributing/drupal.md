@@ -31,6 +31,16 @@ project's releases, adds a release for the pushed tag and pastes the notes
 the issue holds. The `drupalorg` workflow closes the issue once drupal.org
 lists the release.
 
+Two things the form does not say:
+
+- drupal.org escapes what a `<code>` holds itself. Notes pasted as HTML (the
+  GitHub release's, rendered) keep `<` and `>` as they are inside `<code>`:
+  `&lt;entity&gt;` there would show as written.
+- The first release of a series (a new minor or major) is unsupported until
+  the series is ticked **Supported** under the project's **Administer
+  releases**; until then drupal.org shows it as unsupported and does not
+  recommend it.
+
 ## Contributions on drupal.org
 
 `.github/workflows/drupalorg.yml` runs `tools/drupalorg.php` every 30

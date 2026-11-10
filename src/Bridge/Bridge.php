@@ -28,7 +28,7 @@ enum Bridge: string
      * The bridge `collaborate.bridge` names: `auto` is `easyadmin` when EasyAdminBundle is registered, `none`
      * otherwise.
      *
-     * @param list<string>|null $bundles the registered bundle classes, null when unknown
+     * @param array<array-key, mixed>|null $bundles the registered bundle classes (`kernel.bundles`), null when unknown
      */
     public static function resolve(string $configured, ?array $bundles): self
     {

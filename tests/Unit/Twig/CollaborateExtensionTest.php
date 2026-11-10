@@ -349,6 +349,8 @@ final class CollaborateExtensionTest extends ExtensionTestCase
             '%who%' => 'x',
             '%none%' => new \stdClass(),
         ]));
+        // A parameter that is no text reads as none.
+        self::assertSame('by ', $extension->translate('by %who%', ['%who%' => new \stdClass()]));
         self::assertSame('', $extension->csrf('collaborate-hub'));
     }
 

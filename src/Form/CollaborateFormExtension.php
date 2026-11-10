@@ -266,7 +266,8 @@ final class CollaborateFormExtension extends AbstractTypeExtension
         $attributes['data-collaborate'] = json_encode($configuration, \JSON_THROW_ON_ERROR);
         $view->vars['attr'] = $attributes;
         self::markRows($view);
-        if ($scope['new'] && null !== $scope['draft']) {
+        // Only a new record's scope has a draft of its own.
+        if (null !== $scope['draft']) {
             /** @var string $action */
             $action = $view->vars['action'];
             $view->vars['action'] =

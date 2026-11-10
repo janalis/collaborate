@@ -106,7 +106,8 @@ export default defineConfig({
             command: `${process.env.PHP || 'php'} -S 127.0.0.1:${drupalPhpPort} .ht.router.php`,
             cwd: 'tests/Application/Drupal/web',
             url: `http://127.0.0.1:${drupalPhpPort}/user/login`,
-            reuseExistingServer: !process.env.CI,
+            // CI starts the site before its PHPUnit run (`make drupal-test`): Playwright uses it.
+            reuseExistingServer: true,
             stdout: 'ignore',
             stderr: 'ignore',
             env: { PHP_CLI_SERVER_WORKERS: '8', DRUPAL_PORT: ports.drupal },
@@ -114,7 +115,7 @@ export default defineConfig({
           {
             command: `${process.env.FRANKENPHP || 'frankenphp'} run --config tests/Application/Drupal/Caddyfile`,
             url: `http://127.0.0.1:${ports.drupal}/user/login`,
-            reuseExistingServer: !process.env.CI,
+            reuseExistingServer: true,
             stdout: 'ignore',
             stderr: 'pipe',
             env: { DRUPAL_PORT: ports.drupal, DRUPAL_PHP_PORT: drupalPhpPort },

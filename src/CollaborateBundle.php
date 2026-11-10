@@ -96,7 +96,7 @@ final class CollaborateBundle extends AbstractBundle
     {
         // Registered, not only installed: EasyAdmin or MercureBundle may be a dependency of another package.
         $bundles = $container->hasParameter('kernel.bundles') ? $container->getParameter('kernel.bundles') : null;
-        $bundles = \is_array($bundles) ? self::strings($bundles) : null;
+        $bundles = \is_array($bundles) ? $bundles : null;
         $bridge = Bridge::resolve(self::string($config, 'bridge'), $bundles);
         $config['bridge'] = $bridge->value;
         $cursors = self::branch($config, 'cursors');
@@ -296,16 +296,6 @@ final class CollaborateBundle extends AbstractBundle
         }
 
         return $config[$key];
-    }
-
-    /**
-     * @param array<array-key, mixed> $values
-     *
-     * @return list<string>
-     */
-    private static function strings(array $values): array
-    {
-        return array_values(array_filter($values, static fn(mixed $value): bool => \is_string($value)));
     }
 
     /** @param array<array-key, mixed> $config */

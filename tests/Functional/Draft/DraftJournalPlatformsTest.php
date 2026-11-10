@@ -23,6 +23,7 @@ use Janalis\Collaborate\Draft\DraftValues;
 use Janalis\Collaborate\Draft\EventValidator;
 use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\Entity\Draft;
+use Janalis\Collaborate\Tests\Fixtures\Draft\JsonAssertions;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -46,6 +47,8 @@ use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
 #[UsesClass(FieldDefinitions::class)]
 final class DraftJournalPlatformsTest extends TestCase
 {
+    use JsonAssertions;
+
     /** @var array<string, array{type: string, initial: mixed}> */
     private const array FIELDS = [
         'title' => ['type' => 'text', 'initial' => 'Hello'],
@@ -101,7 +104,8 @@ final class DraftJournalPlatformsTest extends TestCase
             'value' => 'b',
         ];
         $accepted = $journal->append('record', self::FIELDS, $event, 1, 'Alice');
-        self::assertSame($accepted, $journal->append('record', self::FIELDS, $event, 1, 'Alice'));
+        // MySQL returns JSON objects with their keys sorted.
+        self::assertSameJson($accepted, $journal->append('record', self::FIELDS, $event, 1, 'Alice'));
         $replay = new DraftJournal($this->connect($platform))->replay('record', self::FIELDS, 0);
         self::assertCount(1, $replay['events']);
         self::assertSame('b', $replay['fields']['choice']['value']);

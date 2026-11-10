@@ -9,6 +9,8 @@ on:
     paths:
       - "drupal/**"
       - ".github/workflows/drupal-split.yml"
+      - ".github/scripts/push-split.sh"
+      - ".github/scripts/known_hosts"
   workflow_dispatch:
     inputs:
       dry_run:

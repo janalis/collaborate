@@ -14,7 +14,8 @@ interface DraftAccessCheckerInterface
 
     /**
      * @param self::CREATE|self::UPDATE $permission
-     * @param class-string              $entityClass
+     * @param string                    $entityClass the record's class, or the kind of record a bridge names
+     *                                              (Drupal's `<entity type>:<bundle>`)
      */
     public function canEdit(UserInterface $user, string $permission, string $entityClass): bool;
 }

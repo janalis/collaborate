@@ -13,11 +13,11 @@ use Janalis\Collaborate\Hub\HubSessions;
 use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
 use Janalis\Collaborate\Notification\NotificationAccess;
+use Janalis\Collaborate\Security\CurrentUserInterface;
 use Janalis\Collaborate\Tests\Fixtures\TestUser;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
-use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 #[CoversClass(HubSessions::class)]
@@ -129,7 +129,7 @@ final class HubSessionsTest extends TestCase
         array $colors = ['blue'],
         bool $provider = true,
     ): HubSessions {
-        $security = $this->createStub(Security::class);
+        $security = $this->createStub(CurrentUserInterface::class);
         $security->method('getUser')->willReturn($this->user);
         $security->method('isGranted')->willReturn(true);
         $collaborators = new SecurityCollaboratorProvider();

@@ -2,12 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Janalis\Collaborate\Tests\Functional\EasyAdmin;
+namespace Janalis\Collaborate\Tests\Functional\Bridge\EasyAdmin;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\ORM\Tools\SchemaTool;
 use Janalis\Collaborate\Access\RoleDraftAccessChecker;
+use Janalis\Collaborate\Bridge\Bridge;
+use Janalis\Collaborate\Bridge\EasyAdmin\DraftRefreshSubscriber;
+use Janalis\Collaborate\Bridge\EasyAdmin\EasyAdminFormContext;
+use Janalis\Collaborate\Bridge\EasyAdmin\SaveSubscriber;
 use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Command\PurgeDraftsCommand;
 use Janalis\Collaborate\Controller\DraftController;
@@ -23,10 +27,7 @@ use Janalis\Collaborate\Draft\DraftValues;
 use Janalis\Collaborate\Draft\EventValidator;
 use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\Draft\FieldKeyResolverInterface;
-use Janalis\Collaborate\EasyAdmin\DraftRefreshSubscriber;
-use Janalis\Collaborate\EasyAdmin\EasyAdminFormContext;
-use Janalis\Collaborate\EasyAdmin\SaveSubscriber;
-use Janalis\Collaborate\EasyAdmin\UpdatesSubscriber;
+use Janalis\Collaborate\Draft\FormDraft;
 use Janalis\Collaborate\Form\CollaborateFormExtension;
 use Janalis\Collaborate\Form\FormContextInterface;
 use Janalis\Collaborate\Gedmo\TranslatableFieldKeyResolver;
@@ -42,10 +43,12 @@ use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
 use Janalis\Collaborate\Hub\Transport\PublishFailedException;
 use Janalis\Collaborate\Hub\Transport\Subscription;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Security\SymfonyCurrentUser;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Article;
 use Janalis\Collaborate\Tests\Fixtures\Draft\DraftKernel;
 use Janalis\Collaborate\Tests\Fixtures\TestUserProvider;
 use Janalis\Collaborate\Twig\CollaborateExtension;
+use Janalis\Collaborate\Updates\UpdatesSubscriber;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
@@ -85,6 +88,9 @@ use Symfony\Component\Console\Command\LazyCommand;
 #[UsesClass(MercureTransport::class)]
 #[UsesClass(Subscription::class)]
 #[UsesClass(PublishFailedException::class)]
+#[UsesClass(Bridge::class)]
+#[UsesClass(SymfonyCurrentUser::class)]
+#[UsesClass(FormDraft::class)]
 final class DraftRefreshTest extends WebTestCase
 {
     protected static function getKernelClass(): string

@@ -18,6 +18,7 @@ use Janalis\Collaborate\Notification\Preferences;
 use Janalis\Collaborate\Notification\Push\PushDispatcher;
 use Janalis\Collaborate\Notification\Push\PushEndpoints;
 use Janalis\Collaborate\Notification\Push\PushSubscriptions;
+use Janalis\Collaborate\Security\CurrentUserInterface;
 use Janalis\Collaborate\Twig\NotificationRuntime;
 
 /*
@@ -29,7 +30,7 @@ return static function (ContainerConfigurator $container): void {
     $services = $container->services();
 
     $services->set(NotificationAccess::class)->args([
-        service('security.helper'),
+        service(CurrentUserInterface::class),
         service(CollaboratorProviderInterface::class),
         param('collaborate.notifications.enabled'),
         param('collaborate.notifications.role'),

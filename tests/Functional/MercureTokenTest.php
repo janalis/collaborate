@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Janalis\Collaborate\Tests\Functional;
 
+use Janalis\Collaborate\Bridge\Bridge;
 use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Controller\CursorController;
 use Janalis\Collaborate\Controller\HubController;
@@ -19,7 +20,7 @@ use Janalis\Collaborate\Draft\DraftSave;
 use Janalis\Collaborate\Draft\DraftValues;
 use Janalis\Collaborate\Draft\EventValidator;
 use Janalis\Collaborate\Draft\FieldDefinitions;
-use Janalis\Collaborate\EasyAdmin\UpdatesSubscriber;
+use Janalis\Collaborate\Draft\FormDraft;
 use Janalis\Collaborate\Form\CollaborateFormExtension;
 use Janalis\Collaborate\Grant;
 use Janalis\Collaborate\Hub\Admission;
@@ -34,9 +35,11 @@ use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
 use Janalis\Collaborate\Hub\Transport\PublishFailedException;
 use Janalis\Collaborate\Hub\Transport\Subscription;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Security\SymfonyCurrentUser;
 use Janalis\Collaborate\Tests\Fixtures\Arrays;
 use Janalis\Collaborate\Tests\Fixtures\TestKernel;
 use Janalis\Collaborate\Twig\CollaborateExtension;
+use Janalis\Collaborate\Updates\UpdatesSubscriber;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -77,6 +80,9 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 #[UsesClass(MercureTransport::class)]
 #[UsesClass(Subscription::class)]
 #[UsesClass(PublishFailedException::class)]
+#[UsesClass(Bridge::class)]
+#[UsesClass(SymfonyCurrentUser::class)]
+#[UsesClass(FormDraft::class)]
 final class MercureTokenTest extends CollaborateWebTestCase
 {
     public function testTheSessionTokenIsAnAccessTokenForTheHubCarryingItsConfiguredClaims(): void

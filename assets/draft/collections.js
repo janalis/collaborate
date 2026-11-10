@@ -1,4 +1,5 @@
-import { ENTRY, entriesOf, parseEntry, placeholderOf, prototypeOf } from '../markup.js';
+import { bridge } from '../bridge.js';
+import { entriesOf, entrySelector, parseEntry, placeholderOf, prototypeOf } from '../markup.js';
 import { valueAdapter } from './fields.js';
 import { initializeRow } from './hooks.js';
 
@@ -28,10 +29,10 @@ export function initializeCollections(session) {
     let bootstrapping = true;
     let renderedOrder = [];
     const ownNodes = () =>
-      Array.from(container.querySelectorAll(ENTRY)).filter(
+      Array.from(container.querySelectorAll(entrySelector())).filter(
         (node) =>
           node.closest('[data-collaborate-collection]') === container &&
-          node.parentElement.closest(ENTRY)?.closest('[data-collaborate-collection]') !== container
+          node.parentElement.closest(entrySelector())?.closest('[data-collaborate-collection]') !== container
       );
 
     function keyOf(node) {
@@ -63,11 +64,10 @@ export function initializeCollections(session) {
       const parent =
         ownNodes()[0]?.parentElement ||
         entriesOf(container) ||
-        container.querySelector(
-          '.ea-form-collection-items .accordion > .form-widget-compound [data-empty-collection]'
-        ) ||
-        container.querySelector('.ea-form-collection-items > .accordion') ||
-        container.querySelector('.ea-form-collection-items');
+        // A collection without entries yet: where the bridge's theme holds them.
+        bridge()
+          .collections.containers.map((selector) => container.querySelector(selector))
+          .find(Boolean);
       if (!parent) return;
       const added = [];
       let prototype;
@@ -104,9 +104,9 @@ export function initializeCollections(session) {
       try {
         for (const node of added) {
           const key = node.dataset.collaborateItem;
-          document.dispatchEvent(
-            new CustomEvent('ea.collection.item-added', { detail: { newElement: node, collection: container } })
-          );
+          const { added: announced } = bridge().collections;
+          if (announced)
+            document.dispatchEvent(new CustomEvent(announced, { detail: { newElement: node, collection: container } }));
           // Form decorators can replace a redundant outer wrapper. Keep its
           // stable identity before the observer sees the decorated row.
           const decorated = ownNodes().find((item) => keyOf(item) === key) || node;
@@ -228,7 +228,7 @@ export function initializeCollections(session) {
   // A childList record's target is the element whose children changed.
   const ignored = (target) => target.closest('.ck, [data-collaborate-bar], [data-collaborate-conflicts]');
   // Widgets redraw their options and messages as the user types: only an entry, a collection or a control is scanned for.
-  const relevant = `${ENTRY}, [data-collaborate-collection], [name]`;
+  const relevant = `${entrySelector()}, [data-collaborate-collection], [name]`;
   const structural = (node) =>
     node.nodeType === Node.ELEMENT_NODE && (node.matches(relevant) || node.querySelector(relevant) !== null);
   const observer = new MutationObserver((records) => {
@@ -241,14 +241,13 @@ export function initializeCollections(session) {
       scan();
   });
   observer.observe(session.form, { childList: true, subtree: true });
-  document.addEventListener('ea.collection.item-added', scan);
-  document.addEventListener('ea.collection.item-removed', scan);
+  const { changed } = bridge().collections;
+  for (const event of changed) document.addEventListener(event, scan);
   // Entries a replay brings are projected from the session's field states.
   session.scanCollections = scan;
   return () => {
     session.scanCollections = null;
     observer.disconnect();
-    document.removeEventListener('ea.collection.item-added', scan);
-    document.removeEventListener('ea.collection.item-removed', scan);
+    for (const event of changed) document.removeEventListener(event, scan);
   };
 }

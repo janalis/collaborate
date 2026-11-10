@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Janalis\Collaborate\Tests\Unit;
 
 use Doctrine\Bundle\DoctrineBundle\DependencyInjection\DoctrineExtension;
+use Janalis\Collaborate\Bridge\Bridge;
 use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\DependencyInjection\Configuration;
 use Janalis\Collaborate\Tests\Fixtures\Arrays;
@@ -25,12 +26,14 @@ use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigura
 use Symfony\Component\DependencyInjection\Loader\PhpFileLoader;
 
 #[CoversClass(CollaborateBundle::class)]
+#[CoversClass(Bridge::class)]
 #[CoversClass(Configuration::class)]
 final class CollaborateBundleConfigurationTest extends TestCase
 {
     public function testTheDefaults(): void
     {
         $config = $this->process([]);
+        self::assertSame('auto', $config['bridge']);
         self::assertSame('janalis_collaborate.identity.security', $config['identity']);
         self::assertSame('janalis_collaborate.access.role', $config['access']);
         self::assertSame('ROLE_ADMIN', $config['role']);
@@ -82,7 +85,8 @@ final class CollaborateBundleConfigurationTest extends TestCase
                 'max_event_bytes' => 4096,
                 'places' => null,
                 'ignored_parameters' => CollaborateBundle::IGNORED_PARAMETERS,
-                'regions' => CollaborateBundle::REGIONS,
+                // The bridge's, set when the extension loads.
+                'regions' => [],
                 'key_attribute' => null,
                 'key_scope' => 'body',
                 'anchor_attributes' => CollaborateBundle::ANCHOR_ATTRIBUTES,
@@ -275,7 +279,6 @@ final class CollaborateBundleConfigurationTest extends TestCase
     /** @return iterable<string, array{array<string, mixed>}> */
     public static function invalidHosts(): iterable
     {
-        yield 'no region' => [['regions' => []]];
         yield 'a region name with a capital' => [['regions' => ['Modal' => 'dialog']]];
         yield 'a region name ending with a dash' => [['regions' => ['modal-' => 'dialog']]];
         yield 'an empty region selector' => [['regions' => ['modal' => '']]];
@@ -331,6 +334,49 @@ final class CollaborateBundleConfigurationTest extends TestCase
         self::assertSame(realpath($root . '/src/Entity'), realpath($mapping['dir']));
     }
 
+    public function testRefusesAnUnprocessedBridge(): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('The "bridge" option must be a string.');
+        $this->loadUnprocessed(['bridge' => null]);
+    }
+
+    public function testRefusesUnprocessedCursors(): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('The "cursors" option must be an array.');
+        $this->loadUnprocessed(['cursors' => false]);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function bridges(): iterable
+    {
+        foreach (['auto', 'none', 'easyadmin'] as $bridge) {
+            yield $bridge => [$bridge];
+        }
+    }
+
+    #[DataProvider('bridges')]
+    public function testABridgeIsNamed(string $bridge): void
+    {
+        self::assertSame($bridge, $this->process(['bridge' => $bridge])['bridge']);
+    }
+
+    public function testTheDrupalBridgeIsTheModules(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessage(
+            'The drupal bridge is the janalis/collaborate_drupal module\'s: install it in Drupal, the bundle is not loaded there.',
+        );
+        $this->process(['bridge' => 'drupal']);
+    }
+
+    public function testAnUnknownBridgeIsRefused(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->process(['bridge' => 'sonata']);
+    }
+
     public function testRefusesAnUnprocessedBranch(): void
     {
         $this->expectException(\LogicException::class);
@@ -365,7 +411,7 @@ final class CollaborateBundleConfigurationTest extends TestCase
         $loader = new PhpFileLoader($container, new FileLocator(\dirname($file)));
         $instanceof = [];
         new CollaborateBundle()->loadExtension(
-            $config,
+            $config + ['bridge' => 'none', 'cursors' => []],
             new ContainerConfigurator($container, $loader, $instanceof, $file, $file),
             $container,
         );

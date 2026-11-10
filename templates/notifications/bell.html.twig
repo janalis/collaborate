@@ -3,12 +3,12 @@
     notifications/bell.js asks for again (_list.html.twig) whenever the hub or the service worker says
     the list of the user changed.
 #}
-{% set label = 'Notifications'|trans({}, 'collaborate') %}
+{% set label = 'Notifications'|collaborate_trans({}, 'collaborate') %}
 <div class="collaborate-notifications" data-collaborate-notifications="{{ settings|json_encode }}">
     <button type="button" class="collaborate-notifications__toggle" id="collaborate-notifications-toggle"
             popovertarget="collaborate-notifications-menu" aria-haspopup="menu" aria-expanded="false"
-            data-label="{{ label }}" data-unread-label="{{ '%count% unread'|trans({}, 'collaborate') }}"
-            aria-label="{{ label }}{% if unread > 0 %}, {{ '%count% unread'|trans({'%count%': unread > settings.maxCount ? settings.maxCount ~ '+' : unread}, 'collaborate') }}{% endif %}">
+            data-label="{{ label }}" data-unread-label="{{ '%count% unread'|collaborate_trans({}, 'collaborate') }}"
+            aria-label="{{ label }}{% if unread > 0 %}, {{ '%count% unread'|collaborate_trans({'%count%': unread > settings.maxCount ? settings.maxCount ~ '+' : unread}, 'collaborate') }}{% endif %}">
         <svg class="collaborate-notifications__bell" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1Z"/></svg>
         <span class="collaborate-notifications__count"{% if unread == 0 %} hidden{% endif %}>{{ unread > settings.maxCount ? settings.maxCount ~ '+' : unread }}</span>
     </button>

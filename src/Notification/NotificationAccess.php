@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Janalis\Collaborate\Notification;
 
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
-use Symfony\Bundle\SecurityBundle\Security;
+use Janalis\Collaborate\Security\CurrentUserInterface;
 
 /** Whether notifications are on, and who the signed-in user is to them: the recipient id of their rows. */
 final readonly class NotificationAccess
 {
     public function __construct(
-        private Security $security,
+        private CurrentUserInterface $security,
         private CollaboratorProviderInterface $collaborators,
         public bool $enabled = false,
         private string $role = 'ROLE_ADMIN',

@@ -1,3 +1,5 @@
+// EasyAdmin's markup: its bridge's profile.
+import '../../../assets/bridges/easyadmin.js';
 import {
   anchorPath,
   CURSOR_COLORS,

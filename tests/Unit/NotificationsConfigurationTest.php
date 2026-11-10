@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Janalis\Collaborate\Tests\Unit;
 
 use Doctrine\Bundle\DoctrineBundle\DependencyInjection\DoctrineExtension;
+use Janalis\Collaborate\Bridge\Bridge;
 use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\DependencyInjection\Configuration;
 use Janalis\Collaborate\Notification\Notifier;
@@ -28,6 +29,7 @@ use Symfony\Component\DependencyInjection\Extension\PrependExtensionInterface;
 
 /** The `notifications` branch: its defaults, what it refuses, and what it registers. */
 #[CoversClass(CollaborateBundle::class)]
+#[CoversClass(Bridge::class)]
 #[CoversClass(Configuration::class)]
 final class NotificationsConfigurationTest extends TestCase
 {

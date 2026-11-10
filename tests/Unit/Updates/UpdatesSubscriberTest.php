@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Janalis\Collaborate\Tests\Unit\EasyAdmin;
+namespace Janalis\Collaborate\Tests\Unit\Updates;
 
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\ORM\EntityManagerInterface;
@@ -14,7 +14,6 @@ use Doctrine\ORM\UnitOfWork;
 use Janalis\Collaborate\Access\RoleDraftAccessChecker;
 use Janalis\Collaborate\Doctrine\ChangeCollector;
 use Janalis\Collaborate\Draft\DraftAccess;
-use Janalis\Collaborate\EasyAdmin\UpdatesSubscriber;
 use Janalis\Collaborate\Hub\HubPublisher;
 use Janalis\Collaborate\Hub\Notice;
 use Janalis\Collaborate\Hub\Topics;
@@ -22,6 +21,7 @@ use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
 use Janalis\Collaborate\Hub\Transport\PublishFailedException;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Tag;
+use Janalis\Collaborate\Updates\UpdatesSubscriber;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;

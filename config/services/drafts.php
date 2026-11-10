@@ -16,12 +16,15 @@ use Janalis\Collaborate\Draft\DraftSave;
 use Janalis\Collaborate\Draft\DraftText;
 use Janalis\Collaborate\Draft\FieldKeyResolver;
 use Janalis\Collaborate\Draft\FieldKeyResolverInterface;
-use Janalis\Collaborate\EasyAdmin\UpdatesSubscriber;
+use Janalis\Collaborate\Draft\FormDraft;
+use Janalis\Collaborate\Draft\RecordIdentifierInterface;
 use Janalis\Collaborate\Form\CollaborateFormExtension;
 use Janalis\Collaborate\Form\FormContextInterface;
 use Janalis\Collaborate\Hub\HubPublisher;
 use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
+use Janalis\Collaborate\Security\CurrentUserInterface;
+use Janalis\Collaborate\Updates\UpdatesSubscriber;
 
 return static function (ContainerConfigurator $container): void {
     $services = $container->services();
@@ -36,13 +39,14 @@ return static function (ContainerConfigurator $container): void {
     ])->tag('kernel.reset', ['method' => 'reset']);
 
     $services->set(RecordIdentifier::class)->args([service('doctrine')->nullOnInvalid()]);
+    $services->alias(RecordIdentifierInterface::class, RecordIdentifier::class);
 
     $services
         ->set(DraftSave::class)
         ->args([
             service(DraftJournal::class),
             service('request_stack'),
-            service(RecordIdentifier::class),
+            service(RecordIdentifierInterface::class),
             service('logger'),
             service('translator'),
         ])
@@ -51,6 +55,18 @@ return static function (ContainerConfigurator $container): void {
     // gedmo.php points the alias at the translatable resolver when Gedmo is installed.
     $services->set(FieldKeyResolver::class);
     $services->alias(FieldKeyResolverInterface::class, FieldKeyResolver::class);
+
+    // The draft of a page's form whatever builds it: what a bridge without Symfony forms (Drupal's) shares them with.
+    $services->set(FormDraft::class)->args([
+        service(DraftAccess::class),
+        service(DraftSave::class),
+        service(CollaboratorProviderInterface::class),
+        service('router'),
+        service('security.csrf.token_manager'),
+        service('translator'),
+        service('logger'),
+        param('collaborate.drafts'),
+    ])->tag('monolog.logger', ['channel' => 'collaborate']);
 
     // Inert while drafts are disabled or no FormContextInterface service (easyadmin.php's, or the
     // application's) says which record a page edits.
@@ -62,13 +78,13 @@ return static function (ContainerConfigurator $container): void {
             service(DraftSave::class),
             service(FormContextInterface::class)->nullOnInvalid(),
             service('request_stack'),
-            service('security.helper'),
+            service(CurrentUserInterface::class),
             service(CollaboratorProviderInterface::class),
             service(DraftAccessCheckerInterface::class),
             service('router'),
             service('security.csrf.token_manager'),
             service('translator'),
-            service(RecordIdentifier::class),
+            service(RecordIdentifierInterface::class),
             service(FieldKeyResolverInterface::class),
             service('asset_mapper.importmap.config_reader')->nullOnInvalid(),
             param('collaborate.role'),
@@ -84,7 +100,7 @@ return static function (ContainerConfigurator $container): void {
             service(DraftAccess::class),
             service(DraftJournal::class),
             service(HubPublisher::class),
-            service('security.helper'),
+            service(CurrentUserInterface::class),
             service(CollaboratorProviderInterface::class),
             service('security.csrf.token_manager'),
             param('collaborate.role'),

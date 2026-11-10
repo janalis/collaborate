@@ -1,6 +1,6 @@
 // The Bootstrap 5 entry of the cursor styles, imported after Bootstrap's functions and variables: each colour
-// of Bootstrap's `$colors` drawn with Bootstrap's own contrast colour, and EasyAdmin's header. A host without
-// Bootstrap 5 loads `_layer.scss` itself.
+// of Bootstrap's `$colors` drawn with Bootstrap's own contrast colour, and EasyAdmin's header (`_easyadmin.scss`).
+// A host without Bootstrap 5 loads `_layer.scss` itself, and its bridge's partial (`_drupal.scss`).
 @use 'sass:map';
 @use 'sass:meta';
 
@@ -14,22 +14,5 @@ $-contrasts: ();
 
 @include meta.load-css('layer', $with: ('colors': $colors, 'contrasts': $-contrasts));
 
-// EasyAdmin's colours: the header behind the avatars, the counter of the others.
-.collaborate-presence {
-  --collaborate-ring: var(--body-bg);
-  --collaborate-muted-bg: var(--gray-200);
-  --collaborate-muted-fg: var(--text-color);
-}
-
-// The mobile header keeps the strip just before the own avatar, which yields its auto margin.
-.responsive-header {
-  .collaborate-presence {
-    --collaborate-ring: var(--responsive-header-bg);
-    margin-left: auto;
-    order: 1;
-  }
-  .user-menu-wrapper,
-  .dropdown-settings,
-  .language-menu-wrapper { order: 2; }
-  &:has(.collaborate-presence:not([hidden])) .user-menu-wrapper { margin-left: 0.5rem !important; }
-}
+// EasyAdmin's header, which this entry has always styled; `_easyadmin.scss` alone serves another Bootstrap entry.
+@import 'easyadmin';

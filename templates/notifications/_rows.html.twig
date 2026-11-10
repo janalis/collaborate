@@ -7,7 +7,7 @@
     {% set icon = collaborate_notification_icon(notification) %}
     <li class="collaborate-notification-row" data-id="{{ notification.id }}" data-unread="{{ notification.unread ? 'true' : 'false' }}">
         {% if icon %}<span class="collaborate-notification__icon {{ icon }}" aria-hidden="true"></span>{% endif %}
-        <span class="collaborate-notification__unread"><span class="collaborate-visually-hidden">{{ 'Not read yet:'|trans({}, 'collaborate') }} </span></span>
+        <span class="collaborate-notification__unread"><span class="collaborate-visually-hidden">{{ 'Not read yet:'|collaborate_trans({}, 'collaborate') }} </span></span>
         {% if notification.url is not null %}
             <a class="collaborate-notification__text" href="{{ notification.url }}">{{ collaborate_notification_text(notification) }}</a>
         {% else %}
@@ -15,14 +15,14 @@
         {% endif %}
         <time class="collaborate-notification__date" datetime="{{ notification.createdAt|date('c') }}">{{ notification.createdAt|date('Y-m-d H:i') }}</time>
         <span class="collaborate-notification-row__actions">
-            <button type="button" class="collaborate-notifications__button" data-action="read"{% if not notification.unread %} hidden{% endif %}>{{ 'Mark as read'|trans({}, 'collaborate') }}</button>
-            <button type="button" class="collaborate-notifications__button" data-action="unread"{% if notification.unread %} hidden{% endif %}>{{ 'Mark as unread'|trans({}, 'collaborate') }}</button>
-            <button type="button" class="collaborate-notifications__button" data-action="clear" aria-label="{{ 'Clear'|trans({}, 'collaborate') }}"><span aria-hidden="true">×</span></button>
+            <button type="button" class="collaborate-notifications__button" data-action="read"{% if not notification.unread %} hidden{% endif %}>{{ 'Mark as read'|collaborate_trans({}, 'collaborate') }}</button>
+            <button type="button" class="collaborate-notifications__button" data-action="unread"{% if notification.unread %} hidden{% endif %}>{{ 'Mark as unread'|collaborate_trans({}, 'collaborate') }}</button>
+            <button type="button" class="collaborate-notifications__button" data-action="clear" aria-label="{{ 'Clear'|collaborate_trans({}, 'collaborate') }}"><span aria-hidden="true">×</span></button>
         </span>
     </li>
 {% endfor %}
 {% if next %}
     <li class="collaborate-notification-more" data-next="{{ next }}">
-        <button type="button" class="collaborate-notifications__button">{{ 'Older notifications'|trans({}, 'collaborate') }}</button>
+        <button type="button" class="collaborate-notifications__button">{{ 'Older notifications'|collaborate_trans({}, 'collaborate') }}</button>
     </li>
 {% endif %}

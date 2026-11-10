@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace Janalis\Collaborate\Doctrine;
 
 use Doctrine\Persistence\ManagerRegistry;
+use Janalis\Collaborate\Draft\RecordIdentifierInterface;
 
 /** Reads the identifier of a mapped entity: an edit page addresses a record by its one identifier column. */
-final readonly class RecordIdentifier
+final readonly class RecordIdentifier implements RecordIdentifierInterface
 {
     public function __construct(
         private ?ManagerRegistry $doctrine = null,

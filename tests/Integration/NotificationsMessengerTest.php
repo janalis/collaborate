@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Janalis\Collaborate\Tests\Integration;
 
+use Janalis\Collaborate\Bridge\Bridge;
 use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Controller\PushController;
 use Janalis\Collaborate\Cursor\PageGrant;
@@ -14,7 +15,7 @@ use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftSave;
 use Janalis\Collaborate\Draft\EventValidator;
-use Janalis\Collaborate\EasyAdmin\UpdatesSubscriber;
+use Janalis\Collaborate\Draft\FormDraft;
 use Janalis\Collaborate\Form\CollaborateFormExtension;
 use Janalis\Collaborate\Grant;
 use Janalis\Collaborate\Hub\HubPublisher;
@@ -42,9 +43,11 @@ use Janalis\Collaborate\Notification\Push\OnlineRecipients;
 use Janalis\Collaborate\Notification\Push\PushDispatcher;
 use Janalis\Collaborate\Notification\Push\PushPayload;
 use Janalis\Collaborate\Notification\Push\PushSubscriptions;
+use Janalis\Collaborate\Security\SymfonyCurrentUser;
 use Janalis\Collaborate\Tests\Application\Host\HostBusKernel;
 use Janalis\Collaborate\Twig\CollaborateExtension;
 use Janalis\Collaborate\Twig\NotificationRuntime;
+use Janalis\Collaborate\Updates\UpdatesSubscriber;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
@@ -59,6 +62,7 @@ use Symfony\Component\Messenger\Worker;
  * whatever its deliveries, tells the pages once the message is handled, and sends one push message per browser.
  */
 #[CoversClass(CollaborateBundle::class)]
+#[CoversClass(Bridge::class)]
 #[CoversClass(Notifier::class)]
 #[CoversClass(SendNotification::class)]
 #[CoversClass(SendNotificationHandler::class)]
@@ -99,6 +103,8 @@ use Symfony\Component\Messenger\Worker;
 #[UsesClass(MercureTransport::class)]
 #[UsesClass(Subscription::class)]
 #[UsesClass(PublishFailedException::class)]
+#[UsesClass(SymfonyCurrentUser::class)]
+#[UsesClass(FormDraft::class)]
 final class NotificationsMessengerTest extends NotificationsTestCase
 {
     protected static function kernel(): string

@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Janalis\Collaborate\Tests\Unit\EasyAdmin;
+namespace Janalis\Collaborate\Tests\Unit\Bridge\EasyAdmin;
 
 use EasyCorp\Bundle\EasyAdminBundle\Config\KeyValueStore;
 use EasyCorp\Bundle\EasyAdminBundle\Event\AfterCrudActionEvent;
-use Janalis\Collaborate\EasyAdmin\DraftRefreshSubscriber;
+use Janalis\Collaborate\Bridge\EasyAdmin\DraftRefreshSubscriber;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;

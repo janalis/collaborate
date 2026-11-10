@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace Janalis\Collaborate\Tests\Integration;
 
 use Janalis\Collaborate\Access\RoleDraftAccessChecker;
+use Janalis\Collaborate\Bridge\Bridge;
+use Janalis\Collaborate\Bridge\EasyAdmin\DraftRefreshSubscriber;
+use Janalis\Collaborate\Bridge\EasyAdmin\EasyAdminFormContext;
+use Janalis\Collaborate\Bridge\EasyAdmin\SaveSubscriber;
 use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Command\PurgeDraftsCommand;
 use Janalis\Collaborate\Controller\CursorController;
@@ -26,10 +30,7 @@ use Janalis\Collaborate\Draft\DraftValues;
 use Janalis\Collaborate\Draft\EventValidator;
 use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\Draft\FieldKeyResolver;
-use Janalis\Collaborate\EasyAdmin\DraftRefreshSubscriber;
-use Janalis\Collaborate\EasyAdmin\EasyAdminFormContext;
-use Janalis\Collaborate\EasyAdmin\SaveSubscriber;
-use Janalis\Collaborate\EasyAdmin\UpdatesSubscriber;
+use Janalis\Collaborate\Draft\FormDraft;
 use Janalis\Collaborate\Entity\Draft;
 use Janalis\Collaborate\Entity\DraftEvent;
 use Janalis\Collaborate\Entity\DraftField;
@@ -50,17 +51,20 @@ use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
 use Janalis\Collaborate\Hub\Transport\PublishFailedException;
 use Janalis\Collaborate\Hub\Transport\Subscription;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Security\SymfonyCurrentUser;
 use Janalis\Collaborate\Tests\Application\EasyAdmin\EasyAdminKernel;
 use Janalis\Collaborate\Tests\Application\Shared\Entity\Article;
 use Janalis\Collaborate\Tests\Application\Shared\Entity\Category;
 use Janalis\Collaborate\Tests\Application\Shared\Entity\Tag;
 use Janalis\Collaborate\Twig\CollaborateExtension;
+use Janalis\Collaborate\Updates\UpdatesSubscriber;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 /** The bundle in an EasyAdmin application: its adapter is the form context, and saved lists refresh. */
 #[CoversClass(RoleDraftAccessChecker::class)]
 #[CoversClass(CollaborateBundle::class)]
+#[CoversClass(Bridge::class)]
 #[CoversClass(Configuration::class)]
 #[CoversClass(PurgeDraftsCommand::class)]
 #[CoversClass(CursorController::class)]
@@ -105,11 +109,18 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(MercureTransport::class)]
 #[UsesClass(Subscription::class)]
 #[UsesClass(PublishFailedException::class)]
+#[UsesClass(SymfonyCurrentUser::class)]
+#[UsesClass(FormDraft::class)]
 final class EasyAdminApplicationTest extends CollaborationTestCase
 {
     protected static function kernel(): string
     {
         return EasyAdminKernel::class;
+    }
+
+    protected static function bridge(): string
+    {
+        return 'easyadmin';
     }
 
     protected function formName(): string
@@ -135,6 +146,9 @@ final class EasyAdminApplicationTest extends CollaborationTestCase
     public function testTheEasyAdminAdapterIsWired(): void
     {
         $container = static::getContainer();
+        // `auto`, with EasyAdmin registered.
+        self::assertSame('easyadmin', $container->getParameter('collaborate.bridge'));
+        self::assertSame(Bridge::EasyAdmin->regions(), $container->getParameter('collaborate.cursors.regions'));
         self::assertInstanceOf(EasyAdminFormContext::class, $container->get(FormContextInterface::class));
         foreach ([
             DraftRefreshSubscriber::class,

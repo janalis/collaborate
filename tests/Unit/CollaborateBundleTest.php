@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Janalis\Collaborate\Tests\Unit;
 
 use EasyCorp\Bundle\EasyAdminBundle\EasyAdminBundle;
+use EasyCorp\Bundle\EasyAdminBundle\Form\Type\CrudAutocompleteType;
 use Janalis\Collaborate\Access\DraftAccessCheckerInterface;
+use Janalis\Collaborate\Bridge\Bridge;
+use Janalis\Collaborate\Bridge\EasyAdmin\EasyAdminFormContext;
 use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Command\HubServeCommand;
 use Janalis\Collaborate\Controller\CursorController;
@@ -13,8 +16,7 @@ use Janalis\Collaborate\Controller\HubController;
 use Janalis\Collaborate\Cursor\PageGrant;
 use Janalis\Collaborate\DependencyInjection\Configuration;
 use Janalis\Collaborate\Doctrine\ChangeCollector;
-use Janalis\Collaborate\EasyAdmin\EasyAdminFormContext;
-use Janalis\Collaborate\EasyAdmin\UpdatesSubscriber;
+use Janalis\Collaborate\Form\CollaborateFormExtension;
 use Janalis\Collaborate\Form\FormContextInterface;
 use Janalis\Collaborate\Hub\HubGuard;
 use Janalis\Collaborate\Hub\RenewSubscriber;
@@ -26,6 +28,7 @@ use Janalis\Collaborate\Hub\Transport\WebSocket\WebSocketTransport;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Tests\Fixtures\Arrays;
 use Janalis\Collaborate\Twig\CollaborateExtension;
+use Janalis\Collaborate\Updates\UpdatesSubscriber;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\IgnoreDeprecations;
 use PHPUnit\Framework\TestCase;
@@ -41,6 +44,7 @@ use Symfony\Component\DependencyInjection\Reference;
 
 #[CoversClass(CollaborateBundle::class)]
 #[CoversClass(Configuration::class)]
+#[CoversClass(Bridge::class)]
 final class CollaborateBundleTest extends TestCase
 {
     public function testEveryOptionBecomesAParameter(): void
@@ -212,7 +216,7 @@ final class CollaborateBundleTest extends TestCase
         );
     }
 
-    public function testImportsTheEasyAdminServicesOnlyWhenItsBundleIsRegistered(): void
+    public function testTheAutoBridgeIsEasyAdminWhenItsBundleIsRegistered(): void
     {
         $registered = $this->load([], [
             'EasyAdminBundle' => EasyAdminBundle::class,
@@ -224,18 +228,38 @@ final class CollaborateBundleTest extends TestCase
             'hub_mercure.php',
             'cursors.php',
             'drafts.php',
-            'easyadmin.php',
+            'bridge_easyadmin.php',
             'gedmo.php',
         ] as $file) {
             self::assertContains($file, $this->files($registered));
         }
+        self::assertSame('easyadmin', $registered->getParameter('collaborate.bridge'));
+        self::assertSame(Bridge::EasyAdmin->regions(), $registered->getParameter('collaborate.cursors.regions'));
         self::assertTrue($registered->hasDefinition(EasyAdminFormContext::class));
-        // Installed (a dev dependency here) but not registered: no adapter, no form context.
+        self::assertSame(
+            [CrudAutocompleteType::class],
+            $registered->getDefinition(CollaborateFormExtension::class)->getArgument('$ownerMappers'),
+        );
+        self::assertSame(
+            '%collaborate.bridge%',
+            $registered->getDefinition(CollaborateExtension::class)->getArgument(10),
+        );
+    }
+
+    public function testTheNoneBridgeLoadsNoAdapter(): void
+    {
+        // Installed (a dev dependency here) but not registered, or registered and turned away: no adapter.
         foreach ([
             $this->load([], ['FrameworkBundle' => FrameworkBundle::class, 'MercureBundle' => MercureBundle::class]),
             $this->load([]),
+            $this->load(['bridge' => 'none'], [
+                'EasyAdminBundle' => EasyAdminBundle::class,
+                'MercureBundle' => MercureBundle::class,
+            ]),
         ] as $plain) {
-            self::assertNotContains('easyadmin.php', $this->files($plain));
+            self::assertSame('none', $plain->getParameter('collaborate.bridge'));
+            self::assertSame(Bridge::None->regions(), $plain->getParameter('collaborate.cursors.regions'));
+            self::assertNotContains('bridge_easyadmin.php', $this->files($plain));
             self::assertFalse($plain->hasDefinition(EasyAdminFormContext::class));
             self::assertFalse($plain->hasAlias(FormContextInterface::class));
             self::assertContains('drafts.php', $this->files($plain));
@@ -243,6 +267,33 @@ final class CollaborateBundleTest extends TestCase
             self::assertTrue($plain->getDefinition(ChangeCollector::class)->hasTag('doctrine.event_listener'));
             self::assertTrue($plain->getDefinition(UpdatesSubscriber::class)->hasTag('kernel.event_subscriber'));
         }
+    }
+
+    public function testTheEasyAdminBridgeNeedsItsBundleRegistered(): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage(
+            'The easyadmin bridge of collaborate.bridge needs easycorp/easyadmin-bundle: require and register it, or set collaborate.bridge to none.',
+        );
+        $this->load(['bridge' => 'easyadmin'], ['MercureBundle' => MercureBundle::class]);
+    }
+
+    public function testTheEasyAdminBridgeIsTakenAtItsWordWhenTheBundlesAreUnknown(): void
+    {
+        $container = $this->load(['bridge' => 'easyadmin']);
+        self::assertContains('bridge_easyadmin.php', $this->files($container));
+    }
+
+    public function testConfiguredRegionsReplaceTheBridges(): void
+    {
+        $container = $this->load(['cursors' => ['regions' => ['list' => '#list', 'body' => 'body']]], [
+            'EasyAdminBundle' => EasyAdminBundle::class,
+            'MercureBundle' => MercureBundle::class,
+        ]);
+        self::assertSame(
+            ['list' => '#list', 'body' => 'body'],
+            $container->getParameter('collaborate.cursors.regions'),
+        );
     }
 
     public function testTheMercureTransportNeedsMercureBundleRegistered(): void

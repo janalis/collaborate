@@ -11,12 +11,12 @@ use Janalis\Collaborate\Hub\HubGuard;
 use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Security\CurrentUserInterface;
 use Janalis\Collaborate\Tests\Fixtures\Arrays;
 use Janalis\Collaborate\Tests\Fixtures\TestPlaces;
 use Janalis\Collaborate\Tests\Fixtures\TestUser;
 use PHPUnit\Framework\MockObject\Stub;
 use PHPUnit\Framework\TestCase;
-use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Session\Session;
@@ -69,7 +69,7 @@ abstract class HubTestCase extends TestCase
 
     protected function guard(): HubGuard
     {
-        $security = $this->createStub(Security::class);
+        $security = $this->createStub(CurrentUserInterface::class);
         $security->method('getUser')->willReturnCallback(fn(): ?TestUser => $this->signedIn);
         $security
             ->method('isGranted')

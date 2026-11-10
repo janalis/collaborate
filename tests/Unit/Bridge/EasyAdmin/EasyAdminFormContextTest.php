@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Janalis\Collaborate\Tests\Unit\EasyAdmin;
+namespace Janalis\Collaborate\Tests\Unit\Bridge\EasyAdmin;
 
 use Doctrine\ORM\Mapping\ClassMetadata;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
@@ -11,7 +11,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Contracts\Provider\AdminContextProviderInter
 use EasyCorp\Bundle\EasyAdminBundle\Dto\CrudDto;
 use EasyCorp\Bundle\EasyAdminBundle\Dto\EntityDto;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGeneratorInterface;
-use Janalis\Collaborate\EasyAdmin\EasyAdminFormContext;
+use Janalis\Collaborate\Bridge\EasyAdmin\EasyAdminFormContext;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Article;
 use Janalis\Collaborate\Tests\Fixtures\Draft\RecordingUrlGenerator;
 use PHPUnit\Framework\Attributes\CoversClass;

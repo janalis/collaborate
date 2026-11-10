@@ -1,4 +1,14 @@
-import { ENTRY, entriesOf, parseEntry, placeholderOf, prototypeOf, ROW, rowOf } from '../../assets/markup.js';
+// EasyAdmin's markup: its bridge's profile.
+import '../../assets/bridges/easyadmin.js';
+import {
+  entriesOf,
+  entrySelector,
+  parseEntry,
+  placeholderOf,
+  prototypeOf,
+  rowOf,
+  rowSelector,
+} from '../../assets/markup.js';
 
 const html = (markup) => {
   document.body.innerHTML = markup;
@@ -30,9 +40,9 @@ describe('rowOf', () => {
     expect(rowOf(undefined)).toBeNull();
   });
 
-  it('exposes the selectors it reads', () => {
-    expect(ROW).toContain('[data-collaborate-row]');
-    expect(ENTRY).toContain('[data-collaborate-entry]');
+  it("exposes the selectors it reads, the extension's first and the bridge's after", () => {
+    expect(rowSelector()).toBe('[data-collaborate-row], .form-group');
+    expect(entrySelector()).toBe('[data-collaborate-entry], .field-collection-item');
   });
 });
 

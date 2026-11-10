@@ -7,7 +7,7 @@
 // editor's own source element, and the plugin's `attachSource()` keeps it and the model in step.
 
 import Collaborate from '@janalis/collaborate/ckeditor5/collaborate.js';
-import { addRowInitializer, sessionFor } from '@janalis/collaborate/easyadmin.js';
+import { addRowInitializer, sessionFor } from '@janalis/collaborate/collaborate.js';
 import { Bold, ClassicEditor, Essentials, Italic, Markdown, Paragraph } from 'ckeditor5';
 
 /** The two mode radios placed before a Markdown field's textarea. */

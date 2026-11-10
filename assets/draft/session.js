@@ -1,3 +1,4 @@
+import { bridge } from '../bridge.js';
 import { hasPendingUpload } from '../ckeditor5/source.js';
 import { backgroundFetch, hubFor } from '../hub.js';
 import { CollaborateBar, confirmAction } from './bar.js';
@@ -924,17 +925,18 @@ export class DraftSession {
   }
 
   /**
-   * The submit button the bar's Save stands for: one the host marks `data-collaborate-submitter`, else EasyAdmin's
-   * `saveAndContinue` (the editor stays on the record), else its `saveAndReturn` (never "save and add another",
-   * which would open an empty form), else the form's first. Buttons outside the form that name it (`form="…"`, as
-   * EasyAdmin's page actions do) count.
+   * The submit button the bar's Save stands for: one the host marks `data-collaborate-submitter`, else the first
+   * the bridge names by its value (EasyAdmin's `saveAndContinue`, which keeps the editor on the record, then its
+   * `saveAndReturn`: never "save and add another", which would open an empty form), else the form's first.
+   * Buttons outside the form that name it (`form="…"`, as EasyAdmin's page actions do) count.
    */
   submitter() {
     const buttons = Array.from(this.form.elements).filter((control) => control.type === 'submit' && !control.disabled);
     return (
       buttons.find((button) => button.hasAttribute('data-collaborate-submitter')) ??
-      buttons.find((button) => button.value === 'saveAndContinue') ??
-      buttons.find((button) => button.value === 'saveAndReturn') ??
+      bridge()
+        .submitters.map((value) => buttons.find((button) => button.value === value))
+        .find(Boolean) ??
       buttons[0] ??
       null
     );

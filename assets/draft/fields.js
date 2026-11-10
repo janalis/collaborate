@@ -1,4 +1,5 @@
 import { Model, ModelLivePosition } from 'ckeditor5';
+import { bridge } from '../bridge.js';
 import { OperationBuffer } from '../ckeditor5/operation-buffer.js';
 import { textChange } from '../ckeditor5/text-change.js';
 
@@ -62,10 +63,11 @@ export function initializeText(session, control, name, state) {
   };
   control.addEventListener('input', input);
   control.addEventListener('change', input);
-  // EasyAdmin's slug widget writes its field, without an event, when its target is typed in or its lock
+  // A slug widget (EasyAdmin's) writes its field, without an event, when its target is typed in or its lock
   // clicked: that write is this page's edit. A peer's edit of the target is applied here with an input
   // event too; the peer shares the slug its own widget computed, so this one must not rewrite the field.
-  const owner = control.matches('[data-ea-slug-field]') ? control.form : null;
+  const { slug } = bridge();
+  const owner = slug && control.matches(slug) ? control.form : null;
   const follow = () => {
     if (!session.applying) input();
     else if (control.value !== value()) control.value = value();

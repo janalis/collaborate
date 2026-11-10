@@ -16,12 +16,13 @@ use Symfony\Component\Security\Core\User\UserInterface;
 
 /**
  * User-bound field grants, issued from authorized, server-built forms. A verified grant's scope is cached
- * under its signature, so later requests send the signature alone instead of every field.
+ * under its signature, so later requests send the signature alone instead of every field. A scope's entity is the
+ * record's class, or the kind of record its bridge names (Drupal's `<entity type>:<bundle>`).
  *
  * @phpstan-import-type SchemaField from DraftJournal
  *
- * @phpstan-type Scope array{id: string, entity: class-string, permission: DraftAccessCheckerInterface::CREATE|DraftAccessCheckerInterface::UPDATE, new: bool, draft: string|null, fields: array<string, SchemaField>, requestedAt?: float}
- * @phpstan-type SignedScope array{id: string, entity: class-string, permission: DraftAccessCheckerInterface::CREATE|DraftAccessCheckerInterface::UPDATE, new: bool, draft: string|null, fields: array<string, SchemaField>, userId: int, expires: int, rolesHash: string, requestedAt?: float}
+ * @phpstan-type Scope array{id: string, entity: string, permission: DraftAccessCheckerInterface::CREATE|DraftAccessCheckerInterface::UPDATE, new: bool, draft: string|null, fields: array<string, SchemaField>, requestedAt?: float}
+ * @phpstan-type SignedScope array{id: string, entity: string, permission: DraftAccessCheckerInterface::CREATE|DraftAccessCheckerInterface::UPDATE, new: bool, draft: string|null, fields: array<string, SchemaField>, userId: int, expires: int, rolesHash: string, requestedAt?: float}
  */
 final readonly class DraftAccess
 {

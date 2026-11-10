@@ -14,6 +14,7 @@ use Janalis\Collaborate\Hub\RenewSubscriber;
 use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Hub\Transport\HubTransportInterface;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
+use Janalis\Collaborate\Security\CurrentUserInterface;
 use Janalis\Collaborate\Twig\CollaborateExtension;
 
 return static function (ContainerConfigurator $container): void {
@@ -33,7 +34,7 @@ return static function (ContainerConfigurator $container): void {
 
     // janalis_collaborate.limiter.cursors is aliased by CollaborateBundle::loadExtension() when configured.
     $services->set(HubGuard::class)->args([
-        service('security.helper'),
+        service(CurrentUserInterface::class),
         service(CollaboratorProviderInterface::class),
         service(PageGrant::class),
         service('security.csrf.token_manager'),
@@ -71,7 +72,7 @@ return static function (ContainerConfigurator $container): void {
         ->set(CollaborateExtension::class)
         ->args([
             service('request_stack'),
-            service('security.helper'),
+            service(CurrentUserInterface::class),
             service(CollaboratorProviderInterface::class),
             service(PageGrant::class),
             service(DraftAccess::class),
@@ -105,6 +106,8 @@ return static function (ContainerConfigurator $container): void {
             ],
             service('translator')->nullOnInvalid(),
             service('janalis_collaborate.notifications.access')->nullOnInvalid(),
+            param('collaborate.bridge'),
+            service('security.csrf.token_manager'),
         ])
         ->tag('twig.extension');
 };

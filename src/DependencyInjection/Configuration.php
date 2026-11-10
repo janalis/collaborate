@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Janalis\Collaborate\DependencyInjection;
 
+use Janalis\Collaborate\Bridge\Bridge;
 use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Notification\Push\PushEndpoints;
 use Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition;
@@ -29,6 +30,19 @@ final class Configuration
         $definition
             ->rootNode()
             ->children()
+            ->enumNode('bridge')
+            ->info(
+                'The admin the pages belong to: easyadmin, none (the host names its forms\' records), or auto for easyadmin when EasyAdminBundle is registered. Read when the container is compiled.',
+            )
+            ->values([Bridge::AUTO, Bridge::None->value, Bridge::EasyAdmin->value, Bridge::Drupal->value])
+            ->defaultValue(Bridge::AUTO)
+            ->validate()
+            ->ifInArray([Bridge::Drupal->value])
+            ->thenInvalid(
+                'The drupal bridge is the janalis/collaborate_drupal module\'s: install it in Drupal, the bundle is not loaded there.',
+            )
+            ->end()
+            ->end()
             ->scalarNode('identity')
             ->info('Service id of a Janalis\Collaborate\Identity\CollaboratorProviderInterface.')
             ->defaultValue('janalis_collaborate.identity.security')
@@ -310,13 +324,12 @@ final class Configuration
             ->end()
             ->arrayNode('regions')
             ->info(
-                'The regions of a page, name => selector, the first one an element is in naming it: a pointer is placed from the root of its region on the peers\' pages.',
+                'The regions of a page, name => selector, the first one an element is in naming it: a pointer is placed from the root of its region on the peers\' pages. Empty for the bridge\'s.',
             )
             ->useAttributeAsKey('name')
             // `mobile-header` stays one: keys are not `-` to `_` normalized.
             ->normalizeKeys(false)
             ->performNoDeepMerging()
-            ->requiresAtLeastOneElement()
             ->validate()
             ->ifTrue(
                 static fn(array $regions): bool => (
@@ -331,7 +344,7 @@ final class Configuration
             ->scalarPrototype()
             ->cannotBeEmpty()
             ->end()
-            ->defaultValue(CollaborateBundle::REGIONS)
+            ->defaultValue([])
             ->end()
             ->scalarNode('key_attribute')
             ->info(

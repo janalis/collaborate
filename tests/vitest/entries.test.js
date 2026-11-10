@@ -8,6 +8,21 @@ afterEach(() => {
 
 // The first import of the entry point loads every module it starts, CKEditor's included: about 3 s alone, more
 // beside the other suites, past Vitest's 5 s default.
+test.each([
+  ['collaborate.js', 'none'],
+  ['easyadmin.js', 'easyadmin'],
+  ['drupal.js', 'drupal'],
+])(
+  '%s registers its bridge before the modules start, and re-exports their API',
+  async (file, name) => {
+    const entry = await import(`../../assets/${file}`);
+    const { bridge, registerBridge } = await import('../../assets/bridge.js');
+    expect(bridge().name).toBe(name);
+    expect(entry.registerBridge).toBe(registerBridge);
+  },
+  30_000
+);
+
 test('re-exports the draft session lookup and the row initializer registry', async () => {
   const entry = await import('../../assets/easyadmin.js');
   const { sessionFor } = await import('../../assets/draft/session.js');

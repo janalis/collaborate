@@ -7,9 +7,9 @@ namespace Janalis\Collaborate\Tests\Unit\Notification;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Notification\NotificationAccess;
 use Janalis\Collaborate\Notification\StreamGuardInterface;
+use Janalis\Collaborate\Security\CurrentUserInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\Security\Core\User\InMemoryUser;
 
 #[CoversClass(NotificationAccess::class)]
@@ -58,9 +58,9 @@ final class NotificationAccessTest extends TestCase
         }
     }
 
-    private function security(?InMemoryUser $user, bool $granted): Security
+    private function security(?InMemoryUser $user, bool $granted): CurrentUserInterface
     {
-        $security = $this->createStub(Security::class);
+        $security = $this->createStub(CurrentUserInterface::class);
         $security->method('getUser')->willReturn($user);
         $security->method('isGranted')->willReturn($granted);
 

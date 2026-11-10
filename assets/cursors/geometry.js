@@ -1,4 +1,5 @@
 // @ts-check
+import { bridge } from '../bridge.js';
 import { CURSOR_SHAPE_NAMES } from './shapes.js';
 
 // The shapes are their own module; they stay importable from here.
@@ -35,16 +36,6 @@ export function cursorStyle(
   return 'windows';
 }
 
-// EasyAdmin's layout, unless the host names its own regions (`cursors.regions`).
-const REGIONS = {
-  modal: '.modal.show',
-  header: '.content-top',
-  'mobile-header': '.responsive-header',
-  // `.ea-sidebar` from EasyAdmin 5.6, `.sidebar` before.
-  sidebar: '.ea-sidebar, .sidebar',
-  content: '.content-wrapper',
-  body: 'body',
-};
 const ANCHOR_ATTRIBUTES = ['data-id', 'data-column', 'name', 'id'];
 
 // What the layer's configuration says of the host's pages; `configureGeometry()` sets it.
@@ -57,7 +48,8 @@ let settings;
  * whose text fields share their caret.
  */
 export function configureGeometry({
-  regions = REGIONS,
+  // The bridge's, unless the host names its own (`cursors.regions`).
+  regions = bridge().regions,
   keyAttribute = null,
   keyScope = 'body',
   anchorAttributes = ANCHOR_ATTRIBUTES,

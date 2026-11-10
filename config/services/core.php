@@ -11,12 +11,17 @@ use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Security\CurrentUserInterface;
+use Janalis\Collaborate\Security\SymfonyCurrentUser;
 
 return static function (ContainerConfigurator $container): void {
     $services = $container->services();
 
     $services->set('janalis_collaborate.identity.security', SecurityCollaboratorProvider::class);
     $services->set('janalis_collaborate.access.role', RoleDraftAccessChecker::class);
+    // The signed-in user and their access decisions, as Symfony's security helper tells them.
+    $services->set(SymfonyCurrentUser::class)->args([service('security.helper')]);
+    $services->alias(CurrentUserInterface::class, SymfonyCurrentUser::class);
     // CollaboratorProviderInterface, DraftAccessCheckerInterface and janalis_collaborate.grant_cache are
     // aliased by CollaborateBundle::loadExtension() to the configured services.
 

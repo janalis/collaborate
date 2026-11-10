@@ -9,9 +9,9 @@ use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Hub\HubPublisher;
 use Janalis\Collaborate\Hub\Notice;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
+use Janalis\Collaborate\Security\CurrentUserInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
-use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -34,7 +34,7 @@ final readonly class DraftController
         private DraftAccess $access,
         private DraftJournal $journal,
         private HubPublisher $publisher,
-        private Security $security,
+        private CurrentUserInterface $security,
         private CollaboratorProviderInterface $collaborators,
         private CsrfTokenManagerInterface $csrf,
         private string $role = 'ROLE_ADMIN',

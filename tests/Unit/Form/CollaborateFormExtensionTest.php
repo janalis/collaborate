@@ -13,11 +13,13 @@ use Janalis\Collaborate\Doctrine\RecordIdentifier;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftSave;
+use Janalis\Collaborate\Draft\FormDraft;
 use Janalis\Collaborate\Form\CollaborateFormExtension;
 use Janalis\Collaborate\Gedmo\TranslatableFieldKeyResolver;
 use Janalis\Collaborate\Grant;
 use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Security\CurrentUserInterface;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Account;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Article;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Membership;
@@ -36,7 +38,6 @@ use Psr\Log\NullLogger;
 use Symfony\Bridge\Twig\Extension\FormExtension;
 use Symfony\Bridge\Twig\Extension\TranslationExtension;
 use Symfony\Bridge\Twig\Form\TwigRendererEngine;
-use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\AssetMapper\ImportMap\ImportMapConfigReader;
 use Symfony\Component\AssetMapper\ImportMap\RemotePackageStorage;
 use Symfony\Component\DomCrawler\Crawler;
@@ -75,6 +76,7 @@ use Twig\RuntimeLoader\FactoryRuntimeLoader;
  * @phpstan-import-type Options from CollaborateFormExtension
  */
 #[CoversClass(CollaborateFormExtension::class)]
+#[CoversClass(FormDraft::class)]
 #[UsesClass(RecordIdentifier::class)]
 #[UsesClass(DraftAccess::class)]
 #[UsesClass(TranslatableFieldKeyResolver::class)]
@@ -112,7 +114,7 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         $requests->push($this->request);
         $this->page = new PageContext($requests, $this->article);
         $this->user = new TestUser(7, 'alice', ['ROLE_ADMIN'], 'Alice');
-        $security = $this->createStub(Security::class);
+        $security = $this->createStub(CurrentUserInterface::class);
         $security->method('getUser')->willReturnCallback(fn(): UserInterface => $this->user);
         $security
             ->method('isGranted')
@@ -178,6 +180,7 @@ final class CollaborateFormExtensionTest extends TypeTestCase
                     ] : []
             ),
             $logger ?? new NullLogger(),
+            [CrudAutocompleteType::class],
         );
         $this->extension = ($this->extensionFactory)(true);
         parent::setUp();

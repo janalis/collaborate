@@ -1,3 +1,5 @@
+// EasyAdmin's markup: its bridge's profile.
+import '../../../assets/bridges/easyadmin.js';
 import { initializeText, initializeValue } from '../../../assets/draft/fields.js';
 
 const sessions = [];
@@ -167,6 +169,20 @@ test('turns replacement and deletion into model operations and ignores duplicate
   expect(session.schedule).toHaveBeenCalledTimes(calls);
   adapter.receive(update);
   expect(control.value).toBe('a😁b');
+});
+
+test("without a bridge, a field EasyAdmin's slug widget would write is a plain field", () => {
+  const { control, adapter } = setup(
+    '<div data-collaborate-layer data-config=\'{"bridge":"none"}\'></div><input name="name"><input name="field" data-ea-slug-field="">',
+    'a',
+    true
+  );
+  // EasyAdmin's widget would have written the slug: under no bridge, the form's input is not this field's edit.
+  control.value = 'b';
+  control.form.elements.namedItem('name').dispatchEvent(new Event('input', { bubbles: true }));
+  expect(adapter.next()).toBeNull();
+  control.dispatchEvent(new Event('input'));
+  expect(adapter.next()).not.toBeNull();
 });
 
 test("shares the slug EasyAdmin's widget writes for a local edit, and keeps the shared slug through a peer's edit", () => {

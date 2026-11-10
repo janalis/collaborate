@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Janalis\Collaborate\Tests\Unit\EasyAdmin;
+namespace Janalis\Collaborate\Tests\Unit\Bridge\EasyAdmin;
 
 use EasyCorp\Bundle\EasyAdminBundle\Event\AfterEntityPersistedEvent;
 use EasyCorp\Bundle\EasyAdminBundle\Event\AfterEntityUpdatedEvent;
+use Janalis\Collaborate\Bridge\EasyAdmin\SaveSubscriber;
 use Janalis\Collaborate\Draft\DraftSave;
-use Janalis\Collaborate\EasyAdmin\SaveSubscriber;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Article;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;

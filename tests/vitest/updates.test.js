@@ -1,3 +1,5 @@
+// EasyAdmin's markup: its bridge's profile.
+import '../../assets/bridges/easyadmin.js';
 import { initUpdates } from '../../assets/updates.js';
 
 afterEach(() => {
@@ -558,5 +560,71 @@ describe('starting on its own', () => {
     document.dispatchEvent(new Event('DOMContentLoaded'));
     expect(join).toHaveBeenCalledOnce();
     window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false }));
+  });
+});
+
+describe('without a bridge', () => {
+  function plain(page, html = '') {
+    vi.useFakeTimers();
+    if (page) document.body.dataset.collaboratePage = page;
+    document.body.innerHTML = `<div data-collaborate-layer data-updates="true" data-config='{"bridge":"none"}'></div>${html}`;
+    const reload = vi.fn();
+    const hub = fakeHub();
+    const updates = initUpdates(document.querySelector('[data-collaborate-layer]'), hub, reload);
+    const receive = (data) => hub.members[0].receive({ data: JSON.stringify(data) }, data);
+    return { reload, updates, receive };
+  }
+
+  afterEach(() => delete document.body.dataset.collaboratePage);
+
+  it('refreshes the list the body marks, for the saves naming its entity', async () => {
+    const { reload, updates, receive } = plain('Article:index');
+    receive({ channel: 'updates', kind: 'saved', entities: ['Tag'] });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(reload).not.toHaveBeenCalled();
+    receive({ channel: 'updates', kind: 'saved', entities: ['Article'] });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(reload).toHaveBeenCalledOnce();
+    updates.stop();
+  });
+
+  it("keeps the selection it marks across the refresh, and ignores EasyAdmin's classes", async () => {
+    document.body.className = 'ea-index ea-index-Article';
+    const { reload, updates } = plain(
+      'Article:index',
+      '<input type="checkbox" data-collaborate-select value="7" checked><input type="checkbox" class="form-batch-checkbox" value="8" checked>'
+    );
+    updates.changed();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(reload).toHaveBeenCalledOnce();
+    expect(JSON.parse(sessionStorage.getItem('collaborate-update:/')).selected).toEqual(['7']);
+    updates.stop();
+  });
+
+  it('leaves a page it cannot tell, and a form, as they are', async () => {
+    for (const [page, html] of [
+      [null, ''],
+      ['Article:edit', ''],
+      ['Article:index', '<form data-collaborate></form>'],
+    ]) {
+      const { reload, updates } = plain(page, html);
+      updates.changed();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(reload).not.toHaveBeenCalled();
+      updates.stop();
+      delete document.body.dataset.collaboratePage;
+    }
+  });
+
+  it('defers the refresh while an open dialog would close', async () => {
+    const { reload, updates } = plain('Article:index', '<dialog open></dialog>');
+    updates.changed();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(reload).not.toHaveBeenCalled();
+    document.querySelector('dialog').removeAttribute('open');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(reload).toHaveBeenCalledOnce();
+    window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+    updates.stop();
   });
 });

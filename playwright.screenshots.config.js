@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { defineConfig } from '@playwright/test';
 import e2e from './playwright.config.js';
 
@@ -6,17 +7,20 @@ import e2e from './playwright.config.js';
 // the images that changed beyond the tolerance below; the screenshots workflow runs it on main and opens
 // a pull request with what changed. CI's renderer (Ubuntu's Chromium and fonts) is the reference one.
 //
-// The projects keep the names of the scenarios' (`easyadmin`, `plain`, `host`), which the fixtures of
-// tests/playwright/lib/app.js read their routes by.
-const shots = ['easyadmin', 'plain', 'host'];
+// The projects keep the names of the scenarios' (`easyadmin`, `plain`, `host`, `drupal`), which the fixtures of
+// tests/playwright/lib/app.js read their routes by. Drupal's are taken once its test site is built
+// (`make drupal-install`), on its own servers.
+const drupal = existsSync('tests/Application/Drupal/web/sites/default/settings.php');
+const shots = ['easyadmin', 'plain', 'host', ...(drupal ? ['drupal'] : [])];
 
 export default defineConfig({
   ...e2e,
   testDir: 'tests/screenshots',
   testMatch: /\.shot\.js$/,
   retries: 0,
-  // The test applications' server; the WebSocket hub serves only the scenarios of `plain-ws`.
-  webServer: e2e.webServer.slice(0, 1),
+  // The test applications' server, and the Drupal site's; the WebSocket hub serves only the scenarios of
+  // `plain-ws`.
+  webServer: [e2e.webServer[0], ...(drupal ? e2e.webServer.slice(-2) : [])],
   snapshotPathTemplate: 'docs/public/screenshots/{arg}{ext}',
   expect: {
     ...e2e.expect,

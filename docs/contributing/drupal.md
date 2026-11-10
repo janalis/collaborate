@@ -13,9 +13,38 @@ written by the workflows only: GitHub is where its code is merged.
 (`git subtree split --prefix=drupal`) on every push to `main` that touches
 it, and pushes it as the `<major>.x` branch (`0.x`) to both repositories.
 The split is deterministic, so every push fast-forwards. Before pushing, it
-checks that the split is a Drupal module (`collaborate.info.yml`) and that
-its `composer.json` validates. *Run workflow* with *dry run* splits and
-checks without pushing.
+checks that the split is a Drupal module (`collaborate.info.yml`), that
+its `composer.json` validates, and that its logo is one drupal.org takes.
+*Run workflow* with *dry run* splits and checks without pushing.
+
+## The project page
+
+drupal.org shows the project's logo from `logo.png` at the root of its
+default branch: `drupal/logo.png`, a PNG of 512×512 pixels and at most
+10 KB, rendered from the documentation's logo:
+
+```sh
+rsvg-convert -w 512 -h 512 docs/public/logo.svg -o /tmp/logo.png
+magick /tmp/logo.png -strip -colors 64 PNG8:drupal/logo.png
+```
+
+The rest of the page is edited by hand on drupal.org (*Edit* on the
+project), which has no API for it:
+
+- **Description**: `drupal/README.md`, rendered as HTML (GitHub's rendering
+  of the file), and its first paragraph as the *Summary*, which listings and
+  Project Browser show. Paste it again when the README changes.
+- **Images**: the Drupal screenshots, `docs/public/screenshots/drupal*.png`,
+  with their alt texts from the guide; replace them when the screenshots
+  workflow retakes them.
+- **Resources**: the documentation links (the Drupal guide, the online
+  documentation, the configuration), the changelog, and the guide as the
+  screenshots link.
+- **Categories**: Content editing experience, Administration tools.
+
+Once the module has a stable release, opt it into drupal.org's security
+advisory coverage (its security review): Project Browser and many site
+builders look for the shield.
 
 ## Releases
 

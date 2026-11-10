@@ -13,6 +13,10 @@ test.describe('an article edited by two editors', () => {
     await bob.title.click();
     // The item the field is in carries the mark, named after its peer.
     await expect(alice.form.locator('[data-peer-focus-label="bob"]')).toHaveAttribute('data-peer-focus', /.+/);
+    // His caret is drawn in it: the content region's selector matches nested elements (`main` holds Claro's
+    // `.layout-region--main`), and his page names the field from the root hers finds it from.
+    await bob.page.keyboard.press('End');
+    await expect(alice.page.locator('[data-collaborate-layer] .collaborate-caret:not([hidden])')).toHaveCount(1);
   });
 
   test('carries title and rich-text edits both ways', async ({ editor }) => {

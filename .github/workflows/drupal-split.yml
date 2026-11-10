@@ -64,6 +64,10 @@ jobs:
       - name: The split is a Drupal module
         run: |
           test -f "$RUNNER_TEMP/module/collaborate.info.yml"
+          # drupal.org's project logo: logo.png at the root, a PNG of 512×512 and at most 10 KB.
+          logo="$RUNNER_TEMP/module/logo.png"
+          file "$logo" | grep -q 'PNG image data, 512 x 512'
+          test "$(wc -c < "$logo")" -le 10240
           composer validate --no-check-all --no-check-publish --working-dir="$RUNNER_TEMP/module"
       - name: Push to the GitHub split
         if: env.DRY_RUN != 'true'

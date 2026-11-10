@@ -3,7 +3,7 @@ layout: home
 
 hero:
   name: collaborate
-  text: Live collaboration for Symfony admin pages
+  text: Live collaboration for Symfony and Drupal admin pages
   tagline: Shared form drafts, presence and cursors, and saved-view refresh, carried by one stream per page, over Mercure or the bundle's own WebSocket server. PHP and your database on the server, no Node service.
   image:
     src: /logo.svg
@@ -15,6 +15,9 @@ hero:
     - theme: alt
       text: What is collaborate?
       link: /guide/introduction
+    - theme: alt
+      text: Drupal module
+      link: /guide/drupal
     - theme: alt
       text: GitHub
       link: https://github.com/janalis/collaborate

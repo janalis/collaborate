@@ -1,7 +1,12 @@
+---
+description: Collaborate for Drupal, the drupal/collaborate module. Real-time collaborative editing in Drupal's administration on Claro or Gin. Shared drafts of entity forms, CKEditor 5, Paragraphs, presence and cursors, conflict review and notifications.
+---
+
 # Drupal
 
-The `janalis/collaborate_drupal` module brings the bundle to Drupal's
-administration, on Claro or Gin:
+The [Collaborate module](https://www.drupal.org/project/collaborate)
+(`drupal/collaborate`, or `janalis/collaborate_drupal` on Packagist) brings
+the bundle to Drupal's administration, on Claro or Gin:
 
 - **Shared drafts of content entity forms.** Editors of the same node (or
   term, media, block content, user…) share one draft: text fields, CKEditor
@@ -18,7 +23,20 @@ administration, on Claro or Gin:
 - **Notifications.** A bell in the top bar, topics each editor subscribes
   to, Drupal's queue for delivery, and web push.
 
-![Alice's edit page in Claro: Bob's avatar in the top bar, his mark on the body he is editing, and the bar telling of unsaved changes](/screenshots/drupal.png)
+![Alice's edit page in Claro: Bob's avatar in the top bar, his caret and mark on the title he is editing, his pointer, and the bar telling of unsaved changes](/screenshots/drupal.png)
+
+Bob's selection in a CKEditor 5 body, as Alice sees it:
+
+![A CKEditor 5 body in Claro: Bob's caret and the words he selected, drawn in his color, and the mark of the field he is in](/screenshots/drupal-rich-text.png)
+
+An article saved outside the draft: the draft shows what differs before
+anyone saves it.
+
+![The review of an article saved elsewhere: the bar in its warning color, and the body's saved and draft versions with the changed word marked](/screenshots/drupal-conflict.png)
+
+The bell in Navigation's top bar:
+
+![The bell of the content overview open on three unread notifications of Bob's saves](/screenshots/drupal-notifications.png)
 
 ## Requirements
 
@@ -158,6 +176,8 @@ are, under the paragraph's key.
   was. The buttons that collapse, duplicate or convert a paragraph, and
   drag-and-drop mode, are left out; the form display's edit mode is `open`
   for the editors who collaborate.
+
+![An article's paragraphs on Alice's page: the quote Bob just added and wrote in, with his mark](/screenshots/drupal-paragraphs.png)
 
 [Inline Entity Form](https://www.drupal.org/project/inline_entity_form)'s
 **simple** widget is a multi-value field whose items are the referenced

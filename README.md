@@ -51,8 +51,8 @@ the same admin page at once:
 It runs on PHP and a hub: a [Mercure](https://mercure.rocks) hub
 (FrankenPHP's built-in hub works), or the WebSocket server the bundle ships
 (`bin/console collaborate:hub:serve`, on ReactPHP). Draft content lives in
-MariaDB or MySQL; the hub only carries invalidations and presence, never
-form content. The bundle is a
+your database (MariaDB, MySQL, PostgreSQL or SQLite); the hub only carries
+invalidations and presence, never form content. The bundle is a
 framework-level core plus admin bridges: EasyAdmin's, loaded when its
 bundle is registered, and a Drupal module (`janalis/collaborate_drupal`)
 for Drupal's administration. Without either, a small form-context service
@@ -64,8 +64,8 @@ is all a page needs.
 composer require janalis/collaborate
 ```
 
-Requirements: PHP 8.4+, Symfony 7.4 or 8, Doctrine ORM 3 on MariaDB or
-MySQL 8, Symfony AssetMapper, and a hub: `symfony/mercure-bundle` and a
+Requirements: PHP 8.4+, Symfony 7.4 or 8, Doctrine ORM 3 on MariaDB,
+MySQL 8, PostgreSQL 13+ or SQLite 3.35+, Symfony AssetMapper, and a hub: `symfony/mercure-bundle` and a
 Mercure hub, or the bundled
 [WebSocket server](https://janalis.github.io/collaborate/guide/websocket-hub)
 (`react/http`, `react/socket`, `react/stream`, `ratchet/rfc6455`).

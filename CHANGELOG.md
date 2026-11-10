@@ -22,7 +22,20 @@ versions follow [Semantic Versioning](https://semver.org/).
   services in Drupal's container. Configured from
   `/admin/config/content/collaborate` and `settings.php`; Mercure or the
   WebSocket hub (`drush collaborate:hub:serve`); notifications through
-  Drupal's queue.
+  Drupal's queue. The items of multi-value fields are shared as a
+  collection, keyed through Drupal's rebuilds ("Add another item", Remove,
+  a reorder), and so are paragraphs (any type a peer adds) and the entities
+  Inline Entity Form's simple widget edits. On MariaDB, MySQL, PostgreSQL or
+  SQLite sites.
+- **PostgreSQL and SQLite**: the draft journal speaks each platform's SQL
+  where they differ (`Draft\Dialect\`: upserts, row locks, and named locks:
+  PostgreSQL's advisory locks, a lock file on SQLite), and the entity mapping
+  drops MySQL's binary collations and `DATETIME(6)` on the other platforms
+  (`Doctrine\PortableSchema`). MariaDB and MySQL schemas are unchanged.
+- A bridge's script profile can add and remove a collection's entries itself
+  (`collections.entry`, `create`, `remove`) when its collections have no
+  prototype, and name the child it numbers after a reorder
+  (`collections.position`).
 - `@janalis/collaborate/collaborate.js`, the entry point of any admin, and
   `registerBridge()`, which describes an admin's markup to the scripts.
 - `data-collaborate-page="<entity>:<index|detail|edit|new>"` on a page's

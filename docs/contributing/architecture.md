@@ -51,7 +51,7 @@ read `collaborate.*.enabled` and stay inert when their feature is off.
 | `Hub\Server\` | The ReactPHP server, never a container service: `ServerConfig`, `ServerFactory`, `Server` (listeners, signals, shutdown, the shared timer), `BrowserEndpoint` (handshake and subscribe protocol), `PublishEndpoint` (`/publish`, `/subscriptions`, `/health`), `Router` (topic to connections), `Connection`, `ClientAddress`, `Sockets`, `Limits`, `Timings`. |
 | `Cursor\` | `PageGrant` (rooms and page grants), `CursorEvent` and `CursorPosition` (validation of what clients send). |
 | `Controller\` | `HubController` (session), `CursorController` (events), `DraftController` (draft actions). |
-| `Draft\` | `DraftAccess` (field grants and their cache), `DraftJournal` (the journal: one class per protocol, MariaDB/MySQL SQL), `DraftText` (plain-text operations on the server), `DraftSave` (the locked save), field-key resolvers. |
+| `Draft\` | `DraftAccess` (field grants and their cache), `DraftJournal` (the journal: one class per protocol), `Dialect\` (its SQL where MariaDB and MySQL, PostgreSQL and SQLite differ: upserts, row and named locks), `DraftText` (plain-text operations on the server), `DraftSave` (the locked save), field-key resolvers. |
 | `Form\` | `CollaborateFormExtension` (the field schema of a Symfony form, stable collection keys, the save hooks) and `FormContextInterface`. |
 | `Doctrine\` | `ChangeCollector` (the `onFlush` half of saved-view updates), `RecordIdentifier`, `TranslationMapperInterface`. |
 | `Bridge\` | `Bridge`: the bridges, their default regions, how `collaborate.bridge` resolves. `Bridge\EasyAdmin\`: EasyAdmin's services. `EasyAdmin\` holds the deprecated names of before 0.5. |

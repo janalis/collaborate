@@ -76,8 +76,11 @@ bin/console doctrine:migrations:migrate
 ```
 
 [`docs/schema.sql`](https://github.com/janalis/collaborate/blob/main/docs/schema.sql)
-holds the reference DDL if you write migrations by hand. The journal needs a
-MariaDB or MySQL 8 connection (the `database_connection` service); any other
+holds the reference DDL, MariaDB's and MySQL's, if you write migrations by
+hand; on PostgreSQL or SQLite, let Doctrine generate them from the mapping,
+which the bundle adapts to those platforms (no binary collation, PostgreSQL's
+`TIMESTAMP(6)`). The journal needs a MariaDB, MySQL 8, PostgreSQL 13+ or
+SQLite 3.35+ connection (the `database_connection` service); any other
 platform fails with a clear error on the first draft request.
 
 You can skip this step if you only want cursors and presence: the tables

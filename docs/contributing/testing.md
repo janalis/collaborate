@@ -11,7 +11,7 @@ applications, and Playwright for real browsers on those applications.
 | Suite | Directory | What it covers |
 |---|---|---|
 | `unit` | `tests/Unit` | Every class on its own: grants, topics, controllers, the form extension, the EasyAdmin and Gedmo adapters, the configuration tree, both transports, and the WebSocket server in process (`tests/Unit/Hub/Server`). |
-| `functional` | `tests/Functional` | A test kernel (`tests/Fixtures`) with a real MariaDB: the journal's SQL, locks and limits, the entity mapping against `docs/schema.sql`, Mercure tokens, page renewal. |
+| `functional` | `tests/Functional` | A test kernel (`tests/Fixtures`) with a real MariaDB: the journal's SQL, locks and limits, the entity mapping against `docs/schema.sql`, Mercure tokens, page renewal; the journal on SQLite and PostgreSQL too. |
 | `integration` | `tests/Integration` | The bundle inside the test applications of `tests/Application` (with and without EasyAdmin), over HTTP: what a page renders, what its scripts ask the endpoints, what a save publishes. |
 | `tools` | `tests/Tools` | The release tool, `tools/relprep.php`. |
 
@@ -29,6 +29,11 @@ make test-unit               # no database needed
 make test PHPUNIT_ARGS='--filter DraftJournalTest'
 COLLABORATE_DATABASE_URL='mysql://user:pass@127.0.0.1:3306/collab?serverVersion=8.0.40' make test
 ```
+
+`DraftJournalPlatformsTest` runs the journal's lifecycle on SQLite too, and
+on PostgreSQL when `COLLABORATE_POSTGRES_URL` names a test database
+(`postgresql://user:pass@127.0.0.1:5432/collaborate_test?serverVersion=16`);
+the dialects' SQL is unit-tested either way.
 
 The integration suite creates a database per test application
 (`collaborate_<app>_test`), so its user needs the right to create
@@ -90,7 +95,7 @@ entries, each with a rich-text note:
 |---|---|---|
 | `Plain` | `PlainKernel` | A host without EasyAdmin: its own controller, form context (`PlainFormContext`), templates and collection markup. |
 | `EasyAdmin` | `EasyAdminKernel` | A dashboard and CRUD controllers, with the layout override. |
-| `Drupal` | Drupal 11 (`make drupal-install`) | The Drupal module on Claro with Navigation: core's article type and content editor role, editors `alice`, `bob` and `carol` (password: their name), notifications with one topic. |
+| `Drupal` | Drupal 11 (`make drupal-install`) | The Drupal module on Claro with Navigation: core's article type and content editor role, an article's notes (a multi-value field), paragraphs of two types and inline pages (Paragraphs, Inline Entity Form), editors `alice`, `bob` and `carol` (password: their name), notifications with one topic. |
 | `Host` | `HostKernel` | A host whose pages are no forms: a library of folders whose records show as rows or tiles, a share popup per record, a folder loaded in place of the listing; drafts off, every cursor option on, the room of a page the folder `HostPlaces` names. |
 
 Both sign users in by user name without a password (`alice`, `bob`,
@@ -117,6 +122,8 @@ database:
 ```sh
 make drupal-install   # DRUPAL_DATABASE_URL, mysql://root@127.0.0.1:3306/collaborate_drupal by default
 make drupal-test      # the module's unit, kernel and functional tests; the site served on DRUPAL_PORT (8790)
+make drupal-test DRUPAL_TEST_DATABASE_URL=pgsql://user:pass@127.0.0.1:5432/collaborate_drupal  # on PostgreSQL 16+
+make drupal-test DRUPAL_TEST_DATABASE_URL=sqlite://localhost//tmp/drupal.sqlite                # on SQLite
 make drupal-e2e       # the `drupal` Playwright project
 ```
 

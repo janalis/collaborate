@@ -273,6 +273,74 @@ final class ReleasePrepTest extends TestCase
         );
     }
 
+    public function testRunWritesTheNotesUnwrappedAndKeepsTheChangelogWrapped(): void
+    {
+        $this->git('init', '-q');
+        $wrapped = "- A feature whose entry\n  the changelog wraps.";
+        file_put_contents($this->directory . '/CHANGELOG.md', str_replace('- A feature.', $wrapped, self::CHANGELOG));
+
+        [$status] = $this->relprep([
+            '--bump',
+            '0.2.0',
+            '--date=2026-10-31',
+            '--notes',
+            $this->directory . '/notes.md',
+            '--changelog=' . $this->directory . '/CHANGELOG.md',
+            '--git',
+            $this->directory,
+        ]);
+
+        self::assertSame(0, $status);
+        self::assertSame(
+            "### Added\n\n- A feature whose entry the changelog wraps.\n",
+            file_get_contents($this->directory . '/notes.md'),
+        );
+        self::assertStringContainsString(
+            "## [0.2.0] - 2026-10-31\n\n### Added\n\n" . $wrapped . "\n",
+            (string) file_get_contents($this->directory . '/CHANGELOG.md'),
+        );
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function wrapped(): iterable
+    {
+        yield 'a paragraph' => ["A paragraph\nthe changelog\nwraps.", 'A paragraph the changelog wraps.'];
+        yield 'a list item and its indented continuation' => [
+            "- An item\n  wrapped once\n  and twice.\n- Another.",
+            "- An item wrapped once and twice.\n- Another.",
+        ];
+        yield 'paragraphs apart' => ["One\nparagraph.\n\nAnother\none.", "One paragraph.\n\nAnother one."];
+        yield 'a heading, and the line after it' => ["### Added\nText\nwrapped.", "### Added\nText wrapped."];
+        yield 'an empty heading' => ["Text\n#\nafter.", "Text\n#\nafter."];
+        yield 'the deepest heading, and a deeper hash' => [
+            "Text\n###### Six\nafter\n####### seven",
+            "Text\n###### Six\nafter ####### seven",
+        ];
+        yield 'nested and numbered items' => [
+            "- Outer\n  wrapped.\n  - Inner\n    wrapped.\n* Star.\n+ Plus.\n1. One\n   wrapped.\n2) Two.",
+            "- Outer wrapped.\n  - Inner wrapped.\n* Star.\n+ Plus.\n1. One wrapped.\n2) Two.",
+        ];
+        yield 'quotes, tables and link references' => [
+            "Text\n> A quote.\n| a | b |\n|---|---|\n[x]: https://example.com",
+            "Text\n> A quote.\n| a | b |\n|---|---|\n[x]: https://example.com",
+        ];
+        yield 'words that only look like blocks' => [
+            "Text\n-not an item\n1.5 is not one\n#hashtag\n[link](https://example.com)",
+            'Text -not an item 1.5 is not one #hashtag [link](https://example.com)',
+        ];
+        yield 'fenced code, kept as written' => [
+            "Text\n```sh\nrun\n  this\n```\nafter\nit.\n~~~\nkept\nas is\n~~~",
+            "Text\n```sh\nrun\n  this\n```\nafter it.\n~~~\nkept\nas is\n~~~",
+        ];
+        yield 'an indented fence' => ["- Item:\n  ```\n  code\n  more\n  ```", "- Item:\n  ```\n  code\n  more\n  ```"];
+    }
+
+    #[DataProvider('wrapped')]
+    public function testUnwrapsWhatTheChangelogWraps(string $markdown, string $unwrapped): void
+    {
+        self::assertSame($unwrapped, new ReleasePrep()->unwrap($markdown));
+    }
+
     public function testRunMakesTheModuleRequireTheReleasedBundle(): void
     {
         $this->git('init', '-q');

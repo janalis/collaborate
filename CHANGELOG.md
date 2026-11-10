@@ -5,6 +5,13 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Release notes broke their lines where the changelog wraps them: GitHub
+  keeps a release body's line breaks. The release tool joins each wrapped
+  paragraph and list item onto one line in the notes; the changelog keeps
+  its wrapping.
+
 ## [0.5.1] - 2026-11-10
 
 ### Added

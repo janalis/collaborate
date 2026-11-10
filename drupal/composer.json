@@ -1,21 +1,31 @@
 {
     "name": "janalis/collaborate_drupal",
-    "description": "Live collaboration for Drupal's administration: shared drafts of entity forms, presence and cursors, refreshed listings and notifications, on janalis/collaborate.",
+    "description": "Real-time collaborative editing for Drupal's administration: shared drafts of entity forms, presence and cursors, conflict review, refreshed listings and notifications.",
     "type": "drupal-module",
     "license": "MIT",
     "keywords": [
         "drupal",
+        "drupal-module",
         "collaboration",
-        "mercure",
-        "websocket",
+        "collaborative-editing",
+        "real-time",
+        "co-editing",
+        "concurrent-editing",
+        "content-editing",
         "presence",
         "cursors",
-        "ckeditor"
+        "ckeditor5",
+        "paragraphs",
+        "claro",
+        "gin",
+        "mercure",
+        "websocket"
     ],
-    "homepage": "https://github.com/janalis/collaborate",
+    "homepage": "https://www.drupal.org/project/collaborate",
     "support": {
         "issues": "https://github.com/janalis/collaborate/issues",
-        "source": "https://github.com/janalis/collaborate"
+        "source": "https://github.com/janalis/collaborate",
+        "docs": "https://janalis.github.io/collaborate/guide/drupal"
     },
     "require": {
         "php": "^8.4",

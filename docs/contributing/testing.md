@@ -318,8 +318,10 @@ instead:
 
 The screenshots of the guide and the README (`docs/public/screenshots/`)
 are taken in the test applications, by the scenes of `tests/screenshots/`
-(one directory per application: `easyadmin`, `plain`, `host`), with the
-fixtures of the Playwright scenarios. `playwright.screenshots.config.js`
+(one directory per application: `easyadmin`, `plain`, `host`, and `drupal`
+once the Drupal test site is built with `make drupal-install`), with the
+fixtures of the Playwright scenarios. The `drupal` ones are also the images
+of the drupal.org project page. `playwright.screenshots.config.js`
 reuses the scenarios' projects and server, at 1280×800 and twice the pixel
 density.
 

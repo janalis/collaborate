@@ -23,7 +23,8 @@
   <a href="https://janalis.github.io/collaborate/guide/configuration">Configuration</a> ·
   <a href="https://janalis.github.io/collaborate/guide/rich-text">Rich text</a> ·
   <a href="https://janalis.github.io/collaborate/guide/easyadmin">EasyAdmin</a> ·
-  <a href="https://janalis.github.io/collaborate/guide/drupal">Drupal</a>
+  <a href="https://janalis.github.io/collaborate/guide/drupal">Drupal</a> ·
+  <a href="https://www.drupal.org/project/collaborate">drupal.org</a>
 </p>
 
 <p align="center">

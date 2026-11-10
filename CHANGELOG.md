@@ -5,6 +5,22 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- The Drupal module's drupal.org project page: its logo (`drupal/logo.png`),
+  a description that says what it solves, needs and leaves out
+  (`drupal/README.md`), and screenshots taken in the Drupal test site
+  (`tests/screenshots/drupal/`, retaken by the screenshots workflow).
+
+### Fixed
+
+- The others' carets and pointers were never drawn in Drupal's content
+  area: a region whose selector matches nested elements (the Drupal
+  bridge's `.region-content, .layout-region--main, main`) named a path from
+  the match nearest the element, which the other page looked for under the
+  outermost one. A path is now named from the root the other page resolves
+  it from.
+
 ## [0.5.0] - 2026-11-10
 
 ### Added

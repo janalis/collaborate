@@ -166,7 +166,11 @@ export function anchorPath(target) {
   const region = regionNames().find((name) => target.closest(settings.regions[name]));
   // The root of the page, its scrollbar, is in no region.
   if (!region) return null;
-  const root = target.closest(settings.regions[region]);
+  // The root a peer's page resolves the path from, the region's first visible match: a region whose selector
+  // matches nested elements (Drupal's `.region-content, .layout-region--main, main`) is named from its outermost
+  // one, not from the one nearest the element.
+  const first = regionRoot(region);
+  const root = first?.contains(target) ? first : target.closest(settings.regions[region]);
   const { keyAttribute } = settings;
   const segments = [];
   let element = target;

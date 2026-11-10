@@ -116,6 +116,29 @@ test('a record the page keeps to its reader is never named', () => {
   expect(anchorPath(document.querySelector('#search'))).toBeNull();
 });
 
+test('a region whose selector matches nested elements names a path from the root a peer resolves it from', () => {
+  // Drupal's content region: its outermost visible match is the root, not the match nearest the element.
+  document.body.innerHTML =
+    '<main id="outer"><div class="inner"><p><input name="title"></p></div></main>' +
+    '<section class="inner" id="second"><input name="other"></section>';
+  configureGeometry({ ...host, keyAttribute: null, regions: { content: '.inner, main' } });
+  const input = document.querySelector('[name="title"]');
+  const path = anchorPath(input);
+  expect(path).toEqual({
+    region: 'content',
+    selector: 'div.inner > p:nth-of-type(1) > input[name="title"]',
+  });
+  expect(resolvePath(path)).toBe(input);
+  // An element of another match than the first is named from its own.
+  expect(anchorPath(document.querySelector('[name="other"]'))).toEqual({
+    region: 'content',
+    selector: 'input[name="other"]',
+  });
+  // No match visible: the element's own.
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(box(0, 0, 0, 0));
+  expect(anchorPath(input)).toEqual({ region: 'content', selector: 'p:nth-of-type(1) > input[name="title"]' });
+});
+
 test('in a popup, a path keeps the kind of its record and names nothing of another popup', () => {
   const popup = document.querySelector('dialog');
   popup.setAttribute('open', '');

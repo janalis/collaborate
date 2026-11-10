@@ -1,6 +1,6 @@
 name: Collaborate
 type: module
-description: 'Shared drafts of entity forms, presence and cursors, refreshed listings and notifications for the administration, on janalis/collaborate.'
+description: 'Real-time collaborative editing for the administration: shared drafts of entity forms, presence and cursors, refreshed listings and notifications.'
 package: Administration
 core_version_requirement: ^11.3 || ^12
 php: 8.4

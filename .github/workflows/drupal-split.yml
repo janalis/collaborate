@@ -20,7 +20,7 @@ on:
       tag:
         description: "A release to split and tag again (X.Y.Z), when the release workflow could not"
         type: string
-        default: 
+        default: ""
   workflow_call:
     inputs:
       tag:

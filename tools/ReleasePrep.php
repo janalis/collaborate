@@ -7,7 +7,7 @@ namespace Janalis\Collaborate\Tools;
 /**
  * Prepares a release: resolves the new version (an explicit X.Y.Z, or a patch, minor or major bump of the
  * latest vX.Y.Z tag), turns the changelog's [Unreleased] section into that version's section, keeps the
- * comparison links at the bottom of the changelog current and writes the section as release notes. With
+ * comparison links at the bottom of the changelog current and writes the section, unwrapped, as release notes. With
  * `--module`, the Drupal module released in lockstep requires that version of the bundle (`^X.Y.Z`).
  * {@see run()} prints `version=`, `tag=` and `module_tag=` (drupal.org's tags carry no `v`) lines for
  * $GITHUB_OUTPUT.
@@ -19,6 +19,15 @@ final class ReleasePrep
     private const string USAGE = 'usage: relprep.php --bump X.Y.Z|patch|minor|major [--date YYYY-MM-DD] [--notes file] [--changelog file] [--git dir] [--module composer.json]';
 
     private const array OPTIONS = ['bump', 'date', 'notes', 'changelog', 'git', 'module'];
+
+    /** A line that starts a block of its own: a heading, a list item, a quote, a table row or a link reference. */
+    private const string BLOCK = '/^(?:#{1,6}(?: |$)|[-*+] |\d+[.)] |>|\||\[[^\]]+\]: )/';
+
+    /** A heading's line, which nothing is joined onto. */
+    private const string HEADING = '/^#{1,6}(?: |$)/';
+
+    /** A code fence's line. */
+    private const string FENCE = '/^(?:```|~~~)/';
 
     /** The bundle, as the module's composer.json requires it. */
     public const string BUNDLE = 'janalis/collaborate';
@@ -84,7 +93,7 @@ final class ReleasePrep
             $this->write($module, $this->requireBundle($composer, $version));
         }
         if (null !== $notes) {
-            $this->write($notes, $body . "\n");
+            $this->write($notes, $this->unwrap($body) . "\n");
         }
         $this->write($changelog, $updated);
 
@@ -164,6 +173,36 @@ final class ReleasePrep
             . ('' === $rest ? '' : "\n" . $rest);
 
         return [$this->links($updated, $version), $body];
+    }
+
+    /**
+     * Release notes as GitHub shows them: a release's body keeps its line breaks, so each paragraph and list item
+     * the changelog wraps is joined onto one line, its continuation's indentation dropped. A blank line, a heading,
+     * a list item, a quote, a table row, a link reference or a code fence starts a line of its own, and a fenced
+     * block is kept as written.
+     */
+    public function unwrap(string $markdown): string
+    {
+        $lines = [];
+        $fenced = false;
+        $joinable = false;
+        foreach (explode("\n", $markdown) as $line) {
+            $text = ltrim($line);
+            if (1 === preg_match(self::FENCE, $text)) {
+                $fenced = !$fenced;
+                $joinable = false;
+                $lines[] = $line;
+            } elseif ($fenced) {
+                $lines[] = $line;
+            } elseif ($joinable && '' !== $text && 1 !== preg_match(self::BLOCK, $text)) {
+                $lines[\count($lines) - 1] .= ' ' . $text;
+            } else {
+                $lines[] = $line;
+                $joinable = '' !== $text && 1 !== preg_match(self::HEADING, $text);
+            }
+        }
+
+        return implode("\n", $lines);
     }
 
     /**

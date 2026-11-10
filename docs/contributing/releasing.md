@@ -16,7 +16,8 @@ publishing. The workflow (`.github/workflows/release.yml`):
 2. runs `tools/relprep.php`, which turns `[Unreleased]` into
    `[X.Y.Z] - <date>`, opens a fresh empty `[Unreleased]` above it, updates
    the comparison links at the bottom of the changelog and extracts the
-   release notes; it refuses an empty `[Unreleased]` section and a version
+   release notes, each wrapped paragraph and list item joined onto one line
+   (GitHub keeps a release body's line breaks); it refuses an empty `[Unreleased]` section and a version
    that is not greater than the latest tag;
 3. commits `Release vX.Y.Z`, creates the annotated tag `vX.Y.Z` and pushes
    both atomically to `main`;

@@ -46,10 +46,10 @@ features:
     link: /guide/operations
     linkText: Operations and security
   - icon: 🧩
-    title: EasyAdmin, or not
-    details: The EasyAdmin adapter shares edit and new pages out of the box; any other Symfony form page needs one small service.
-    link: /guide/easyadmin
-    linkText: EasyAdmin adapter
+    title: EasyAdmin, Drupal, or neither
+    details: Bridges share EasyAdmin's edit and new pages and Drupal's entity forms out of the box; any other Symfony form page needs one small service.
+    link: /guide/bridges
+    linkText: Bridges
 ---
 
 ![Alice's edit page in EasyAdmin: Bob's avatar in the header, his pointer, his selection in the summary he is editing, and the bar telling of unsaved changes](/screenshots/hero.png)

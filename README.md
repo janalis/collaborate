@@ -5,7 +5,7 @@
 <h1 align="center">collaborate</h1>
 
 <p align="center">
-  <strong>Live collaboration for Symfony admin pages.</strong><br>
+  <strong>Live collaboration for Symfony and Drupal admin pages.</strong><br>
   Shared form drafts · presence and cursors · saved-view refresh · notifications · over Mercure or WebSockets, no Node service
 </p>
 
@@ -22,7 +22,8 @@
   <a href="https://janalis.github.io/collaborate/guide/getting-started">Getting started</a> ·
   <a href="https://janalis.github.io/collaborate/guide/configuration">Configuration</a> ·
   <a href="https://janalis.github.io/collaborate/guide/rich-text">Rich text</a> ·
-  <a href="https://janalis.github.io/collaborate/guide/easyadmin">EasyAdmin</a>
+  <a href="https://janalis.github.io/collaborate/guide/easyadmin">EasyAdmin</a> ·
+  <a href="https://janalis.github.io/collaborate/guide/drupal">Drupal</a>
 </p>
 
 <p align="center">
@@ -52,8 +53,10 @@ It runs on PHP and a hub: a [Mercure](https://mercure.rocks) hub
 (`bin/console collaborate:hub:serve`, on ReactPHP). Draft content lives in
 MariaDB or MySQL; the hub only carries invalidations and presence, never
 form content. The bundle is a
-framework-level core plus an EasyAdmin adapter: without EasyAdmin, a small
-form-context service is all a page needs.
+framework-level core plus admin bridges: EasyAdmin's, loaded when its
+bundle is registered, and a Drupal module (`janalis/collaborate_drupal`)
+for Drupal's administration. Without either, a small form-context service
+is all a page needs.
 
 ## Install
 

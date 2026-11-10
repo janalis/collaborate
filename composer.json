@@ -1,6 +1,6 @@
 {
     "name": "janalis/collaborate",
-    "description": "Live collaboration for Symfony admin forms: shared drafts, presence and cursors over Mercure or the bundled WebSocket server, with an EasyAdmin adapter.",
+    "description": "Live collaboration for Symfony admin forms: shared drafts, presence and cursors over Mercure or the bundled WebSocket server, with EasyAdmin and Drupal bridges.",
     "type": "symfony-bundle",
     "license": "MIT",
     "keywords": [
@@ -12,6 +12,7 @@
         "cursors",
         "ckeditor",
         "easyadmin",
+        "drupal",
         "symfony-bundle"
     ],
     "homepage": "https://github.com/janalis/collaborate",
@@ -72,7 +73,7 @@
         "symfony/yaml": "^7.4 || ^8.0"
     },
     "suggest": {
-        "easycorp/easyadmin-bundle": "Shared drafts on EasyAdmin edit and new forms, and live refresh of saved lists",
+        "easycorp/easyadmin-bundle": "Shared drafts on EasyAdmin edit and new forms, and live refresh of saved lists (collaborate.bridge: easyadmin)",
         "ext-ev": "An event loop for collaborate:hub:serve beyond about 1000 connections (or ext-event, or ext-uv)",
         "ext-pcntl": "Graceful shutdown of collaborate:hub:serve on SIGTERM (or ext-ev / ext-event)",
         "gedmo/doctrine-extensions": "Locale-specific draft fields for Gedmo translatable properties",

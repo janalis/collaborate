@@ -1,8 +1,10 @@
 # EasyAdmin
 
-When EasyAdminBundle (4.24 or later, or 5) is **registered** in the kernel,
-the bundle loads its EasyAdmin adapter. Having EasyAdmin installed as a
-dependency of another package is not enough.
+The EasyAdmin [bridge](./bridges) is loaded when `collaborate.bridge` is
+`easyadmin`, or `auto` (the default) with EasyAdminBundle (4.24 or later,
+or 5) **registered** in the kernel. Having EasyAdmin installed as a
+dependency of another package is not enough. Its pages import
+`@janalis/collaborate/easyadmin.js`, which reads EasyAdmin's markup.
 
 ## What the adapter does
 

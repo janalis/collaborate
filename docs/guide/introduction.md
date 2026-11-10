@@ -18,9 +18,10 @@ people use at the same time. It adds three things:
 ![Alice's edit page in EasyAdmin: Bob's avatar in the header, his pointer, his selection in the summary he is editing, and the bar telling of unsaved changes](/screenshots/hero.png)
 
 The bundle is a framework-level **core** (forms, Twig, controllers, the
-journal) plus an **EasyAdmin adapter**, loaded when EasyAdminBundle is
-registered. Without EasyAdmin, one small service tells the bundle which
-record a page edits ([Without EasyAdmin](./without-easyadmin)).
+journal) and admin **[bridges](./bridges)**: the EasyAdmin one, loaded when
+EasyAdminBundle is registered, and a [Drupal module](./drupal) that brings
+the core to Drupal's administration. Without either, one small service
+tells the bundle which record a page edits ([No bridge](./without-easyadmin)).
 
 ## How it works
 
@@ -58,7 +59,7 @@ record a page edits ([Without EasyAdmin](./without-easyadmin)).
 | Database | MariaDB or MySQL 8: the journal uses `GET_LOCK`, `INSERT IGNORE`, `ON DUPLICATE KEY UPDATE` and `SELECT … FOR UPDATE` |
 | Hub | Either `symfony/mercure-bundle` and a Mercure hub whose subscriber tokens the bundle signs with the hub's own token factory, or the bundle's WebSocket server: `react/http`, `react/socket`, `react/stream`, `ratchet/rfc6455`, `nyholm/psr7` and `symfony/http-client` ([WebSocket hub](./websocket-hub)) |
 | Front end | Symfony AssetMapper; `ckeditor5` and `bootstrap/js/src/modal.js` in the import map, and `@microsoft/fetch-event-source` with Mercure; Bootstrap 5's Sass sources for the styles |
-| Optional | `easycorp/easyadmin-bundle` 4.24+ or 5 (the adapter), `gedmo/doctrine-extensions` 3.13+ (per-locale draft fields for translatable properties) |
+| Optional | `easycorp/easyadmin-bundle` 4.24+ or 5 (its bridge), `gedmo/doctrine-extensions` 3.13+ (per-locale draft fields for translatable properties) |
 
 The continuous integration runs PHP 8.4 and 8.5 with Symfony 7.4 and 8.1,
 against MariaDB 10.11 and 11.4.

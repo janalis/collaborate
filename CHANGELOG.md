@@ -7,6 +7,33 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Bridges**, the admin the pages belong to
+  ([guide](https://janalis.github.io/collaborate/guide/bridges)):
+  `collaborate.bridge`, `auto` by default (`easyadmin` when EasyAdminBundle
+  is registered, `none` otherwise), `easyadmin` or `none`. A bridge loads
+  its admin's services and sets the default `cursors.regions` and the
+  scripts' profile, which reads its markup. The resolved bridge is the
+  `collaborate.bridge` parameter and the layer's `bridge`.
+- **A Drupal module**, `janalis/collaborate_drupal` (`drupal/`), for Drupal
+  11.3+ and 12 on Claro or Gin
+  ([guide](https://janalis.github.io/collaborate/guide/drupal)): shared
+  drafts of content entity forms (CKEditor 5 fields as rich text), the others
+  in Navigation's top bar, refreshed listings, the bell, on the bundle's own
+  services in Drupal's container. Configured from
+  `/admin/config/content/collaborate` and `settings.php`; Mercure or the
+  WebSocket hub (`drush collaborate:hub:serve`); notifications through
+  Drupal's queue.
+- `@janalis/collaborate/collaborate.js`, the entry point of any admin, and
+  `registerBridge()`, which describes an admin's markup to the scripts.
+- `data-collaborate-page="<entity>:<index|detail|edit|new>"` on a page's
+  body says what it shows: the saved-view refresh reloads a marked list or
+  detail page of any admin.
+- `data-collaborate-submitter` on a save button: the bar's Save stands for
+  it.
+- `Security\CurrentUserInterface`, `Draft\RecordIdentifierInterface` and
+  `Draft\FormDraft` (a form's draft whatever builds the form), and the
+  `collaborate_trans` filter and `collaborate_csrf()` function the bundle's
+  templates now use, for hosts other than a Symfony kernel.
 - A page that stops following its draft as incompatible reports why: the
   `report` draft action logs its cause (`refused`, `version`, `replay`,
   `schema` or `prototype`), field, HTTP status and detail with its draft
@@ -16,9 +43,49 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Without a bridge, the defaults are no longer EasyAdmin's: `cursors.regions`
+  defaults to `modal`, `header`, `content` and `body` (`dialog[open],
+  .modal.show`, `body > header, [role=banner]`, `main, [role=main]`), the
+  scripts read the bundle's own markup (`data-collaborate-row`,
+  `data-collaborate-entry`), and the saved-view refresh reloads the pages
+  that say what they show. EasyAdmin's are unchanged.
+- The EasyAdmin services moved to `Janalis\Collaborate\Bridge\EasyAdmin\`
+  and `UpdatesSubscriber` to `Janalis\Collaborate\Updates\`;
+  `config/services/easyadmin.php` is `bridge_easyadmin.php`.
+- The controllers, the hub guard, the Twig extension, the form extension and
+  the notification access read the user through `CurrentUserInterface`
+  (Symfony's security helper, `SymfonyCurrentUser`), and `DraftSave` the
+  record's id through `RecordIdentifierInterface`.
+- `_cursors.scss` loads EasyAdmin's header rules from `_easyadmin.scss`.
 - An append for a field outside the form's grant is refused as
   `Collaborate field "<name>" is not in this form.` instead of the generic
   invalid-event message.
+
+### Deprecated
+
+- `Janalis\Collaborate\EasyAdmin\{EasyAdminFormContext,SaveSubscriber,DraftRefreshSubscriber,UpdatesSubscriber}`:
+  aliases of their moved classes, removed in 0.6.
+- `CollaborateBundle::REGIONS`: `Bridge::EasyAdmin->regions()`.
+
+### Fixed
+
+- The `report` draft action, which a page sends when it stops following its
+  draft, reached no route: `collaborate_draft` accepts it.
+
+### Upgrading
+
+- A host without EasyAdmin whose pages relied on EasyAdmin's default regions
+  or markup sets `cursors.regions`, or `collaborate.bridge: easyadmin`; its
+  pages import `@janalis/collaborate/collaborate.js` (`easyadmin.js` reads
+  EasyAdmin's markup).
+- A host that wants its own lists refreshed marks them
+  `data-collaborate-page`.
+- A host that constructs the services itself passes a `CurrentUserInterface`
+  (`new SymfonyCurrentUser($security)`) where it passed Symfony's
+  `Security`.
+- A host that overrides the bundle's templates replaces `|trans({}, 'collaborate')`
+  with `|collaborate_trans` and `csrf_token()` with `collaborate_csrf()`, or
+  keeps Symfony's.
 
 ## [0.4.0] - 2026-11-08
 

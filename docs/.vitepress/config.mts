@@ -62,8 +62,10 @@ export default defineConfig({
             { text: 'Configuration', link: '/guide/configuration' },
             { text: 'Identity and access', link: '/guide/identity-and-access' },
             { text: 'Rich text and scripts', link: '/guide/rich-text' },
+            { text: 'Bridges', link: '/guide/bridges' },
             { text: 'EasyAdmin', link: '/guide/easyadmin' },
-            { text: 'Without EasyAdmin', link: '/guide/without-easyadmin' },
+            { text: 'Drupal', link: '/guide/drupal' },
+            { text: 'No bridge', link: '/guide/without-easyadmin' },
           ],
         },
         {

@@ -90,6 +90,7 @@ entries, each with a rich-text note:
 |---|---|---|
 | `Plain` | `PlainKernel` | A host without EasyAdmin: its own controller, form context (`PlainFormContext`), templates and collection markup. |
 | `EasyAdmin` | `EasyAdminKernel` | A dashboard and CRUD controllers, with the layout override. |
+| `Drupal` | Drupal 11 (`make drupal-install`) | The Drupal module on Claro with Navigation: core's article type and content editor role, editors `alice`, `bob` and `carol` (password: their name), notifications with one topic. |
 | `Host` | `HostKernel` | A host whose pages are no forms: a library of folders whose records show as rows or tiles, a share popup per record, a folder loaded in place of the listing; drafts off, every cursor option on, the room of a page the folder `HostPlaces` names. |
 
 Both sign users in by user name without a password (`alice`, `bob`,
@@ -107,6 +108,28 @@ installs EasyAdmin's public files, and recreates both applications'
 databases with their fixtures
 (`COLLABORATE_APP=plain|easyadmin|host APP_ENV=e2e php tests/Application/bin/console.php app:setup`).
 
+### The Drupal site
+
+`tests/Application/Drupal` is a Composer project of its own (Drupal, Drush,
+and the bundle and the module through path repositories), built on its own
+database:
+
+```sh
+make drupal-install   # DRUPAL_DATABASE_URL, mysql://root@127.0.0.1:3306/collaborate_drupal by default
+make drupal-test      # the module's unit, kernel and functional tests; the site served on DRUPAL_PORT (8790)
+make drupal-e2e       # the `drupal` Playwright project
+```
+
+Its origin is FrankenPHP with a Mercure hub
+(`tests/Application/Drupal/Caddyfile`), proxying the site to PHP's built-in
+server (`DRUPAL_PHP_PORT`, 8791, run from `web/`): FrankenPHP running Drupal
+itself aborted intermittently on macOS. `make drupal-test` needs both
+running, as Playwright starts them. `bin/settings.php` names the hub,
+`bin/fixtures.php` loads the editors and the notification types. The module's
+tests run on Drupal's own PHPUnit configuration, their tables under the
+test's prefix. Rebuild the module's stylesheet with `make drupal-assets` after
+changing a partial it compiles.
+
 ## Playwright
 
 `tests/playwright` drives the applications in Chromium, each scenario with
@@ -123,6 +146,7 @@ Playwright starts too:
 | `limits` | `LIMITS_PORT` (8730) | The plain application in its `e2e_limits` environment, whose drafts take updates of 4 KiB, journals of 64 KiB and 30 field states, and compact on the next Join past 1 KiB: `limits.spec.js`. |
 | `host` | `HOST_PORT` (8740) | The host application (`e2e`), whose pointers go idle after 5 s: `host-*.spec.js`. A folder is revoked with `POST /e2e/folders/{folder}/revoke`. |
 | `plain-ws` | `PLAIN_WS_PORT` (8780) | The plain application in its `e2e_ws` environment, without Mercure: the WebSocket hub on unix sockets under `COLLABORATE_HUB_RUN`, proxied on the application's origin as the [guide](/guide/websocket-hub#same-origin) recommends. `collaboration`, `cursors`, `presence` and `draft-states`. |
+| `drupal` | `DRUPAL_PORT` (8790) | The Drupal site, once `make drupal-install` built it: `drupal-*.spec.js`, on its own FrankenPHP server and Mercure hub. |
 
 The `e2e` environments show two avatars before the `+N` counter. Every
 scenario creates its own article through `POST /e2e/articles`; a script

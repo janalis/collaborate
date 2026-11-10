@@ -32,15 +32,20 @@ Notices name classes and drafts, never content.
 
 ## What refreshes
 
-The refresh reads EasyAdmin's markup, so it applies to EasyAdmin pages:
+The refresh reads what a page says it shows, through its
+[bridge](./bridges):
 
-- An **index or detail** page whose entity (EasyAdmin's `ea-index-<Entity>`
-  or `ea-detail-<Entity>` body class) is among the announced entities
-  reloads, keeping its URL, scroll position, ticked batch checkboxes and the
-  focused row.
-- A **form page** does not reload: it only refreshes lists embedded in it
-  (`.field-embedded-list[data-src]` elements). Its own record is followed
-  through its draft.
+- An **index or detail** page whose entity is among the announced entities
+  reloads, keeping its URL, scroll position, ticked row checkboxes and the
+  focused row. A page says what it shows on its body
+  (`data-collaborate-page="Article:index"`, see
+  [Marking a page](./bridges#marking-a-page)); EasyAdmin's pages say it with
+  their `ea-index-<Entity>` and `ea-detail-<Entity>` body classes, Drupal's
+  through the module. A page that names no entity (`index`) reloads for any
+  save.
+- A **form page** does not reload: on EasyAdmin, it only refreshes lists
+  embedded in it (`.field-embedded-list[data-src]` elements). Its own record
+  is followed through its draft.
 
 A page refreshes at most once a second, counted from the first notice, so a
 stream of saves cannot postpone it forever. It waits while a refresh would

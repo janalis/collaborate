@@ -158,3 +158,60 @@ test('runs the next request after one that failed', async () => {
   // The first rebuild's empty row is free: the page takes it, without asking Drupal.
   expect(row.querySelector('input').name).toBe('notes[t1][value]');
 });
+
+/** A paragraph's key: `n<type>-<uuid>`. */
+const paragraph = (type) => `n${type}-12345678-1234-1234-1234-123456789abc`;
+
+/** A Paragraphs field: its rows, and its add buttons per type or its select of types. */
+function paragraphs(rows, controls) {
+  document.body.innerHTML =
+    `<form><div data-collaborate-collection="parts"><table><tbody>${rows.join('')}</tbody></table>` +
+    `${controls}</div></form>`;
+  return document.querySelector('[data-collaborate-collection]');
+}
+
+const part = (key) => `<tr class="draggable"><td><input name="parts[${key}][subform][field_text][0][value]"></td></tr>`;
+
+test("adds a peer's paragraph with its type's button, under the key it asks for", async () => {
+  const container = paragraphs(
+    [part('p0')],
+    '<input type="submit" name="parts_text_add_more" value="Add Text"><input type="submit" name="parts_quote_add_more" value="Add Quote">'
+  );
+  const instances = drupal({});
+  const quote = instances.find((instance) => instance.element.name === 'parts_quote_add_more');
+  let asked = null;
+  quote.element.addEventListener('mousedown', () => {
+    asked = document.querySelector('[name="_collaborate_add"]')?.value;
+    setTimeout(() => {
+      document.querySelector('tbody').insertAdjacentHTML('beforeend', part(paragraph('quote')));
+    }, 10);
+  });
+
+  const row = await create(container, paragraph('quote'), vi.fn());
+
+  expect(asked).toBe(paragraph('quote'));
+  expect(row.querySelector('input').name).toBe(`parts[${paragraph('quote')}][subform][field_text][0][value]`);
+  // The key it asked for is gone once Drupal answered.
+  expect(document.querySelector('[name="_collaborate_add"]')).toBeNull();
+});
+
+test("chooses a peer's paragraph type in Paragraphs' select, and adds nothing without one", async () => {
+  const container = paragraphs(
+    [part('p0')],
+    '<select name="parts[add_more][add_more_select]"><option value="text">Text</option><option value="quote">Quote</option></select>' +
+      '<input type="submit" name="parts_add_more" value="Add">'
+  );
+  const [add] = drupal({});
+  add.element.addEventListener('mousedown', () => {
+    setTimeout(() => {
+      document.querySelector('tbody').insertAdjacentHTML('beforeend', part(paragraph('quote')));
+    }, 10);
+  });
+
+  const row = await create(container, paragraph('quote'), vi.fn());
+
+  expect(document.querySelector('select').value).toBe('quote');
+  expect(row).not.toBeNull();
+  const bare = paragraphs([part('p0')], '');
+  expect(await create(bare, paragraph('quote'), vi.fn())).toBeNull();
+});

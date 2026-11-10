@@ -17,6 +17,10 @@ on:
         description: "Split and check the module, push nothing"
         type: boolean
         default: true
+      tag:
+        description: "A release to split and tag again (X.Y.Z), when the release workflow could not"
+        type: string
+        default: 
   workflow_call:
     inputs:
       tag:

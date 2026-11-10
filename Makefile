@@ -106,7 +106,7 @@ DRUPAL_PORT ?= 8790
 DRUPAL_TEST_DATABASE_URL ?= $(DRUPAL_DATABASE_URL)
 export DRUPAL_PORT
 
-drupal-assets: ## Build the Drupal module's stylesheet and its copy of fetch-event-source (drupal/css, drupal/js/vendor)
+drupal-assets: ## Build the Drupal module's stylesheet (drupal/css) and the copy of fetch-event-source it loads (assets/vendor)
 	node tools/drupal-assets.mjs
 
 drupal-install: ## Build the Drupal test site (tests/Application/Drupal) on DRUPAL_DATABASE_URL: Drupal, the module, content

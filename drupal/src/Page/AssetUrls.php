@@ -11,8 +11,9 @@ use Janalis\Collaborate\CollaborateBundle;
 
 /**
  * Where a page finds the bundle's modules and the bare names they import: the bundle's `assets/` through the
- * module's asset route (Composer keeps it outside the web root), the module's shims for `ckeditor5` and Bootstrap's
- * modal, and its copy of `@microsoft/fetch-event-source`.
+ * module's asset route (Composer keeps it outside the web root), the bundle's copy of
+ * `@microsoft/fetch-event-source` through the same route, and the module's shims for `ckeditor5` and Bootstrap's
+ * modal.
  */
 final readonly class AssetUrls
 {
@@ -24,13 +25,13 @@ final readonly class AssetUrls
     public function imports(): array
     {
         $module = base_path() . $this->modules->getPath('collaborate') . '/js/';
+        $bundle = Url::fromRoute('collaborate.asset', ['version' => self::version()])->toString() . '/';
 
         return [
-            '@janalis/collaborate/' =>
-                Url::fromRoute('collaborate.asset', ['version' => self::version()])->toString() . '/',
+            '@janalis/collaborate/' => $bundle,
             'ckeditor5' => $module . 'ckeditor5.js',
             'bootstrap/js/src/modal.js' => $module . 'modal.js',
-            '@microsoft/fetch-event-source' => $module . 'vendor/fetch-event-source/index.js',
+            '@microsoft/fetch-event-source' => $bundle . 'vendor/fetch-event-source/index.js',
         ];
     }
 

@@ -11,5 +11,6 @@
     "lib": ["es2024", "dom", "dom.iterable"],
     "skipLibCheck": true
   },
-  "include": ["assets/**/*.js", "typings/*.d.ts"]
+  "include": ["assets/**/*.js", "typings/*.d.ts"],
+  "exclude": ["assets/vendor"]
 }

@@ -12,7 +12,7 @@
     "^tests/Application/.*/var/",
     "^tests/Application/var/",
     "^tests/Application/Drupal/(vendor|web)/",
-    "^drupal/js/vendor/",
+    "^assets/vendor/",
     "^drupal/css/",
     "^docs/node_modules/",
     "^docs/\\.vitepress/(cache|dist)/",

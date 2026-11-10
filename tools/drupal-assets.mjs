@@ -1,8 +1,9 @@
 // Builds what the Drupal module ships of the bundle's front end, for sites without Node: its stylesheet
 // (drupal/css/collaborate.css: the layer in Claro's palette, the draft bar, the notifications, the Drupal bridge's
 // partial) and an ES
-// module copy of @microsoft/fetch-event-source (drupal/js/vendor/), whose relative imports carry their `.js`
-// extension, as browsers need. Run from the repository root after `npm ci`: `node tools/drupal-assets.mjs`.
+// module copy of @microsoft/fetch-event-source (assets/vendor/: the bundle ships it, as drupal.org hosts no
+// third-party code; the module loads it through the bundle's asset route), whose relative imports carry their
+// `.js` extension, as browsers need. Run from the repository root after `npm ci`: `node tools/drupal-assets.mjs`.
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,7 +13,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const drupal = join(root, 'drupal');
 
 const library = join(root, 'node_modules/@microsoft/fetch-event-source/lib/esm');
-const vendor = join(drupal, 'js/vendor/fetch-event-source');
+const vendor = join(root, 'assets/vendor/fetch-event-source');
 mkdirSync(vendor, { recursive: true });
 for (const file of readdirSync(library).filter((name) => name.endsWith('.js'))) {
   const source = readFileSync(join(library, file), 'utf8')

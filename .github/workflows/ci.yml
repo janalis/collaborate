@@ -277,7 +277,7 @@ jobs:
       - run: make drupal-install
       # The module's assets are committed: a partial changed without `make drupal-assets` fails here.
       - name: The module's built assets are current
-        run: make drupal-assets && git diff --exit-code drupal/css drupal/js/vendor
+        run: make drupal-assets && git diff --exit-code drupal/css assets/vendor
       # The site's PHP on PHP's server, its origin and Mercure hub on FrankenPHP, as Playwright starts them.
       - name: Serve the site
         run: |

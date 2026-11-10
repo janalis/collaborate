@@ -69,6 +69,8 @@ Two things the form does not say:
   the series is ticked **Supported** under the project's **Administer
   releases**; until then drupal.org shows it as unsupported and does not
   recommend it.
+- A release whose `drupal/README.md` changed also updates the project's
+  description ([the project page](#the-project-page)).
 
 ## Contributions on drupal.org
 

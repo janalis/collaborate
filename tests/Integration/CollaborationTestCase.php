@@ -26,7 +26,14 @@ abstract class CollaborationTestCase extends ApplicationTestCase
         self::assertNotSame('', $layer['grant']);
         self::assertNotSame('', $layer['csrf']);
         self::assertSame(
-            ['throttle' => 100, 'heartbeat' => 5_000, 'expiry' => 15_000, 'maxAvatars' => 5, 'renew' => 240_000],
+            [
+                'bridge' => static::bridge(),
+                'throttle' => 100,
+                'heartbeat' => 5_000,
+                'expiry' => 15_000,
+                'maxAvatars' => 5,
+                'renew' => 240_000,
+            ],
             array_diff_key($layer['config'], ['colors' => true]),
         );
         $presence = $page->filter('[data-collaborate-presence]');
@@ -299,6 +306,9 @@ abstract class CollaborationTestCase extends ApplicationTestCase
 
     /** The name of the article form: its controls are `<name>[title]`… */
     abstract protected function formName(): string;
+
+    /** The bridge the application's pages belong to: `collaborate.bridge`, resolved. */
+    abstract protected static function bridge(): string;
 
     /** @param array{grant: string, ...} $configuration */
     protected static function draftId(array $configuration): string

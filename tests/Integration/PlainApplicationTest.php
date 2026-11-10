@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace Janalis\Collaborate\Tests\Integration;
 
 use Janalis\Collaborate\Access\RoleDraftAccessChecker;
+use Janalis\Collaborate\Bridge\Bridge;
+use Janalis\Collaborate\Bridge\EasyAdmin\DraftRefreshSubscriber;
+use Janalis\Collaborate\Bridge\EasyAdmin\EasyAdminFormContext;
+use Janalis\Collaborate\Bridge\EasyAdmin\SaveSubscriber;
 use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Command\PurgeDraftsCommand;
 use Janalis\Collaborate\Controller\CursorController;
@@ -17,7 +21,10 @@ use Janalis\Collaborate\Cursor\CursorPosition;
 use Janalis\Collaborate\Cursor\PageGrant;
 use Janalis\Collaborate\DependencyInjection\Configuration;
 use Janalis\Collaborate\Doctrine\ChangeCollector;
+use Janalis\Collaborate\Doctrine\PortableSchema;
 use Janalis\Collaborate\Doctrine\RecordIdentifier;
+use Janalis\Collaborate\Draft\Dialect\JournalDialect;
+use Janalis\Collaborate\Draft\Dialect\MySqlDialect;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftSave;
@@ -26,10 +33,7 @@ use Janalis\Collaborate\Draft\DraftValues;
 use Janalis\Collaborate\Draft\EventValidator;
 use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\Draft\FieldKeyResolver;
-use Janalis\Collaborate\EasyAdmin\DraftRefreshSubscriber;
-use Janalis\Collaborate\EasyAdmin\EasyAdminFormContext;
-use Janalis\Collaborate\EasyAdmin\SaveSubscriber;
-use Janalis\Collaborate\EasyAdmin\UpdatesSubscriber;
+use Janalis\Collaborate\Draft\FormDraft;
 use Janalis\Collaborate\Entity\Draft;
 use Janalis\Collaborate\Entity\DraftEvent;
 use Janalis\Collaborate\Entity\DraftField;
@@ -50,6 +54,7 @@ use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
 use Janalis\Collaborate\Hub\Transport\PublishFailedException;
 use Janalis\Collaborate\Hub\Transport\Subscription;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Security\SymfonyCurrentUser;
 use Janalis\Collaborate\Tests\Application\Plain\PlainFormContext;
 use Janalis\Collaborate\Tests\Application\Plain\PlainKernel;
 use Janalis\Collaborate\Tests\Application\Shared\Entity\Article;
@@ -58,6 +63,7 @@ use Janalis\Collaborate\Tests\Application\Shared\Form\ArticleType;
 use Janalis\Collaborate\Tests\Application\Shared\Form\TagType;
 use Janalis\Collaborate\Tests\Fixtures\TestUserProvider;
 use Janalis\Collaborate\Twig\CollaborateExtension;
+use Janalis\Collaborate\Updates\UpdatesSubscriber;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\DomCrawler\Crawler;
@@ -74,6 +80,7 @@ use Twig\Environment;
 /** The bundle in an application that installs EasyAdmin without registering it, with its own admin pages. */
 #[CoversClass(RoleDraftAccessChecker::class)]
 #[CoversClass(CollaborateBundle::class)]
+#[CoversClass(Bridge::class)]
 #[CoversClass(Configuration::class)]
 #[CoversClass(PurgeDraftsCommand::class)]
 #[CoversClass(CursorController::class)]
@@ -115,11 +122,21 @@ use Twig\Environment;
 #[UsesClass(MercureTransport::class)]
 #[UsesClass(Subscription::class)]
 #[UsesClass(PublishFailedException::class)]
+#[UsesClass(SymfonyCurrentUser::class)]
+#[UsesClass(FormDraft::class)]
+#[UsesClass(JournalDialect::class)]
+#[UsesClass(MySqlDialect::class)]
+#[UsesClass(PortableSchema::class)]
 final class PlainApplicationTest extends CollaborationTestCase
 {
     protected static function kernel(): string
     {
         return PlainKernel::class;
+    }
+
+    protected static function bridge(): string
+    {
+        return 'none';
     }
 
     protected function formName(): string
@@ -149,6 +166,9 @@ final class PlainApplicationTest extends CollaborationTestCase
         self::assertIsArray($bundles);
         self::assertArrayNotHasKey('EasyAdminBundle', $bundles);
         self::assertTrue(class_exists(EasyAdminFormContext::class));
+        // `auto`, without EasyAdmin registered: no bridge, the neutral regions.
+        self::assertSame('none', $container->getParameter('collaborate.bridge'));
+        self::assertSame(Bridge::None->regions(), $container->getParameter('collaborate.cursors.regions'));
 
         self::assertInstanceOf(PlainFormContext::class, $container->get(FormContextInterface::class));
         foreach ([EasyAdminFormContext::class, DraftRefreshSubscriber::class, SaveSubscriber::class] as $service) {

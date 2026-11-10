@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Janalis\Collaborate\Tests\Integration;
 
 use Janalis\Collaborate\Access\RoleDraftAccessChecker;
+use Janalis\Collaborate\Bridge\Bridge;
 use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Controller\CursorController;
 use Janalis\Collaborate\Controller\HubController;
@@ -15,14 +16,17 @@ use Janalis\Collaborate\Cursor\CursorPosition;
 use Janalis\Collaborate\Cursor\PageGrant;
 use Janalis\Collaborate\DependencyInjection\Configuration;
 use Janalis\Collaborate\Doctrine\ChangeCollector;
+use Janalis\Collaborate\Doctrine\PortableSchema;
 use Janalis\Collaborate\Doctrine\RecordIdentifier;
+use Janalis\Collaborate\Draft\Dialect\JournalDialect;
+use Janalis\Collaborate\Draft\Dialect\MySqlDialect;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftSave;
 use Janalis\Collaborate\Draft\DraftValues;
 use Janalis\Collaborate\Draft\EventValidator;
 use Janalis\Collaborate\Draft\FieldDefinitions;
-use Janalis\Collaborate\EasyAdmin\UpdatesSubscriber;
+use Janalis\Collaborate\Draft\FormDraft;
 use Janalis\Collaborate\Form\CollaborateFormExtension;
 use Janalis\Collaborate\Grant;
 use Janalis\Collaborate\Hub\Admission;
@@ -44,10 +48,12 @@ use Janalis\Collaborate\Notification\Push\OnlineRecipients;
 use Janalis\Collaborate\Notification\Push\PushDispatcher;
 use Janalis\Collaborate\Notification\Push\PushPayload;
 use Janalis\Collaborate\Notification\Push\PushSubscriptions;
+use Janalis\Collaborate\Security\SymfonyCurrentUser;
 use Janalis\Collaborate\Tests\Application\Host\HostKernel;
 use Janalis\Collaborate\Tests\Application\Host\HostPlaces;
 use Janalis\Collaborate\Twig\CollaborateExtension;
 use Janalis\Collaborate\Twig\NotificationRuntime;
+use Janalis\Collaborate\Updates\UpdatesSubscriber;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\DomCrawler\Crawler;
@@ -58,6 +64,7 @@ use Symfony\Component\DomCrawler\Crawler;
  */
 #[CoversClass(RoleDraftAccessChecker::class)]
 #[CoversClass(CollaborateBundle::class)]
+#[CoversClass(Bridge::class)]
 #[CoversClass(Configuration::class)]
 #[CoversClass(CursorController::class)]
 #[CoversClass(HubController::class)]
@@ -102,6 +109,11 @@ use Symfony\Component\DomCrawler\Crawler;
 #[UsesClass(MercureTransport::class)]
 #[UsesClass(Subscription::class)]
 #[UsesClass(PublishFailedException::class)]
+#[UsesClass(SymfonyCurrentUser::class)]
+#[UsesClass(FormDraft::class)]
+#[UsesClass(JournalDialect::class)]
+#[UsesClass(MySqlDialect::class)]
+#[UsesClass(PortableSchema::class)]
 final class HostApplicationTest extends ApplicationTestCase
 {
     private const array EVENT = [

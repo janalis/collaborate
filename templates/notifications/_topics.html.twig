@@ -4,8 +4,8 @@
 #}
 {% set settings = collaborate_notifications_settings() %}
 <div class="collaborate-notification-topics" data-collaborate-notification-topics="{{ settings|json_encode }}">
-    <h1 class="collaborate-notifications-page__title">{{ 'What I am notified of'|trans({}, 'collaborate') }}</h1>
-    <p class="collaborate-notification-topics__intro">{{ 'Unsubscribed from a topic, you are told nothing of it: neither under the bell, nor on this device.'|trans({}, 'collaborate') }}</p>
+    <h1 class="collaborate-notifications-page__title">{{ 'What I am notified of'|collaborate_trans({}, 'collaborate') }}</h1>
+    <p class="collaborate-notification-topics__intro">{{ 'Unsubscribed from a topic, you are told nothing of it: neither under the bell, nor on this device.'|collaborate_trans({}, 'collaborate') }}</p>
     <ul class="collaborate-notification-topics__list">
         {% for name, topic in collaborate_notification_topics() %}
             {% set on = subscribed[name] ?? true %}
@@ -18,13 +18,13 @@
                     <span class="collaborate-notification-topic__label">{{ topic.label }}</span>
                 </label>
                 {% if topic.description %}<p class="collaborate-notification-topic__description" id="collaborate-topic-{{ name }}-description">{{ topic.description }}</p>{% endif %}
-                {% if topic.mandatory %}<p class="collaborate-notification-topic__description" id="collaborate-topic-{{ name }}-mandatory">{{ 'Everyone is notified of this.'|trans({}, 'collaborate') }}</p>{% endif %}
+                {% if topic.mandatory %}<p class="collaborate-notification-topic__description" id="collaborate-topic-{{ name }}-mandatory">{{ 'Everyone is notified of this.'|collaborate_trans({}, 'collaborate') }}</p>{% endif %}
             </li>
         {% endfor %}
     </ul>
     <p class="collaborate-notification-topics__status" role="status"
-       data-subscribed="{{ 'You are notified of %topic% again.'|trans({}, 'collaborate') }}"
-       data-unsubscribed="{{ 'You are no longer notified of %topic%.'|trans({}, 'collaborate') }}"
-       data-failed="{{ 'Your choice for %topic% could not be saved: try again.'|trans({}, 'collaborate') }}"></p>
-    <a class="collaborate-notifications__button" href="{{ path('collaborate_notifications_page') }}">{{ 'See all notifications'|trans({}, 'collaborate') }}</a>
+       data-subscribed="{{ 'You are notified of %topic% again.'|collaborate_trans({}, 'collaborate') }}"
+       data-unsubscribed="{{ 'You are no longer notified of %topic%.'|collaborate_trans({}, 'collaborate') }}"
+       data-failed="{{ 'Your choice for %topic% could not be saved: try again.'|collaborate_trans({}, 'collaborate') }}"></p>
+    <a class="collaborate-notifications__button" href="{{ path('collaborate_notifications_page') }}">{{ 'See all notifications'|collaborate_trans({}, 'collaborate') }}</a>
 </div>

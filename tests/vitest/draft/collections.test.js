@@ -1,3 +1,5 @@
+// EasyAdmin's markup: its bridge's profile.
+import '../../../assets/bridges/easyadmin.js';
 import { initializeCollections } from '../../../assets/draft/collections.js';
 import { addRowInitializer } from '../../../assets/draft/hooks.js';
 
@@ -161,6 +163,45 @@ test('projects members first discovered by replay and detaches their descendant 
   expect(editable.ckeditorInstance.destroy).toHaveBeenCalledOnce();
   expect(container.querySelector('[data-collaborate-item="remote"]')).toBeNull();
   stop();
+});
+
+test('without a bridge, projects a peer row into the widget the extension marks and announces no EasyAdmin event', async () => {
+  document.body.innerHTML =
+    '<div data-collaborate-layer data-config=\'{"bridge":"none"}\'></div><form><div data-collaborate-collection="Record[items]"><div data-collaborate-entries="Record[items]" data-collaborate-placeholder="__name__" data-prototype="<div data-collaborate-entry><input name=&quot;Record[items][__name__][title]&quot;></div>"></div></div></form>';
+  const form = document.querySelector('form');
+  const session = {
+    form,
+    state: { fields: {} },
+    adapters: new Map(),
+    editorWaiters: new Map(),
+    initializeControls: vi.fn(),
+    schedule: vi.fn(),
+    setStatus: vi.fn(),
+    report: vi.fn(),
+    ensureField(name) {
+      this.state.fields[name] ||= { type: 'member', initial: { alive: false, order: 0, recordId: null } };
+      return this.state.fields[name];
+    },
+    register(name, adapter) {
+      this.adapters.set(name, adapter);
+    },
+    formName: (name) => name,
+  };
+  const added = vi.fn();
+  document.addEventListener('ea.collection.item-added', added);
+  const stop = initializeCollections(session);
+  try {
+    session.state.fields['Record[items][@remote]'] = { type: 'member', value: { alive: true, order: 1 } };
+    session.scanCollections();
+    await vi.waitFor(() => expect(form.querySelector('[data-collaborate-item="remote"]')).not.toBeNull());
+    expect(form.querySelector('[data-collaborate-entries] > [data-collaborate-item="remote"] input').name).toBe(
+      'Record[items][remote][title]'
+    );
+    expect(added).not.toHaveBeenCalled();
+  } finally {
+    document.removeEventListener('ea.collection.item-added', added);
+    stop();
+  }
 });
 
 test('initializes peer-created row controls through the collection lifecycle without echoing membership', async () => {

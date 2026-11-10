@@ -1,3 +1,5 @@
+// EasyAdmin's markup: its bridge's profile.
+import '../../../assets/bridges/easyadmin.js';
 import { renderConflicts } from '../../../assets/draft/conflicts.js';
 
 test('renders external and current draft values as text and delegates explicit reconciliation', () => {

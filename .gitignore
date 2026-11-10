@@ -17,3 +17,9 @@
 /tests/Application/*/config/reference.php
 /test-results/
 /playwright-report/
+# The Drupal test site, built by `make drupal-install` from its composer.json.
+/tests/Application/Drupal/vendor/
+/tests/Application/Drupal/web/
+/tests/Application/Drupal/composer.lock
+/tests/Application/Drupal/private/
+/tests/Application/Drupal/recipes/

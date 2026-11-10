@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Janalis\Collaborate\Draft;
 
-use Janalis\Collaborate\Doctrine\RecordIdentifier;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -40,7 +39,7 @@ class DraftSave implements EventSubscriberInterface
     public function __construct(
         private readonly DraftJournal $journal,
         private readonly RequestStack $requests,
-        private readonly RecordIdentifier $identifier,
+        private readonly RecordIdentifierInterface $identifier,
         private readonly LoggerInterface $logger,
         private readonly TranslatorInterface $translator,
     ) {}

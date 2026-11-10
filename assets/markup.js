@@ -1,14 +1,15 @@
 // @ts-check
 // The form markup the scripts read, whatever form theme renders it. The form extension tags a shared form's
 // rows (`data-collaborate-row`), each collection's widget (`data-collaborate-entries`) and each entry's row
-// (`data-collaborate-entry`), and every stock Symfony theme renders those attributes. EasyAdmin's own classes,
-// and those of templates written for earlier versions, are still read after them.
+// (`data-collaborate-entry`), and every stock Symfony theme renders those attributes. The bridge's own classes
+// (EasyAdmin's, and those of templates written for its earlier versions; Drupal's form items) are read after them.
+import { bridge } from './bridge.js';
 
 /** A field's row: the element a peer's field mark outlines, and where a widget's own control is found. */
-export const ROW = '[data-collaborate-row], .form-group';
+export const rowSelector = () => ['[data-collaborate-row]', ...bridge().rows].join(', ');
 
 /** One entry of a collection. */
-export const ENTRY = '[data-collaborate-entry], .field-collection-item';
+export const entrySelector = () => ['[data-collaborate-entry]', ...bridge().entries].join(', ');
 
 /**
  * The row of the field `element` is in, or null.
@@ -16,7 +17,7 @@ export const ENTRY = '[data-collaborate-entry], .field-collection-item';
  * @param {Element | null | undefined} element
  * @returns {HTMLElement | null}
  */
-export const rowOf = (element) => /** @type {HTMLElement | null} */ (element?.closest(ROW) ?? null);
+export const rowOf = (element) => /** @type {HTMLElement | null} */ (element?.closest(rowSelector()) ?? null);
 
 /**
  * The element holding the entries of the collection whose row is `container`: its widget, not a nested

@@ -9,13 +9,13 @@ use Janalis\Collaborate\Cursor\PageGrant;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Security\CurrentUserInterface;
 use Janalis\Collaborate\Twig\CollaborateExtension;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bridge\Twig\Extension\CsrfExtension;
 use Symfony\Bridge\Twig\Extension\CsrfRuntime;
 use Symfony\Bridge\Twig\Extension\RoutingExtension;
 use Symfony\Bridge\Twig\Extension\TranslationExtension;
-use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
@@ -68,9 +68,8 @@ abstract class ExtensionTestCase extends TestCase
         $twig->addRuntimeLoader(new FactoryRuntimeLoader([
             CsrfRuntime::class => static fn(): CsrfRuntime => new CsrfRuntime($csrf),
         ]));
-        if (null !== $extension) {
-            $twig->addExtension($extension);
-        }
+        // The bundle's templates translate and draw their tokens through the extension's filter and function.
+        $twig->addExtension($extension ?? $this->extension());
 
         return $twig;
     }
@@ -90,12 +89,13 @@ abstract class ExtensionTestCase extends TestCase
         array $layer = [],
         array $host = [],
         ?TranslatorInterface $translator = null,
+        string $bridge = 'none',
     ): CollaborateExtension {
         $requests = new RequestStack();
         if ($hasRequest) {
             $requests->push(new Request(attributes: ['_route' => 'article_index']));
         }
-        $security = $this->createStub(Security::class);
+        $security = $this->createStub(CurrentUserInterface::class);
         $security->method('getUser')->willReturn($user);
         $security
             ->method('isGranted')
@@ -116,6 +116,21 @@ abstract class ExtensionTestCase extends TestCase
             $layer,
             $host,
             $translator,
+            null,
+            $bridge,
+            $this->tokens(),
         );
+    }
+
+    /** Tokens named after their id: `token:<id>`. */
+    protected function tokens(): CsrfTokenManagerInterface
+    {
+        $csrf = $this->createStub(CsrfTokenManagerInterface::class);
+        $csrf->method('getToken')->willReturnCallback(static fn(string $id): CsrfToken => new CsrfToken(
+            $id,
+            'token:' . $id,
+        ));
+
+        return $csrf;
     }
 }

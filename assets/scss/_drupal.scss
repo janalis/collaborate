@@ -1,0 +1,179 @@
+// The Drupal bridge: the state bar, its notices and confirmation, and the conflict review in Claro's and Gin's
+// colours, for pages without Bootstrap. The scripts draw them with Bootstrap's class names (`alert`, `btn`, `modal`
+// and a few utilities), which only these elements are given here; the presence in their header.
+
+// Bootstrap's custom properties `_draft.scss` reads, from Claro's (Gin sets the same ones).
+.collaborate-bar,
+.collaborate-conflicts,
+.collaborate-dialog {
+  --bs-body-bg: var(--color-white, Canvas);
+  --bs-border-radius-sm: var(--base-border-radius, 2px);
+  --bs-danger-text-emphasis: var(--color-maximumred, #d72222);
+  --bs-danger-bg-subtle: color-mix(in srgb, var(--color-maximumred, #d72222) 12%, transparent);
+  --bs-success-text-emphasis: var(--color-green, #228572);
+  --bs-success-bg-subtle: color-mix(in srgb, var(--color-green, #228572) 12%, transparent);
+  font-family: var(--font-family, system-ui, sans-serif);
+
+  &.d-flex,
+  .d-flex { display: flex; }
+  .d-block { display: block; }
+  &.flex-wrap,
+  .flex-wrap { flex-wrap: wrap; }
+  &.align-items-center,
+  .align-items-center { align-items: center; }
+  &.gap-2,
+  .gap-2 { gap: 0.5rem; }
+  .ms-auto { margin-inline-start: auto; }
+  .me-1 { margin-inline-end: 0.25rem; }
+  .mb-0 { margin-block-end: 0; }
+  .mb-1 { margin-block-end: 0.25rem; }
+  &.mb-3,
+  .mb-3 { margin-block-end: 1rem; }
+  &.py-2,
+  .py-2 { padding-block: 0.5rem; }
+  .w-100 { width: 100%; }
+  .small { font-size: 0.875em; }
+  .visually-hidden {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+  }
+
+  &.alert,
+  .alert {
+    position: relative;
+    padding-inline: 1rem;
+    color: var(--color-text, #232429);
+    border: 1px solid var(--collaborate-alert, var(--color-gray-200, #d3d4d9));
+    border-inline-start-width: 4px;
+    border-radius: var(--base-border-radius, 2px);
+    background: color-mix(in srgb, var(--collaborate-alert, var(--color-gray-200, #d3d4d9)) 10%, var(--color-white, Canvas));
+  }
+
+  &.alert-secondary,
+  .alert-secondary,
+  .alert-light { --collaborate-alert: var(--color-gray-400, #8e929c); }
+  &.alert-info,
+  .alert-info { --collaborate-alert: var(--color-absolutezero, #003ecc); }
+  &.alert-success,
+  .alert-success { --collaborate-alert: var(--color-green, #228572); }
+  &.alert-warning,
+  .alert-warning { --collaborate-alert: var(--color-lightninggold, #ffd23f); }
+  &.alert-danger,
+  .alert-danger { --collaborate-alert: var(--color-maximumred, #d72222); }
+  .alert-dismissible { padding-inline-end: 3rem; }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    font: inherit;
+    font-weight: 700;
+    color: var(--color-text, #232429);
+    cursor: pointer;
+    background: var(--color-white, Canvas);
+    border: 1px solid var(--color-gray-500, #828388);
+    border-radius: var(--button-border-radius-size, 2rem);
+
+    &:focus-visible {
+      outline: 3px solid var(--color-focus, #26a769);
+      outline-offset: 2px;
+    }
+  }
+
+  .btn-primary {
+    color: var(--color-white, #fff);
+    background: var(--color-absolutezero, #003ecc);
+    border-color: var(--color-absolutezero, #003ecc);
+  }
+
+  .btn-danger {
+    color: var(--color-white, #fff);
+    background: var(--color-maximumred, #d72222);
+    border-color: var(--color-maximumred, #d72222);
+  }
+
+  .btn-link {
+    color: var(--color-absolutezero, #003ecc);
+    background: none;
+    border-color: transparent;
+    text-decoration: underline;
+  }
+
+  .link-danger { color: var(--color-maximumred, #d72222); }
+
+  .btn-close {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-end: 0;
+    width: 2.5rem;
+    height: 100%;
+    cursor: pointer;
+    background: none;
+    border: 0;
+
+    &::before { content: '\00d7'; font-size: 1.25rem; }
+  }
+
+  .form-control {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 0.25rem 0.5rem;
+    font: inherit;
+    border: 1px solid var(--color-gray-500, #828388);
+    border-radius: var(--base-border-radius, 2px);
+  }
+}
+
+// The confirmation: Bootstrap's `.modal` markup in a native <dialog>, which gives it the top layer.
+.collaborate-dialog {
+  max-width: 32rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--base-border-radius, 2px);
+  box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 25%);
+
+  &::backdrop { background: rgb(0 0 0 / 50%); }
+
+  .modal-header,
+  .modal-body,
+  .modal-footer { padding: 1rem 1.5rem; }
+  .modal-header h1,
+  .modal-header h2,
+  .modal-header h5 { margin: 0; font-size: 1.25rem; }
+  .modal-footer { display: flex; gap: 0.5rem; justify-content: flex-end; }
+}
+
+// The others and the bell in Navigation's top bar, side by side before the page's actions.
+.collaborate-top-bar {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-inline-end: 0.5rem;
+}
+
+// The others, in Claro's and Gin's header: on the page's background, before the user's own menu.
+.collaborate-presence {
+  --collaborate-ring: var(--color-white, Canvas);
+  --collaborate-muted-bg: var(--color-gray-100, #e6e7eb);
+  --collaborate-muted-fg: var(--color-text, #232429);
+  --collaborate-font: var(--font-family, system-ui, sans-serif);
+}
+
+// The notifications in Claro's and Gin's tokens; their pages' title is the administration theme's own.
+.collaborate-notifications,
+.collaborate-notifications-page,
+.collaborate-notification-topics {
+  --collaborate-notifications-accent: var(--color-absolutezero, #003ecc);
+  --collaborate-notifications-fg: var(--color-text, #232429);
+  --collaborate-notifications-bg: var(--color-white, Canvas);
+  --collaborate-notifications-border: var(--color-gray-200, #d3d4d9);
+  --collaborate-notifications-danger: var(--color-maximumred, #d72222);
+  --collaborate-notifications-radius: var(--base-border-radius, 2px);
+  --collaborate-notifications-font: var(--font-family, system-ui, sans-serif);
+}
+
+.collaborate-notifications-page__title { display: none; }

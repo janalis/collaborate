@@ -1,0 +1,10 @@
+drupal:
+  version: VERSION
+  js:
+    js/collaborate.js: { attributes: { type: module }, preprocess: false }
+  css:
+    theme:
+      css/collaborate.css: {}
+  dependencies:
+    - core/drupal
+    - core/drupalSettings

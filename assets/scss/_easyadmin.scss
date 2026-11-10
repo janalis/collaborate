@@ -1,0 +1,21 @@
+// The EasyAdmin bridge: the presence strip in EasyAdmin's header and mobile header, in its colours.
+
+// EasyAdmin's colours: the header behind the avatars, the counter of the others.
+.collaborate-presence {
+  --collaborate-ring: var(--body-bg);
+  --collaborate-muted-bg: var(--gray-200);
+  --collaborate-muted-fg: var(--text-color);
+}
+
+// The mobile header keeps the strip just before the own avatar, which yields its auto margin.
+.responsive-header {
+  .collaborate-presence {
+    --collaborate-ring: var(--responsive-header-bg);
+    margin-left: auto;
+    order: 1;
+  }
+  .user-menu-wrapper,
+  .dropdown-settings,
+  .language-menu-wrapper { order: 2; }
+  &:has(.collaborate-presence:not([hidden])) .user-menu-wrapper { margin-left: 0.5rem !important; }
+}

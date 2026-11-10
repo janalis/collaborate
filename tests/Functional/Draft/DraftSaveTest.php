@@ -6,7 +6,10 @@ namespace Janalis\Collaborate\Tests\Functional\Draft;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\Persistence\ManagerRegistry;
+use Janalis\Collaborate\Doctrine\PortableSchema;
 use Janalis\Collaborate\Doctrine\RecordIdentifier;
+use Janalis\Collaborate\Draft\Dialect\JournalDialect;
+use Janalis\Collaborate\Draft\Dialect\MySqlDialect;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftSave;
@@ -42,6 +45,9 @@ use Symfony\Component\Translation\IdentityTranslator;
 #[UsesClass(EventValidator::class)]
 #[UsesClass(FieldDefinitions::class)]
 #[UsesClass(RecordIdentifier::class)]
+#[UsesClass(JournalDialect::class)]
+#[UsesClass(MySqlDialect::class)]
+#[UsesClass(PortableSchema::class)]
 final class DraftSaveTest extends TestCase
 {
     /** @var array<string, array{type: string, initial: mixed}> */

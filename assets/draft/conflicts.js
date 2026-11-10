@@ -1,5 +1,5 @@
 import { diff } from 'ckeditor5';
-import { ENTRY, rowOf } from '../markup.js';
+import { entrySelector, rowOf } from '../markup.js';
 
 // Past this many words a side is shown whole: the diff grows with the product of both lengths.
 const MAX_DIFF_TOKENS = 2000;
@@ -40,7 +40,7 @@ function collectionLabel(session, name) {
   const parent = container?.querySelector('label, legend')?.textContent.trim();
   if (!parent) return null;
   const row = match[2]
-    ? Array.from(container.querySelectorAll(ENTRY)).find((node) => node.dataset.collaborateItem === match[2])
+    ? Array.from(container.querySelectorAll(entrySelector())).find((node) => node.dataset.collaborateItem === match[2])
     : null;
   const text = Array.from(row?.querySelectorAll('input:not([type]), input[type="text"]') ?? [])
     .map((input) => input.value.trim())

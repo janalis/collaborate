@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 
@@ -15,10 +16,15 @@ const ports = {
   'plain-tailwind': process.env.PLAIN_TAILWIND_PORT || '8770',
   // The plain application without Mercure: the bundle's WebSocket hub, behind the application's origin.
   'plain-ws': process.env.PLAIN_WS_PORT || '8780',
+  // The Drupal test site (tests/Application/Drupal, `make drupal-install`), with its own Mercure hub.
+  drupal: process.env.DRUPAL_PORT || '8790',
 };
+// Its scenarios run once the site is built: `make e2e` needs no Drupal.
+const drupal = existsSync('tests/Application/Drupal/web/sites/default/settings.php');
+const drupalPhpPort = process.env.DRUPAL_PHP_PORT || '8791';
 // The unix sockets of the WebSocket hub (`collaborate:hub:serve`), which FrankenPHP proxies.
 const hubRun = process.env.COLLABORATE_HUB_RUN || path.resolve('tests/Application/var/plain/run');
-const plainIgnore = [/easyadmin-.*\.spec\.js/, /limits\.spec\.js/, /host-.*\.spec\.js/];
+const plainIgnore = [/easyadmin-.*\.spec\.js/, /limits\.spec\.js/, /host-.*\.spec\.js/, /drupal-.*\.spec\.js/];
 
 export default defineConfig({
   testDir: 'tests/playwright',
@@ -42,7 +48,7 @@ export default defineConfig({
     })),
     {
       name: 'easyadmin',
-      testIgnore: [/limits\.spec\.js/, /host-.*\.spec\.js/],
+      testIgnore: [/limits\.spec\.js/, /host-.*\.spec\.js/, /drupal-.*\.spec\.js/],
       use: { baseURL: `http://127.0.0.1:${ports.easyadmin}` },
     },
     { name: 'limits', testMatch: /limits\.spec\.js/, use: { baseURL: `http://127.0.0.1:${ports.limits}` } },
@@ -59,6 +65,10 @@ export default defineConfig({
       ],
       use: { baseURL: `http://127.0.0.1:${ports['plain-ws']}` },
     },
+    // The Drupal module on Claro, with Navigation's top bar.
+    ...(drupal
+      ? [{ name: 'drupal', testMatch: /drupal-.*\.spec\.js/, use: { baseURL: `http://127.0.0.1:${ports.drupal}` } }]
+      : []),
   ],
   webServer: [
     {
@@ -88,5 +98,29 @@ export default defineConfig({
       stderr: 'pipe',
       env: { COLLABORATE_APP: 'plain', APP_ENV: 'e2e_ws', COLLABORATE_HUB_RUN: hubRun },
     },
+    ...(drupal
+      ? [
+          {
+            // The site's PHP, behind the origin FrankenPHP serves with its Mercure hub.
+            // From the web root, which Drupal resolves its templates from.
+            command: `${process.env.PHP || 'php'} -S 127.0.0.1:${drupalPhpPort} .ht.router.php`,
+            cwd: 'tests/Application/Drupal/web',
+            url: `http://127.0.0.1:${drupalPhpPort}/user/login`,
+            // CI starts the site before its PHPUnit run (`make drupal-test`): Playwright uses it.
+            reuseExistingServer: true,
+            stdout: 'ignore',
+            stderr: 'ignore',
+            env: { PHP_CLI_SERVER_WORKERS: '8', DRUPAL_PORT: ports.drupal },
+          },
+          {
+            command: `${process.env.FRANKENPHP || 'frankenphp'} run --config tests/Application/Drupal/Caddyfile`,
+            url: `http://127.0.0.1:${ports.drupal}/user/login`,
+            reuseExistingServer: true,
+            stdout: 'ignore',
+            stderr: 'pipe',
+            env: { DRUPAL_PORT: ports.drupal, DRUPAL_PHP_PORT: drupalPhpPort },
+          },
+        ]
+      : []),
   ],
 });

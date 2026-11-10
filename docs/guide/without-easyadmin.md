@@ -1,10 +1,12 @@
-# Without EasyAdmin
+# No bridge
 
-Cursors and presence work on any page that renders the
+Without an admin [bridge](./bridges) (`collaborate.bridge: none`, or `auto`
+without EasyAdmin), cursors and presence work on any page that renders the
 [layer](./getting-started#_3-render-the-layer-and-the-presence). Shared
 drafts work on any Symfony form page once the bundle knows which record the
 page edits, and once the page's controller plays its part in Save. This page
-lists what EasyAdmin's adapter otherwise does for you.
+lists what EasyAdmin's adapter otherwise does for you. Pages import
+`@janalis/collaborate/collaborate.js`.
 
 ![The same shared draft on a page rendered by Symfony's Bootstrap 5 form theme, without EasyAdmin](/screenshots/plain.png)
 
@@ -184,7 +186,7 @@ A form theme of your own keeps working as long as its `form_row` renders
 with `form_row`, which is what Symfony's own blocks do. Templates that
 follow EasyAdmin's markup (a `.form-group` row, `.field-collection-item`
 entries in `.ea-form-collection-items`, the prototype on the collection's
-row) are still read.
+row) are read on EasyAdmin's bridge only (`easyadmin.js`).
 
 Your own add and remove buttons only need to add or remove entries in the
 collection's widget: the bundle observes them. Build an added entry from the
@@ -200,8 +202,9 @@ form theme: load Bootstrap's CSS and provide `bootstrap/js/src/modal.js`
 
 ## What you do not get
 
-- **Saved-view refresh** reloads EasyAdmin index and detail pages only (it
-  reads EasyAdmin's `<body>` classes). Your own lists stay as they are. The
+- **Saved-view refresh** reloads the pages that say what they show
+  ([`data-collaborate-page`](./bridges#marking-a-page) on their body: a
+  list or a record's detail). Pages that say nothing stay as they are. The
   notices to open edit pages, which compare their draft with a record saved
   elsewhere, work everywhere, for writes on paths matched by
   [`updates.path_pattern`](./configuration#updates) or named in

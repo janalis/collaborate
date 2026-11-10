@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Janalis\Collaborate\Tests\Integration;
 
+use Janalis\Collaborate\Bridge\Bridge;
 use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Controller\CursorController;
 use Janalis\Collaborate\Controller\HubController;
@@ -14,12 +15,15 @@ use Janalis\Collaborate\Cursor\CursorIdentity;
 use Janalis\Collaborate\Cursor\PageGrant;
 use Janalis\Collaborate\DependencyInjection\Configuration;
 use Janalis\Collaborate\Doctrine\ChangeCollector;
+use Janalis\Collaborate\Doctrine\PortableSchema;
 use Janalis\Collaborate\Doctrine\RecordIdentifier;
+use Janalis\Collaborate\Draft\Dialect\JournalDialect;
+use Janalis\Collaborate\Draft\Dialect\MySqlDialect;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftSave;
 use Janalis\Collaborate\Draft\EventValidator;
-use Janalis\Collaborate\EasyAdmin\UpdatesSubscriber;
+use Janalis\Collaborate\Draft\FormDraft;
 use Janalis\Collaborate\Grant;
 use Janalis\Collaborate\Hub\Admission;
 use Janalis\Collaborate\Hub\HubGuard;
@@ -47,11 +51,13 @@ use Janalis\Collaborate\Notification\Push\PushDispatcher;
 use Janalis\Collaborate\Notification\Push\PushPayload;
 use Janalis\Collaborate\Notification\Push\PushResult;
 use Janalis\Collaborate\Notification\Push\PushSubscriptions;
+use Janalis\Collaborate\Security\SymfonyCurrentUser;
 use Janalis\Collaborate\Tests\Application\Host\HostStreamGuard;
 use Janalis\Collaborate\Tests\Application\Host\Push\HubSubscriptions;
 use Janalis\Collaborate\Tests\Application\Shared\Hub\RecordingTransport;
 use Janalis\Collaborate\Twig\CollaborateExtension;
 use Janalis\Collaborate\Twig\NotificationRuntime;
+use Janalis\Collaborate\Updates\UpdatesSubscriber;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
@@ -60,6 +66,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
  * stream a page listens to them on (a bare grant where the page is in no place), and web push.
  */
 #[CoversClass(CollaborateBundle::class)]
+#[CoversClass(Bridge::class)]
 #[CoversClass(Configuration::class)]
 #[CoversClass(NotificationController::class)]
 #[CoversClass(PushController::class)]
@@ -105,6 +112,11 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(MercureTransport::class)]
 #[UsesClass(Subscription::class)]
 #[UsesClass(PublishFailedException::class)]
+#[UsesClass(SymfonyCurrentUser::class)]
+#[UsesClass(FormDraft::class)]
+#[UsesClass(JournalDialect::class)]
+#[UsesClass(MySqlDialect::class)]
+#[UsesClass(PortableSchema::class)]
 final class NotificationsApplicationTest extends NotificationsTestCase
 {
     public function testTheBellListsTheLatestNotificationsAndCountsTheUnreadOnes(): void

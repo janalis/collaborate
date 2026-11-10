@@ -4,17 +4,21 @@ declare(strict_types=1);
 
 namespace Janalis\Collaborate\Tests\Unit\Twig;
 
+use Janalis\Collaborate\Access\RoleDraftAccessChecker;
+use Janalis\Collaborate\Bridge\Bridge;
 use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Cursor\PageGrant;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Grant;
 use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Security\CurrentUserInterface;
 use Janalis\Collaborate\Tests\Fixtures\TestUser;
 use Janalis\Collaborate\Twig\CollaborateExtension;
 use Janalis\Collaborate\Twig\NotificationRuntime;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Security\Core\User\InMemoryUser;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use Twig\Node\Node;
@@ -25,6 +29,7 @@ use Twig\Node\Node;
 #[UsesClass(Topics::class)]
 #[UsesClass(Grant::class)]
 #[UsesClass(SecurityCollaboratorProvider::class)]
+#[UsesClass(Bridge::class)]
 final class CollaborateExtensionTest extends ExtensionTestCase
 {
     public function testRegistersTheLayoutFunctions(): void
@@ -32,6 +37,7 @@ final class CollaborateExtensionTest extends ExtensionTestCase
         $functions = $this->extension()->getFunctions();
         self::assertSame(
             [
+                'collaborate_csrf',
                 'collaborate_grant',
                 'collaborate_enabled',
                 'collaborate_layer',
@@ -47,7 +53,7 @@ final class CollaborateExtensionTest extends ExtensionTestCase
             array_map(static fn($function): string => $function->getName(), $functions),
         );
         // The notifications are the runtime's: made only when a template calls one of them.
-        $notifications = \array_slice($functions, 4);
+        $notifications = \array_slice($functions, 5);
         self::assertSame(
             ['bell', 'text', 'icon', 'types', 'topics', 'settings', 'layout'],
             array_map(static function ($function): string {
@@ -133,6 +139,7 @@ final class CollaborateExtensionTest extends ExtensionTestCase
         self::assertSame('true', $layer->getAttribute('data-updates'));
         self::assertSame(
             [
+                'bridge' => 'none',
                 'throttle' => 50,
                 'heartbeat' => 6000,
                 'expiry' => 20_000,
@@ -150,7 +157,7 @@ final class CollaborateExtensionTest extends ExtensionTestCase
         self::assertTrue($layer->hasAttribute('data-event-url'));
         self::assertFalse($layer->hasAttribute('data-updates'));
         self::assertSame(
-            '{"throttle":100,"heartbeat":5000,"expiry":15000,"maxAvatars":5,"renew":240000,"colors":["blue"]}',
+            '{"bridge":"none","throttle":100,"heartbeat":5000,"expiry":15000,"maxAvatars":5,"renew":240000,"colors":["blue"]}',
             $layer->getAttribute('data-config'),
         );
 
@@ -163,6 +170,37 @@ final class CollaborateExtensionTest extends ExtensionTestCase
         /** @var array{colors: list<string>} $config */
         $config = json_decode($layer->getAttribute('data-config'), true, flags: \JSON_THROW_ON_ERROR);
         self::assertSame(CollaborateBundle::COLORS, $config['colors']);
+    }
+
+    public function testTheLayerNamesItsBridgeAndLeavesOutTheBridgesRegions(): void
+    {
+        foreach (Bridge::cases() as $bridge) {
+            foreach ([[], ['regions' => []], ['regions' => $bridge->regions()]] as $host) {
+                $config = $this->config($this->extension(new TestUser(7), host: $host, bridge: $bridge->value));
+                self::assertSame($bridge->value, $config['bridge']);
+                self::assertArrayNotHasKey('regions', $config);
+                self::assertArrayNotHasKey('messages', $config);
+            }
+        }
+        // Another bridge's regions are the host's own: the page is told them.
+        $config = $this->config($this->extension(
+            new TestUser(7),
+            host: ['regions' => Bridge::EasyAdmin->regions()],
+            bridge: 'none',
+        ));
+        self::assertSame(Bridge::EasyAdmin->regions(), $config['regions']);
+        self::assertArrayHasKey('messages', $config);
+    }
+
+    /** @return array<string, mixed> */
+    private function config(CollaborateExtension $extension): array
+    {
+        /** @var array<string, mixed> */
+        return json_decode(
+            $this->element($extension->layer($this->twig()))->getAttribute('data-config'),
+            true,
+            flags: \JSON_THROW_ON_ERROR,
+        );
     }
 
     public function testTheLayerNamesTheHostOptionsThatDifferFromTheDefaultsWithTheSentencesTranslated(): void
@@ -207,6 +245,7 @@ final class CollaborateExtensionTest extends ExtensionTestCase
         );
         self::assertSame(
             [
+                'bridge' => 'none',
                 'throttle' => 100,
                 'heartbeat' => 5000,
                 'expiry' => 15_000,
@@ -259,6 +298,60 @@ final class CollaborateExtensionTest extends ExtensionTestCase
         self::assertSame(0, $config['idle']);
         self::assertSame([], $config['popups']);
         self::assertSame('%name% is %place%', $config['messages']['is']);
+    }
+
+    public function testTranslatesAndDrawsTokensForTheTemplatesWhateverTheirTwig(): void
+    {
+        $translator = $this->createStub(TranslatorInterface::class);
+        $translator
+            ->method('trans')
+            ->willReturnCallback(
+                static fn(string $id, array $parameters, ?string $domain): string => ($domain ?? '')
+                . ':'
+                . str_replace(
+                    '%count%',
+                    \is_int($parameters['%count%'] ?? null) ? (string) $parameters['%count%'] : '',
+                    $id,
+                ),
+            );
+        $extension = $this->extension(translator: $translator);
+        self::assertSame(
+            ['collaborate_trans'],
+            array_map(static fn($filter): string => $filter->getName(), $extension->getFilters()),
+        );
+        self::assertSame('collaborate:3 unread', $extension->translate('%count% unread', ['%count%' => 3]));
+        self::assertSame('other:Hi', $extension->translate('Hi', [], 'other'));
+        self::assertSame('token:collaborate-hub', $extension->csrf('collaborate-hub'));
+        $html = $this
+            ->twig($extension)
+            ->createTemplate("{{ '%count% unread'|collaborate_trans({'%count%': 2}) }} {{ collaborate_csrf('x') }}")
+            ->render();
+        self::assertSame('collaborate:2 unread token:x', $html);
+    }
+
+    public function testWithoutATranslatorNorTokensTheSentencesAreTheirKeys(): void
+    {
+        $extension = new CollaborateExtension(
+            new RequestStack(),
+            $this->createStub(CurrentUserInterface::class),
+            new SecurityCollaboratorProvider(),
+            $this->pages,
+            new DraftAccess(
+                'secret',
+                false,
+                new Topics(),
+                new SecurityCollaboratorProvider(),
+                new RoleDraftAccessChecker(),
+            ),
+        );
+        self::assertSame('2 unread, by x', $extension->translate('%count% unread, by %who%', [
+            '%count%' => 2,
+            '%who%' => 'x',
+            '%none%' => new \stdClass(),
+        ]));
+        // A parameter that is no text reads as none.
+        self::assertSame('by ', $extension->translate('by %who%', ['%who%' => new \stdClass()]));
+        self::assertSame('', $extension->csrf('collaborate-hub'));
     }
 
     public function testRendersThePresenceGroup(): void

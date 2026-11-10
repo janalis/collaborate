@@ -1,7 +1,8 @@
 # Architecture
 
-The bundle is a framework-level **core** and two optional **adapters**,
-EasyAdmin and Gedmo. The names that PHP, Twig and JavaScript share (routes,
+The bundle is a framework-level **core**, admin **bridges** (EasyAdmin's, in
+the bundle; Drupal's, the `drupal/` module) and an optional **Gedmo**
+adapter. The names that PHP, Twig and JavaScript share (routes,
 attributes, headers, CSRF ids, storage keys, events) are listed in the
 [internal contract](https://github.com/janalis/collaborate/blob/main/docs/internals/contract.md);
 keep it current when you change one.
@@ -24,13 +25,13 @@ keep it current when you change one.
 
 | File | Loaded | Defines |
 |---|---|---|
-| `core.php` | always | The default identity and access services, `Topics`, `PageGrant`, `DraftAccess`. |
+| `core.php` | always | The default identity and access services, `SymfonyCurrentUser` (aliased as `CurrentUserInterface`), `Topics`, `PageGrant`, `DraftAccess`. |
 | `hub.php` | always | `HubPublisher`, `HubGuard`, `HubSessions`, `HubController`, `RenewSubscriber`, the Twig extension. |
 | `hub_mercure.php` | with `hub.transport: mercure` (MercureBundle must be registered) | `MercureTransport`, on `mercure.hub.<hub.mercure.name>`; `HubTransportInterface` and `PresenceProbeInterface` aliased to it. |
 | `hub_websocket.php` | with `hub.transport: websocket` | `Keys` (its secrets set by `CollaborateBundle`, not parameters), `RequestSigner`, `SubscriberToken`, `WebSocketTransport` (aliased as both interfaces), `HubServeCommand`. Nothing in it names a ReactPHP type. |
 | `cursors.php` | always | `CursorController` (it answers 404 when cursors are disabled). |
-| `drafts.php` | always | `DraftText`, `DraftJournal`, `DraftSave`, the field-key resolver, the form type extension, `DraftController`, `PurgeDraftsCommand`, and the saved-view collection and announcement (`ChangeCollector`, `UpdatesSubscriber`). |
-| `easyadmin.php` | when EasyAdminBundle is registered | `EasyAdminFormContext` (aliased as `FormContextInterface`), `DraftRefreshSubscriber`, `SaveSubscriber`. |
+| `drafts.php` | always | `DraftText`, `DraftJournal`, `DraftSave`, `FormDraft`, the record identifier (`RecordIdentifierInterface`), the field-key resolver, the form type extension, `DraftController`, `PurgeDraftsCommand`, and the saved-view collection and announcement (`ChangeCollector`, `UpdatesSubscriber`). |
+| `bridge_easyadmin.php` | when `collaborate.bridge` resolves to `easyadmin` (`auto` with EasyAdminBundle registered) | `EasyAdminFormContext` (aliased as `FormContextInterface`), `DraftRefreshSubscriber`, `SaveSubscriber`, and the autocomplete's mapper for the form extension. |
 | `gedmo.php` | when Gedmo's `Translatable` interface exists | `TranslatableFieldKeyResolver`, `TranslationMapper`. |
 
 Everything is registered whatever the feature flags say; the services
@@ -50,10 +51,12 @@ read `collaborate.*.enabled` and stay inert when their feature is off.
 | `Hub\Server\` | The ReactPHP server, never a container service: `ServerConfig`, `ServerFactory`, `Server` (listeners, signals, shutdown, the shared timer), `BrowserEndpoint` (handshake and subscribe protocol), `PublishEndpoint` (`/publish`, `/subscriptions`, `/health`), `Router` (topic to connections), `Connection`, `ClientAddress`, `Sockets`, `Limits`, `Timings`. |
 | `Cursor\` | `PageGrant` (rooms and page grants), `CursorEvent` and `CursorPosition` (validation of what clients send). |
 | `Controller\` | `HubController` (session), `CursorController` (events), `DraftController` (draft actions). |
-| `Draft\` | `DraftAccess` (field grants and their cache), `DraftJournal` (the journal: one class per protocol, MariaDB/MySQL SQL), `DraftText` (plain-text operations on the server), `DraftSave` (the locked save), field-key resolvers. |
-| `Form\` | `CollaborateFormExtension` (field schema, stable collection keys, the `data-collaborate` attribute, the save hooks) and `FormContextInterface`. |
+| `Draft\` | `DraftAccess` (field grants and their cache), `DraftJournal` (the journal: one class per protocol), `Dialect\` (its SQL where MariaDB and MySQL, PostgreSQL and SQLite differ: upserts, row and named locks), `DraftText` (plain-text operations on the server), `DraftSave` (the locked save), field-key resolvers. |
+| `Form\` | `CollaborateFormExtension` (the field schema of a Symfony form, stable collection keys, the save hooks) and `FormContextInterface`. |
 | `Doctrine\` | `ChangeCollector` (the `onFlush` half of saved-view updates), `RecordIdentifier`, `TranslationMapperInterface`. |
-| `EasyAdmin\` | The adapter, and `UpdatesSubscriber` (the response half of saved-view updates). |
+| `Bridge\` | `Bridge`: the bridges, their default regions, how `collaborate.bridge` resolves. `Bridge\EasyAdmin\`: EasyAdmin's services. `EasyAdmin\` holds the deprecated names of before 0.5. |
+| `Updates\` | `UpdatesSubscriber`: the response half of saved-view updates. |
+| `Security\` | `CurrentUserInterface` (the user and their access decisions) and Symfony's, `SymfonyCurrentUser`. |
 | `Gedmo\` | Per-locale field keys and the translation-to-record mapping. |
 | `Entity\` | `Draft`, `DraftField`, `DraftEvent`: the mapping of the three tables. |
 | `Command\` | `collaborate:purge`, `collaborate:push:setup`, `collaborate:hub:serve` (checks the server's packages, then builds and runs it). |
@@ -63,7 +66,9 @@ read `collaborate.*.enabled` and stay inert when their feature is off.
 
 | Module | Role |
 |---|---|
-| `easyadmin.js` | Entry point: starts cursors, updates and drafts; re-exports `sessionFor` and `addRowInitializer`. |
+| `collaborate.js` | Entry point: starts cursors, updates and drafts; re-exports `sessionFor`, `addRowInitializer` and `registerBridge`. |
+| `easyadmin.js`, `drupal.js` | Entry points of the bridges: their profile, then `collaborate.js`. |
+| `bridge.js`, `bridges/*.js` | The bridges' script profiles (regions, rows and entries, the page shown, embedded lists, selection, overlays, collection and slug widgets, save buttons), and the active one: the layer's `bridge` when registered. |
 | `hub.js` | One hub stream per page, whatever the transport; members join by `channel` (`cursors`, `updates`, `draft`, `notifications`); renewal (in place on a WebSocket), backoff with jitter, resend of unknown grant signatures, background renewal of the page grant. |
 | `hub/mercure.js`, `hub/websocket.js` | The two sources `hub.js` loads on demand, after the session names its `transport`: a Mercure stream through `@microsoft/fetch-event-source`, or a WebSocket with its subscribe and acknowledgement messages. |
 | `cursors/cursors.js`, `carets.js`, `geometry.js`, `presence.js`, `marks.js`, `turn.js` | Pointers, carets, field marks, header avatars or menu, markers, edge arrows, popup lines, the turn of a tab. |
@@ -73,7 +78,23 @@ read `collaborate.*.enabled` and stay inert when their feature is off.
 | `draft/fields.js`, `collections.js`, `conflicts.js`, `bar.js`, `hooks.js` | Field adapters, collection rows, the conflict review, the state bar and dialogs, `addRowInitializer()`. |
 | `ckeditor5/collaborate.js` | The `Collaborate` CKEditor plugin. |
 | `ckeditor5/operation-buffer.js`, `source.js`, `text-change.js` | Operation batching and transformation, Markdown source reconciliation, text diffs. |
-| `scss/_cursors.scss`, `scss/_draft.scss` | Styles. |
+| `scss/_layer.scss`, `_cursors.scss`, `_draft.scss`, `_notifications.scss` | Styles; `_cursors.scss` is the Bootstrap 5 entry. |
+| `scss/_easyadmin.scss`, `_drupal.scss` | The bridges' styles: EasyAdmin's header; Drupal's bar, dialog and tokens (built into `drupal/css/collaborate.css`). |
+
+## Drupal module
+
+`drupal/` is its own Composer package, `janalis/collaborate_drupal`, left
+out of the bundle's archive. It loads the bundle's own extension into
+Drupal's container (`CollaborateServiceProvider`, with `Options` from
+`collaborate.settings` and `settings.php`), then `DrupalWiringPass` points
+the bundle's references at Drupal's services and the module's adapters
+(`Security\`, `DrupalTranslator`, `Storage\Connections`: DBAL with
+Drupal's table prefix, an entity manager for the notifications), renames
+the kernel tags, and inlines the parameters holding a `%`, which Drupal's
+dumper would escape once per level. `Bridge\EntityForms` shares content
+entity forms through `Draft\FormDraft`, the framework-free half of the
+form extension. `tools/drupal-assets.mjs` builds its stylesheet and its
+copy of `@microsoft/fetch-event-source`.
 
 Every module that talks to the server captures `window.fetch` when it is
 evaluated, so background requests bypass the host's fetch wrappers; that is

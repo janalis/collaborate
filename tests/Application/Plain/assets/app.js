@@ -1,7 +1,7 @@
-// The plain application's page script: the bundle's entry point first (it captures `window.fetch`),
+// The plain application's page script: the bundle's entry point of no bridge first (it captures `window.fetch`),
 // then the rich-text editors and the tag collection's add, move and remove buttons, on the markup of
 // whichever stock form theme renders the page.
-import '@janalis/collaborate/easyadmin.js';
+import '@janalis/collaborate/collaborate.js';
 import { moveUp, startEditors } from 'editors';
 
 startEditors();

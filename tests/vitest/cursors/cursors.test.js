@@ -1,3 +1,5 @@
+// EasyAdmin's markup: its bridge's profile.
+import '../../../assets/bridges/easyadmin.js';
 const mocks = vi.hoisted(() => ({ subscribe: vi.fn(), pointerShape: vi.fn(), resolveCaret: vi.fn() }));
 vi.mock('@microsoft/fetch-event-source', () => ({ fetchEventSource: mocks.subscribe }));
 // Spies around the measuring helpers count how often a frame or a move measures layout.

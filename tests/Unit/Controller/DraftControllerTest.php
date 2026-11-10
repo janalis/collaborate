@@ -15,6 +15,7 @@ use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
 use Janalis\Collaborate\Hub\Transport\PublishFailedException;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Security\CurrentUserInterface;
 use Janalis\Collaborate\Tests\Fixtures\TestUser;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -22,7 +23,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
-use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Session\Session;
@@ -100,7 +100,7 @@ final class DraftControllerTest extends TestCase
     private function handle(string $action, array $body = [], bool $terminate = true, ?string $csrf = 'csrf'): Response
     {
         $publisher = new HubPublisher(new MercureTransport($this->hub), $this->logger);
-        $security = $this->createStub(Security::class);
+        $security = $this->createStub(CurrentUserInterface::class);
         $security->method('getUser')->willReturnCallback(fn(): ?UserInterface => $this->signedIn);
         $security
             ->method('isGranted')

@@ -92,9 +92,10 @@ bypass any `fetch` wrapper installed after the bundle's entry point.
 
 ## Pages of your own
 
-The defaults describe EasyAdmin's pages. A page laid out another way (a file
-listing, a board, a document) describes itself with the
-[`cursors` options](./configuration#cursors); each is off, or EasyAdmin's,
+The defaults describe the pages of the admin's [bridge](./bridges): its
+regions, its rows. A page laid out another way (a file listing, a board, a
+document) describes itself with the
+[`cursors` options](./configuration#cursors); each is off, or the bridge's,
 by default.
 
 ### Places

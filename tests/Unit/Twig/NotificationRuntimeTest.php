@@ -11,11 +11,11 @@ use Janalis\Collaborate\Notification\Entity\Notification;
 use Janalis\Collaborate\Notification\NotificationAccess;
 use Janalis\Collaborate\Notification\NotificationCatalog;
 use Janalis\Collaborate\Notification\NotificationRepository;
+use Janalis\Collaborate\Security\CurrentUserInterface;
 use Janalis\Collaborate\Twig\NotificationRuntime;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
-use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Security\Core\User\InMemoryUser;
 use Symfony\Component\Security\Csrf\CsrfToken;
@@ -139,7 +139,7 @@ final class NotificationRuntimeTest extends TestCase
         ?string $serviceWorker = null,
         ?TranslatorInterface $translator = null,
     ): NotificationRuntime {
-        $security = $this->createStub(Security::class);
+        $security = $this->createStub(CurrentUserInterface::class);
         $security->method('getUser')->willReturn(new InMemoryUser('alice', null));
         $security->method('isGranted')->willReturn(true);
         $collaborators = $this->createStub(CollaboratorProviderInterface::class);

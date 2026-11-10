@@ -201,7 +201,7 @@ export class Editor {
   /** The draft session of this page's shared form, as a page-side handle (`window.collaborateSession()`). */
   async exposeSession() {
     await this.page.evaluate(async () => {
-      const { sessionFor } = await import('@janalis/collaborate/easyadmin.js');
+      const { sessionFor } = await import('@janalis/collaborate/collaborate.js');
       window.collaborateSession = () => {
         const form = document.querySelector('form[data-collaborate]');
         const control = Array.from(form?.elements ?? []).find((element) => element.name);

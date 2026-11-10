@@ -8,7 +8,7 @@ use Janalis\Collaborate\Cursor\PageGrant;
 use Janalis\Collaborate\Cursor\PlaceProviderInterface;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Notification\NotificationAccess;
-use Symfony\Bundle\SecurityBundle\Security;
+use Janalis\Collaborate\Security\CurrentUserInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -30,7 +30,7 @@ final readonly class HubGuard
     public const string CSRF_TOKEN_ID = 'collaborate-hub';
 
     public function __construct(
-        private Security $security,
+        private CurrentUserInterface $security,
         private CollaboratorProviderInterface $collaborators,
         private PageGrant $pages,
         private CsrfTokenManagerInterface $csrf,

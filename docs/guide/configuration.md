@@ -16,6 +16,7 @@ Each option is also a container parameter named after its path
 ```yaml
 # config/packages/collaborate.yaml
 collaborate:
+    bridge: auto                # easyadmin when EasyAdminBundle is registered, none otherwise
     identity: janalis_collaborate.identity.security
     access: janalis_collaborate.access.role
     role: ROLE_ADMIN
@@ -62,13 +63,7 @@ collaborate:
         max_event_bytes: 4096
         places: null            # service id of a PlaceProviderInterface
         ignored_parameters: [_locale, _token, _switch_user]
-        regions:                # name: root selector, in the order they are tried
-            modal: '.modal.show'
-            header: '.content-top'
-            mobile-header: '.responsive-header'
-            sidebar: '.ea-sidebar, .sidebar'
-            content: '.content-wrapper'
-            body: 'body'
+        regions: {}             # name: root selector, in the order they are tried; empty for the bridge's
         key_attribute: null
         key_scope: body
         anchor_attributes: [data-id, data-column, name, id]
@@ -128,6 +123,7 @@ collaborate:
 
 | Option | Default | Meaning |
 |---|---|---|
+| `bridge` | `auto` | The admin the pages belong to: `easyadmin`, `none`, or `auto` for `easyadmin` when EasyAdminBundle is registered and `none` otherwise. It loads the admin's services and sets the default regions and the scripts' profile. Read when the container is compiled. See [Bridges](./bridges). |
 | `identity` | `janalis_collaborate.identity.security` | Service id of a `CollaboratorProviderInterface`: a user's id, name, avatar and what admits them. The default reads a public `id` or `getId()`, the user's string form and its roles. See [Identity and access](./identity-and-access). |
 | `access` | `janalis_collaborate.access.role` | Service id of a `DraftAccessCheckerInterface`: whether a user may share the draft of a record of a given class. The default admits every collaborator. |
 | `role` | `ROLE_ADMIN` | Role every collaboration endpoint, grant and layer requires. A user without it gets no layer, no presence and no shared form. |
@@ -189,7 +185,7 @@ Read with `transport: websocket` alone. The application and
 | `max_event_bytes` | `4096` (min 512) | Largest cursor event body. |
 | `places` | `null` | Service id of a `PlaceProviderInterface` that names a page's room and is asked again at every hub request; `null` keeps the room of the route, its parameters and the query. See [Pages of your own](./cursors-and-presence#pages-of-your-own). |
 | `ignored_parameters` | `[_locale, _token, _switch_user]` | Route and query parameters that do not separate rooms, without a place provider. |
-| `regions` | EasyAdmin's layout | The regions of a page, `name: selector`, the first one an element is in naming it. Names are lowercase words joined by `-`; events naming another region get 400. |
+| `regions` | The [bridge's](./bridges#what-each-bridge-brings) | The regions of a page, `name: selector`, the first one an element is in naming it. Names are lowercase words joined by `-`; events naming another region get 400. |
 | `key_attribute` | `null` | Attribute naming a record wherever a page shows it (`data-key`): a pointer on it is placed from the record, in whatever element the peer's page shows it. |
 | `key_scope` | `body` | Selector of what holds the records the page shows its readers, for markers, popups and finding a peer. A record outside it is never named to peers. |
 | `anchor_attributes` | `[data-id, data-column, name, id]` | Attributes naming an element on the way from its region to a pointer, in order of preference. |

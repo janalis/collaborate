@@ -4,18 +4,21 @@ declare(strict_types=1);
 
 namespace Janalis\Collaborate\Twig;
 
+use Janalis\Collaborate\Bridge\Bridge;
 use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Cursor\PageGrant;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Notification\NotificationAccess;
-use Symfony\Bundle\SecurityBundle\Security;
+use Janalis\Collaborate\Security\CurrentUserInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Security\Core\User\UserInterface;
+use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use Twig\Environment;
 use Twig\Extension\AbstractExtension;
+use Twig\TwigFilter;
 use Twig\TwigFunction;
 
 /**
@@ -36,9 +39,12 @@ final class CollaborateExtension extends AbstractExtension
         'colors' => ['blue'],
     ];
 
-    /** Host options at their defaults, which the layer leaves out: a page of a 0.1 host renders as it did. */
+    /**
+     * Host options at their defaults, which the layer leaves out: a page of a 0.1 host renders as it did. The
+     * regions default to the bridge's, which its script profile holds too.
+     */
     private const array DEFAULT_HOST = [
-        'regions' => CollaborateBundle::REGIONS,
+        'regions' => [],
         'keyAttribute' => null,
         'keyScope' => 'body',
         'anchorAttributes' => CollaborateBundle::ANCHOR_ATTRIBUTES,
@@ -72,15 +78,21 @@ final class CollaborateExtension extends AbstractExtension
     /** @var array<string, mixed> */
     private readonly array $host;
 
+    /** @var array<string, mixed> */
+    private readonly array $defaultHost;
+
+    private readonly Bridge $bridge;
+
     /**
      * @param array{cursors?: bool, updates?: bool, throttle?: int, heartbeat?: int, expiry?: int, maxAvatars?: int, renew?: int, colors?: list<string>} $layer
      *   `throttle` in milliseconds; `heartbeat`, `expiry` and `renew` in seconds
      * @param array<string, mixed> $host the `cursors` options describing the host's pages, by their camel-cased
      *   names (`idle` in seconds, `popups` kind => {where, line})
+     * @param string $bridge the {@see Bridge} the pages belong to, which picks their script profile
      */
     public function __construct(
         private readonly RequestStack $requests,
-        private readonly Security $security,
+        private readonly CurrentUserInterface $security,
         private readonly CollaboratorProviderInterface $collaborators,
         private readonly PageGrant $pages,
         private readonly DraftAccess $drafts,
@@ -89,14 +101,51 @@ final class CollaborateExtension extends AbstractExtension
         array $host = [],
         private readonly ?TranslatorInterface $translator = null,
         private readonly ?NotificationAccess $notifications = null,
+        string $bridge = 'none',
+        private readonly ?CsrfTokenManagerInterface $csrf = null,
     ) {
+        $this->bridge = Bridge::from($bridge);
         $this->layer = $layer + self::DEFAULT_LAYER;
-        $this->host = array_intersect_key($host, self::DEFAULT_HOST) + self::DEFAULT_HOST;
+        $this->defaultHost = ['regions' => $this->bridge->regions()] + self::DEFAULT_HOST;
+        $host = array_intersect_key($host, $this->defaultHost);
+        if ([] === ($host['regions'] ?? [])) {
+            unset($host['regions']);
+        }
+        $this->host = $host + $this->defaultHost;
+    }
+
+    /** The bundle's templates translate and draw tokens through these: they render under Drupal's Twig too. */
+    public function getFilters(): array
+    {
+        return [new TwigFilter('collaborate_trans', $this->translate(...))];
+    }
+
+    /**
+     * A sentence of the bundle in the user's language (domain `collaborate`), its parameters filled.
+     *
+     * @param array<string, mixed> $parameters
+     */
+    public function translate(string $message, array $parameters = [], string $domain = 'collaborate'): string
+    {
+        if (null === $this->translator) {
+            return strtr($message, array_map(static fn(mixed $value): string => \is_scalar($value)
+                ? (string) $value
+                : '', $parameters));
+        }
+
+        return $this->translator->trans($message, $parameters, $domain);
+    }
+
+    /** The CSRF token of an id, empty without a token manager. */
+    public function csrf(string $id): string
+    {
+        return null === $this->csrf ? '' : (string) $this->csrf->getToken($id);
     }
 
     public function getFunctions(): array
     {
         return [
+            new TwigFunction('collaborate_csrf', $this->csrf(...)),
             new TwigFunction('collaborate_grant', $this->grant(...)),
             new TwigFunction('collaborate_enabled', $this->enabled(...)),
             new TwigFunction('collaborate_layer', $this->layer(...), [
@@ -171,6 +220,7 @@ final class CollaborateExtension extends AbstractExtension
             'updates' => $this->layer['updates'] && !$bare,
             'config' =>
                 [
+                    'bridge' => $this->bridge->value,
                     'throttle' => $this->layer['throttle'],
                     'heartbeat' => $this->layer['heartbeat'] * 1000,
                     'expiry' => $this->layer['expiry'] * 1000,
@@ -190,7 +240,7 @@ final class CollaborateExtension extends AbstractExtension
     {
         $config = [];
         foreach (array_keys($this->host) as $name) {
-            if ($this->host[$name] === self::DEFAULT_HOST[$name]) {
+            if ($this->host[$name] === $this->defaultHost[$name]) {
                 continue;
             }
             $config[$name] = $this->hostOption($name, $this->host[$name]);

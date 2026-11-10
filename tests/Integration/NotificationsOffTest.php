@@ -4,8 +4,13 @@ declare(strict_types=1);
 
 namespace Janalis\Collaborate\Tests\Integration;
 
+use Janalis\Collaborate\Bridge\Bridge;
 use Janalis\Collaborate\Controller\NotificationController;
 use Janalis\Collaborate\Controller\PushController;
+use Janalis\Collaborate\Doctrine\PortableSchema;
+use Janalis\Collaborate\Draft\Dialect\JournalDialect;
+use Janalis\Collaborate\Draft\Dialect\MySqlDialect;
+use Janalis\Collaborate\Draft\FormDraft;
 use Janalis\Collaborate\Hub\HubSession;
 use Janalis\Collaborate\Hub\HubSessions;
 use Janalis\Collaborate\Hub\Notice;
@@ -13,6 +18,7 @@ use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
 use Janalis\Collaborate\Hub\Transport\PublishFailedException;
 use Janalis\Collaborate\Hub\Transport\Subscription;
 use Janalis\Collaborate\Notification\NotificationAccess;
+use Janalis\Collaborate\Security\SymfonyCurrentUser;
 use Janalis\Collaborate\Tests\Application\Plain\PlainKernel;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -28,7 +34,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(\Janalis\Collaborate\Draft\DraftJournal::class)]
 #[UsesClass(\Janalis\Collaborate\Draft\DraftSave::class)]
 #[UsesClass(\Janalis\Collaborate\Draft\EventValidator::class)]
-#[UsesClass(\Janalis\Collaborate\EasyAdmin\UpdatesSubscriber::class)]
+#[UsesClass(\Janalis\Collaborate\Updates\UpdatesSubscriber::class)]
 #[UsesClass(\Janalis\Collaborate\Hub\HubPublisher::class)]
 #[UsesClass(\Janalis\Collaborate\Hub\RenewSubscriber::class)]
 #[UsesClass(\Janalis\Collaborate\Hub\Topics::class)]
@@ -48,6 +54,12 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(MercureTransport::class)]
 #[UsesClass(Subscription::class)]
 #[UsesClass(PublishFailedException::class)]
+#[UsesClass(Bridge::class)]
+#[UsesClass(SymfonyCurrentUser::class)]
+#[UsesClass(FormDraft::class)]
+#[UsesClass(JournalDialect::class)]
+#[UsesClass(MySqlDialect::class)]
+#[UsesClass(PortableSchema::class)]
 final class NotificationsOffTest extends ApplicationTestCase
 {
     protected static function kernel(): string

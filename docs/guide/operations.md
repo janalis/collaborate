@@ -64,15 +64,22 @@ publications: pages replay on their own (every 30 seconds while connected,
 
 ## Database
 
-The journal runs on the `database_connection` service and needs MariaDB or
-MySQL: it uses named locks (`GET_LOCK`), `INSERT IGNORE`,
-`ON DUPLICATE KEY UPDATE` and `SELECT … FOR UPDATE`.
+The journal runs on the `database_connection` service: MariaDB, MySQL 8,
+PostgreSQL 13+ or SQLite 3.35+. Where their SQL differs, it speaks each one's:
+
+| | MariaDB, MySQL | PostgreSQL | SQLite |
+|---|---|---|---|
+| A draft's row, created once | `INSERT IGNORE` | `ON CONFLICT DO NOTHING` | `INSERT OR IGNORE` |
+| A field's row, written whole | `REPLACE` | `ON CONFLICT DO UPDATE` | `INSERT OR REPLACE` |
+| A draft's row, read to change it | `SELECT … FOR UPDATE` | `SELECT … FOR UPDATE` | a plain `SELECT`: a write locks the database |
+| A draft's named lock | `GET_LOCK` | a session advisory lock | an exclusive lock on a file of the system's temporary directory |
 
 - **Named locks** are named
   `collaborate:<16 hex characters of the database name's hash>:<md5 of the draft id>`.
-  They are global to the database server, so the database-name hash keeps
-  the same record's draft in two databases (staging and production, test
-  instances) on separate locks.
+  They are global to the database server (to the machine, on SQLite), so
+  the database-name hash keeps the same record's draft in two databases
+  (staging and production, test instances) on separate locks. PostgreSQL
+  keys its advisory lock by the name's 64-bit hash.
 - Every writer of a draft (join, append, discard, reconcile, Save) holds
   its lock. Save holds it from its revision check to the response, outside
   any transaction, so the application's flush commits on its own and its

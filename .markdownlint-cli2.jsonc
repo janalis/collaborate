@@ -20,6 +20,8 @@
   "ignores": [
     "**/node_modules/**",
     "vendor/**",
+    "tests/Application/Drupal/vendor/**",
+    "tests/Application/Drupal/web/**",
     "var/**",
     "coverage/**",
     "test-results/**",

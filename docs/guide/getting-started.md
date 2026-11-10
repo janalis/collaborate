@@ -75,6 +75,9 @@ return [
 import '@janalis/collaborate/easyadmin.js';
 ```
 
+`easyadmin.js` reads EasyAdmin's markup; a page of no admin imports
+`@janalis/collaborate/collaborate.js` instead (see [Bridges](./bridges)).
+
 ```php
 // your DashboardController
 public function configureAssets(): Assets
@@ -135,6 +138,7 @@ whether the shared draft is saved. A rich-text field needs one more step:
 ## Next steps
 
 - [Configuration](./configuration): every option.
-- [EasyAdmin](./easyadmin): what the adapter does.
+- [Bridges](./bridges): EasyAdmin, Drupal, or none.
+- [EasyAdmin](./easyadmin): what its bridge does.
 - [Shared drafts](./shared-drafts): what editors see, and the limits.
 - [Operations and security](./operations): before going to production.

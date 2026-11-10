@@ -1,0 +1,10 @@
+use collaborate:
+  title: 'Collaborate'
+  description: 'See who else is on an administration page, share the drafts of the entity forms one may edit, and hear of saves elsewhere.'
+receive collaborate notifications:
+  title: 'Receive notifications'
+  description: 'Use the notification bell, choose its topics and receive web push.'
+administer collaborate:
+  title: 'Administer Collaborate'
+  description: 'Configure presence, shared drafts, refreshed listings and notifications.'
+  restrict access: true

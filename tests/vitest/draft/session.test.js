@@ -1,3 +1,5 @@
+// EasyAdmin's markup: its bridge's profile.
+import '../../../assets/bridges/easyadmin.js';
 vi.mock('@microsoft/fetch-event-source', () => ({ fetchEventSource: vi.fn(() => Promise.resolve()) }));
 
 vi.mock('../../../assets/draft/bar.js', async (original) => ({
@@ -2351,6 +2353,16 @@ describe('starting on its own', () => {
     expect(shared.dataset.collaborateState).toBe('unavailable');
     expect(shared.querySelector('input').hasAttribute('inert')).toBe(false);
   });
+});
+
+test("without a bridge, the bar's Save stands for the form's first button, not EasyAdmin's", async () => {
+  const { session, form } = fixture();
+  await session.ready;
+  form.insertAdjacentHTML('beforebegin', '<div data-collaborate-layer data-config=\'{"bridge":"none"}\'></div>');
+  form.insertAdjacentHTML('afterbegin', '<button type="submit" value="saveAndContinue">Save and continue</button>');
+  expect(session.submitter().textContent).toBe('Save and continue');
+  form.insertAdjacentHTML('afterbegin', '<button type="submit" value="preview">Preview</button>');
+  expect(session.submitter().value).toBe('preview');
 });
 
 test("the bar's Save stands for the button that keeps the editor on the page, or the one the host marks", async () => {

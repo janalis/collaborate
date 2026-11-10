@@ -27,6 +27,7 @@ BUMP ?= patch
 
 .PHONY: help install fmt fmt-check lint analyze validate test test-unit test-functional test-integration test-js lint-js coverage infection app-setup e2e screenshots verify clean
 .PHONY: docs docs-dev lint-md fmt-md lint-editorconfig lint-actions test-tools release-notes
+.PHONY: drupal-assets drupal-install drupal-test drupal-e2e
 
 help: ## List the targets
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN { FS = ":.*## " } { printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2 }'
@@ -97,6 +98,34 @@ screenshots: app-setup ## Retake the screenshots of the docs and the README (doc
 	npx playwright test -c playwright.screenshots.config.js --update-snapshots=changed $(ARGS)
 
 verify: validate fmt-check lint analyze test lint-js test-js ## Everything CI checks, but the browser and mutation runs
+
+DRUPAL := tests/Application/Drupal
+DRUPAL_DATABASE_URL ?= mysql://root@127.0.0.1:3306/collaborate_drupal
+DRUPAL_PORT ?= 8790
+# The database the module's kernel and functional tests install their sites on: the test site's, or a PostgreSQL or SQLite one.
+DRUPAL_TEST_DATABASE_URL ?= $(DRUPAL_DATABASE_URL)
+export DRUPAL_PORT
+
+drupal-assets: ## Build the Drupal module's stylesheet and its copy of fetch-event-source (drupal/css, drupal/js/vendor)
+	node tools/drupal-assets.mjs
+
+drupal-install: ## Build the Drupal test site (tests/Application/Drupal) on DRUPAL_DATABASE_URL: Drupal, the module, content
+	cd $(DRUPAL) && $(COMPOSER) install --no-interaction
+	cd $(DRUPAL) && vendor/bin/drush site:install standard --db-url="$(DRUPAL_DATABASE_URL)" --account-name=admin --account-pass=admin --site-name=Collaborate -y
+	chmod u+w $(DRUPAL)/web/sites/default $(DRUPAL)/web/sites/default/settings.php
+	echo "require __DIR__ . '/../../../bin/settings.php';" >> $(DRUPAL)/web/sites/default/settings.php
+	cd $(DRUPAL) && vendor/bin/drush recipe core/recipes/article_tags
+	cd $(DRUPAL) && vendor/bin/drush recipe core/recipes/content_editor_role
+	cd $(DRUPAL) && vendor/bin/drush pm:install collaborate -y
+	cd $(DRUPAL) && vendor/bin/drush php:script bin/fixtures.php
+	cd $(DRUPAL) && vendor/bin/drush cache:rebuild
+
+drupal-test: ## Run the Drupal module's unit, kernel and functional tests (the site serving on DRUPAL_PORT; DRUPAL_TEST_DATABASE_URL=pgsql://…|sqlite://localhost//…)
+	cat $(DRUPAL)/web/core/.deprecation-ignore.txt $(DRUPAL)/deprecation-ignore.txt > $(DRUPAL)/web/sites/deprecation-ignore.txt
+	cd $(DRUPAL) && SYMFONY_DEPRECATIONS_HELPER="ignoreFile=$(CURDIR)/$(DRUPAL)/web/sites/deprecation-ignore.txt" SIMPLETEST_DB="$(DRUPAL_TEST_DATABASE_URL)" SIMPLETEST_BASE_URL="http://127.0.0.1:$(DRUPAL_PORT)" vendor/bin/phpunit -c web/core/phpunit.xml.dist web/modules/contrib/collaborate_drupal/tests $(PHPUNIT_ARGS)
+
+drupal-e2e: ## Run the Playwright scenarios against the Drupal test site under FrankenPHP
+	npx playwright test --project=drupal $(ARGS)
 
 docs/node_modules: docs/package-lock.json
 	$(NPM) ci --prefix docs

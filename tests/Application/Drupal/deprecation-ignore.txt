@@ -1,0 +1,5 @@
+# Deprecations of the contributed modules the test site installs for its scenarios, ignored on top of core's
+# (`make drupal-test` joins both files).
+
+# Paragraphs, until its hooks take Drupal 11.2's attribute.
+%paragraphs_module_implements_alter without a #\[LegacyModuleImplementsAlter\] attribute is deprecated%

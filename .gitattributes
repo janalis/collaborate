@@ -24,3 +24,6 @@
 
 # Screenshots are compared and replaced whole, never merged.
 *.png binary
+
+# The Drupal module is its own package (janalis/collaborate_drupal).
+/drupal/ export-ignore

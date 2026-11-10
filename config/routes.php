@@ -23,6 +23,6 @@ return static function (RoutingConfigurator $routes): void {
     $routes
         ->add('collaborate_draft', '/collaborate/{action}')
         ->controller('Janalis\Collaborate\Controller\DraftController::handle')
-        ->requirements(['action' => 'join|replay|append|discard|reconcile'])
+        ->requirements(['action' => 'join|replay|append|discard|reconcile|report'])
         ->methods(['POST']);
 };

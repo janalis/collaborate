@@ -6,7 +6,6 @@ namespace Janalis\Collaborate\Form;
 
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
-use EasyCorp\Bundle\EasyAdminBundle\Form\Type\CrudAutocompleteType;
 use Janalis\Collaborate\Access\DraftAccessCheckerInterface;
 use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Doctrine\RecordIdentifier;
@@ -15,10 +14,12 @@ use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftSave;
 use Janalis\Collaborate\Draft\FieldKeyResolver;
 use Janalis\Collaborate\Draft\FieldKeyResolverInterface;
+use Janalis\Collaborate\Draft\FormDraft;
+use Janalis\Collaborate\Draft\RecordIdentifierInterface;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
+use Janalis\Collaborate\Security\CurrentUserInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
-use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\AssetMapper\ImportMap\ImportMapConfigReader;
 use Symfony\Component\Form\AbstractTypeExtension;
 use Symfony\Component\Form\DataTransformerInterface;
@@ -30,7 +31,6 @@ use Symfony\Component\Form\FormInterface;
 use Symfony\Component\Form\FormView;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
-use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\PropertyAccess\PropertyAccess;
 use Symfony\Component\PropertyAccess\PropertyPathInterface;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
@@ -55,54 +55,7 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 final class CollaborateFormExtension extends AbstractTypeExtension
 {
     /** The bar's, dialogs' and notices' strings, by the key the client reads them under (domain `collaborate`). */
-    public const array MESSAGES = [
-        'connecting' => 'Connecting to the shared draft…',
-        'saved' => 'All changes saved.',
-        'draft' => 'Unsaved changes, kept automatically. Click Save to record them.',
-        'pending' => 'Synchronizing changes…',
-        'offline' => 'Connection interrupted. Keep this page open to synchronize your changes.',
-        'denied' => 'Collaboration access expired. Your local content is retained.',
-        'unavailable' => 'The shared draft is unavailable. Changes you save here are not shared live.',
-        'incompatible' => 'This editor is incompatible with the shared draft. Reload the page.',
-        'discarded' => 'The shared draft was reset. Your local content is retained; copy unsaved changes before reloading.',
-        'discardedBy' => '%name% reset the shared draft. Your local content is retained; copy unsaved changes before reloading.',
-        'savedBy' => 'All changes saved by %name%.',
-        'changed' => 'The shared draft changed meanwhile. Review it and try again.',
-        'failed' => 'The server refused this action. Copy unsaved content and reload the page.',
-        'save' => 'Save',
-        'discard' => 'Discard changes',
-        'confirmDiscardTitle' => 'Discard unsaved changes?',
-        'confirmDiscardBody' => 'The unsaved changes are erased: yours and those of everyone editing this record. To keep them, cancel and click Save.',
-        'confirmDiscardAccept' => 'Erase changes',
-        'confirmSavedTitle' => 'Use the saved record?',
-        'confirmSavedBody' => "The shared draft's conflicting changes are replaced by the saved values for everyone.",
-        'confirmSavedAccept' => 'Use saved record',
-        'cancel' => 'Cancel',
-        'close' => 'Close',
-        'copyInvitation' => 'Copy invitation link',
-        'copied' => 'Copied',
-        'invitationCopied' => 'Invitation link copied.',
-        'copyInvitationFallback' => 'Copy this link to invite another editor:',
-        'noticeDiscardedOwn' => 'You discarded the shared draft.',
-        'noticeDiscarded' => 'The shared draft was discarded; this page reloaded.',
-        'noticeDiscardedBy' => '%name% discarded the shared draft; this page reloaded.',
-        'noticeUsedSaved' => 'The shared draft now uses the saved record.',
-        'created' => 'This draft has created its record. Local changes are retained; copy unsent content before opening the saved record.',
-        'createdBy' => '%name% created this record. Local changes are retained; copy unsent content before opening the saved record.',
-        'openRecord' => 'Open saved record',
-        'conflict' => 'The saved record differs from this shared draft. Review both versions before saving.',
-        'keepDraft' => 'Keep shared draft',
-        'useSaved' => 'Use saved record',
-        'savedVersion' => 'Saved record',
-        'draftVersion' => 'Shared draft',
-        'conflictsTitle' => 'Differences with the saved record',
-        'entryRemoved' => 'Entry removed',
-        'entryPresent' => 'Entry present',
-        'orderChanged' => 'Order changed',
-        'yes' => 'Yes',
-        'no' => 'No',
-        'full' => 'The shared draft limit was reached. Copy unsent content before discarding this draft.',
-    ];
+    public const array MESSAGES = FormDraft::MESSAGES;
 
     /** Block prefixes of the controls whose value never enters a draft. */
     private const array UNEDITABLE = ['password', 'hidden', 'file', 'button', 'submit', 'reset'];
@@ -122,52 +75,48 @@ final class CollaborateFormExtension extends AbstractTypeExtension
 
     private string $positionField;
 
-    /** The largest update: a page sends its full grant along with one. */
-    private int $maxUpdateBytes;
-
     /** @var list<string> */
     private array $sensitive;
 
-    /** @var array{replayConnected: int, replayDisconnected: int, joinRetry: int, labelLength: int} */
-    private array $client;
+    /** The draft of the root form, whatever builds it: its scope, its configuration, its locked save. */
+    private FormDraft $drafts;
 
-    /** @param Options $options the `collaborate.drafts` configuration */
+    /**
+     * @param Options $options the `collaborate.drafts` configuration
+     * @param list<class-string> $ownerMappers the data mappers of compound fields that map their parent's property
+     *   to an inner control themselves (EasyAdmin's autocomplete): their children read the parent's value
+     */
     public function __construct(
         private readonly DraftAccess $access,
         private readonly DraftJournal $journal,
-        private readonly DraftSave $save,
+        DraftSave $save,
         private readonly ?FormContextInterface $context,
         private readonly RequestStack $requests,
-        private readonly Security $security,
+        private readonly CurrentUserInterface $security,
         private readonly CollaboratorProviderInterface $collaborators,
         private readonly DraftAccessCheckerInterface $checker,
-        private readonly UrlGeneratorInterface $urls,
-        private readonly CsrfTokenManagerInterface $csrf,
-        private readonly TranslatorInterface $translator,
-        private readonly RecordIdentifier $identifier = new RecordIdentifier(),
+        UrlGeneratorInterface $urls,
+        CsrfTokenManagerInterface $csrf,
+        TranslatorInterface $translator,
+        private readonly RecordIdentifierInterface $identifier = new RecordIdentifier(),
         private readonly FieldKeyResolverInterface $keys = new FieldKeyResolver(),
         private readonly ?ImportMapConfigReader $importMap = null,
         private readonly string $role = 'ROLE_ADMIN',
         array $options = [],
-        private readonly LoggerInterface $logger = new NullLogger(),
+        LoggerInterface $logger = new NullLogger(),
+        private readonly array $ownerMappers = [],
     ) {
         $this->lists = new \WeakMap();
         $this->richText = $options['rich_text']['block_prefixes'] ?? [];
         $this->schemaOption = $options['rich_text']['schema_option'] ?? null;
         $this->editorVersion = $options['rich_text']['ckeditor_version'] ?? null;
         $this->positionField = $options['position_field'] ?? 'position';
-        $this->maxUpdateBytes = $options['max_update_bytes'] ?? 262_144;
         $this->sensitive = array_map(static fn(string $name): string => strtolower(str_replace(
             ['_', '-'],
             '',
             $name,
         )), $options['sensitive_fields'] ?? CollaborateBundle::SENSITIVE_FIELDS);
-        $this->client = [
-            'replayConnected' => ($options['replay']['connected'] ?? 30) * 1000,
-            'replayDisconnected' => ($options['replay']['disconnected'] ?? 5) * 1000,
-            'joinRetry' => ($options['replay']['join_retry'] ?? 12) * 1000,
-            'labelLength' => $options['label_length'] ?? 255,
-        ];
+        $this->drafts = new FormDraft($access, $save, $collaborators, $urls, $csrf, $translator, $logger, $options);
     }
 
     public static function getExtendedTypes(): iterable
@@ -273,23 +222,10 @@ final class CollaborateFormExtension extends AbstractTypeExtension
                 $request->attributes->set('_collaborate_form_scope', ['form' => $form, 'scope' => $scope]);
                 // Non-JavaScript clients keep the ordinary Symfony submission path.
                 // Their writes are detected as external changes by active drafts.
-                if (!$request->request->has('_collaborate_grant')) {
-                    return;
-                }
-                $grant = $request->request->get('_collaborate_grant', '');
-                $authorized = $this->access->verify(\is_string($grant) ? $grant : '', $user, time());
-                if ($scope['id'] !== $authorized['id']) {
-                    throw new AccessDeniedHttpException('Collaborate grant belongs to another form.');
-                }
-                $values = array_map(static fn(array $field): mixed => $field['initial'], $scope['fields']);
-                $this->save->begin($request, $authorized, $values, $this->collaborators->label($user));
-                if ($request->attributes->has('_collaborate_save')) {
-                    // Read once the admin has persisted the record (DraftSave::completed()).
-                    $request->attributes->set('_collaborate_snapshot', fn(): array => array_map(
-                        static fn(array $field): mixed => $field['initial'],
-                        $this->fields($form, $scope['new'], fresh: true),
-                    ));
-                }
+                $this->drafts->begin($request, $user, $scope, fn(): array => array_map(
+                    static fn(array $field): mixed => $field['initial'],
+                    $this->fields($form, $scope['new'], fresh: true),
+                ));
             },
             2048,
         );
@@ -321,59 +257,22 @@ final class CollaborateFormExtension extends AbstractTypeExtension
         }
         ['user' => $user, 'request' => $request, 'context' => $context] = $sharing;
         $scope = $this->scope($form, $sharing);
-        $grant = $this->access->issue(
-            $scope,
-            (int) $this->collaborators->id($user),
-            time(),
-            $this->collaborators->authorization($user),
-        );
-        // A page sends its full grant at least once, with an update when the server has forgotten it.
-        if (\strlen($grant) > ($this->access->maxRequestBytes - $this->maxUpdateBytes - 1024)) {
-            $this->logger->warning('The {entity} form is too large to share as a draft; it is edited without one.', [
-                'entity' => $scope['entity'],
-                'draft' => $scope['id'],
-                'grant_bytes' => \strlen($grant),
-            ]);
-
+        $configuration = $this->drafts->configuration($scope, $user, $request, $context->editUrl());
+        if (null === $configuration) {
             return;
         }
         /** @var array<string, mixed> $attributes */
         $attributes = $view->vars['attr'];
-        $attributes['data-collaborate'] = json_encode(
-            [
-                'grant' => $grant,
-                'url' => substr($this->urls->generate('collaborate_draft', ['action' => 'join']), 0, -4) . '__action__',
-                'csrf' => (string) $this->csrf->getToken('collaborate-draft'),
-                'messages' => array_map(fn(string $message): string => $this->translator->trans(
-                    $message,
-                    [],
-                    'collaborate',
-                ), self::MESSAGES),
-                'isNew' => $scope['new'],
-                'editUrl' => $context->editUrl(),
-                'invitation' => $scope['new']
-                    ? $request->getPathInfo() . '?' . http_build_query(array_replace($request->query->all(), [
-                        'draft' => $scope['draft'],
-                    ]))
-                    : null,
-                'config' => $this->client,
-            ],
-            \JSON_THROW_ON_ERROR,
-        );
+        $attributes['data-collaborate'] = json_encode($configuration, \JSON_THROW_ON_ERROR);
         $view->vars['attr'] = $attributes;
         self::markRows($view);
-        if ($scope['new']) {
+        // Only a new record's scope has a draft of its own.
+        if (null !== $scope['draft']) {
             /** @var string $action */
             $action = $view->vars['action'];
-            $action = '' !== $action ? $action : $request->getRequestUri();
-            $parts = explode('?', $action, 2);
-            $query = [];
-            parse_str($parts[1] ?? '', $query);
-            // A malformed key in the URL is drawn again on every request: post the one this grant names.
-            if (($query['draft'] ?? null) !== $scope['draft']) {
-                $query['draft'] = $scope['draft'];
-                $view->vars['action'] = $parts[0] . '?' . http_build_query($query);
-            }
+            $view->vars['action'] =
+                FormDraft::action('' !== $action ? $action : $request->getRequestUri(), $scope['draft'])
+                ?? $view->vars['action'];
         }
     }
 
@@ -493,43 +392,13 @@ final class CollaborateFormExtension extends AbstractTypeExtension
     private function scope(FormInterface $form, array $sharing): array
     {
         ['record' => $record, 'request' => $request, 'permission' => $permission] = $sharing;
-        $new = $record['new'];
-        $entityClass = $record['class'];
-        $draft = null;
-        if ($new) {
-            $draft = $record['draft'];
-            if (null === $draft || 1 !== preg_match('/^[a-f0-9]{32}$/D', $draft)) {
-                $drawn = self::stringOrNull($request->attributes->get('_collaborate_new_draft'));
-                if (null === $drawn) {
-                    $drawn = bin2hex(random_bytes(16));
-                    $request->attributes->set('_collaborate_new_draft', $drawn);
-                }
-                $draft = $drawn;
-            }
-        }
-        $identity = null === $draft ? $record['id'] ?? '' : 'new:' . $draft;
-
         /** @var array{form: FormInterface, scope: Scope}|null $submitted */
         $submitted = $request->attributes->get('_collaborate_form_scope');
         if (null !== $submitted && $submitted['form'] === $form) {
             return $submitted['scope'];
         }
 
-        return [
-            'id' => $this->access->draftId($entityClass, $identity),
-            'entity' => $entityClass,
-            'permission' => $permission,
-            'new' => $new,
-            'draft' => $draft,
-            'requestedAt' => self::requestedAt($request->server->get('REQUEST_TIME_FLOAT')),
-            'fields' => $this->fields($form, $new),
-        ];
-    }
-
-    /** When the page's request started: a grant's conflicts compare the draft with the record it read then. */
-    private static function requestedAt(mixed $time): float
-    {
-        return is_numeric($time) ? (float) $time : microtime(true);
+        return $this->drafts->scope($record, $permission, $request, $this->fields($form, $record['new']));
     }
 
     /** @return array<string, SchemaField> */
@@ -696,11 +565,13 @@ final class CollaborateFormExtension extends AbstractTypeExtension
         }
         $config = $child->getConfig();
 
-        // EasyAdmin maps an association itself to its inner autocomplete control; [autocomplete] is not a
-        // property of the selected entity.
+        // A bridge's mapper may map an association itself to its inner control (EasyAdmin's autocomplete):
+        // [autocomplete] is not a property of the selected entity.
+        $mapper = $form->getConfig()->getDataMapper();
+
         return self::transform(
             [...$config->getModelTransformers(), ...$config->getViewTransformers()],
-            $form->getConfig()->getDataMapper() instanceof CrudAutocompleteType
+            null !== $mapper && \in_array($mapper::class, $this->ownerMappers, true)
                 ? $owner
                 : PropertyAccess::createPropertyAccessor()->getValue($owner, $propertyPath),
         );
@@ -815,11 +686,6 @@ final class CollaborateFormExtension extends AbstractTypeExtension
     private static function arrayOrNull(mixed $value): ?array
     {
         return \is_array($value) ? $value : null;
-    }
-
-    private static function stringOrNull(mixed $value): ?string
-    {
-        return \is_string($value) ? $value : null;
     }
 
     private static function formOrNull(mixed $value): ?FormInterface

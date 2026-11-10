@@ -6,7 +6,7 @@ namespace Janalis\Collaborate\Form;
 
 /**
  * Which record the current page's root form edits. An admin adapter implements it (the bundle's EasyAdmin
- * one is {@see \Janalis\Collaborate\EasyAdmin\EasyAdminFormContext}); without one, forms share no draft.
+ * one is {@see \Janalis\Collaborate\Bridge\EasyAdmin\EasyAdminFormContext}); without one, forms share no draft.
  *
  * @phpstan-type FormRecord array{entity: object|null, class: class-string, new: bool, id: string|null, draft: string|null}
  */

@@ -1,0 +1,5 @@
+collaborate.settings:
+  title: 'Collaborate'
+  description: 'Presence and cursors, shared drafts of entity forms, refreshed listings and notifications.'
+  route_name: collaborate.settings
+  parent: system.admin_config_content

@@ -1,0 +1,19 @@
+# What the administration form edits; anything else of the bundle's `collaborate` tree goes under `advanced`, and the
+# hub's transport, URLs and secrets in settings.php (`$settings['collaborate']`). See the module's documentation.
+colors: [blue, indigo, purple, pink, red, orange, yellow, green, teal, cyan]
+cursors:
+  enabled: true
+  presence: avatars
+  max_avatars: 5
+  idle: 0
+  markers: false
+  regions: {}
+drafts:
+  enabled: true
+  rich_text: true
+updates:
+  enabled: true
+notifications:
+  enabled: false
+  web_push: false
+advanced: {}

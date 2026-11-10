@@ -1,4 +1,4 @@
-import { ENTRY, rowOf } from '../markup.js';
+import { entrySelector, rowOf } from '../markup.js';
 import { anchorPath, isTextControl, resolvePath, sharesCaret } from './geometry.js';
 
 export const MAX_CARET_OFFSET = 10485760;
@@ -231,7 +231,7 @@ export function focusedField(element = document.activeElement) {
   control ||= element.closest('.ck-editor__editable')?.ckeditorInstance?.sourceElement;
   // A collection entry's own row holds its buttons and help, not a field: focus there names none.
   const row = rowOf(element);
-  if (row && !row.matches(ENTRY)) {
+  if (row && !row.matches(entrySelector())) {
     control ||= row.querySelector('select[name], textarea[name], input[name]:not([type="hidden"])');
   }
   if (!control?.name || UNSHARED.includes(control.type) || control.name.length > 512) return null;

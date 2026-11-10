@@ -46,7 +46,7 @@ collaborate:
 ```js
 import { ClassicEditor, Essentials, Paragraph, Bold, Italic } from 'ckeditor5';
 import Collaborate from '@janalis/collaborate/ckeditor5/collaborate.js';
-import { addRowInitializer, sessionFor } from '@janalis/collaborate/easyadmin.js';
+import { addRowInitializer, sessionFor } from '@janalis/collaborate/easyadmin.js'; // or collaborate.js
 
 async function createEditor(textarea) {
   const session = sessionFor(textarea);

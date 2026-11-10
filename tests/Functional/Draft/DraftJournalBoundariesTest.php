@@ -7,6 +7,8 @@ namespace Janalis\Collaborate\Tests\Functional\Draft;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Exception\LockWaitTimeoutException;
+use Janalis\Collaborate\Draft\Dialect\JournalDialect;
+use Janalis\Collaborate\Draft\Dialect\MySqlDialect;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftText;
 use Janalis\Collaborate\Draft\DraftValues;
@@ -32,6 +34,8 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 #[CoversClass(EventValidator::class)]
 #[CoversClass(FieldDefinitions::class)]
 #[UsesClass(DraftText::class)]
+#[CoversClass(JournalDialect::class)]
+#[CoversClass(MySqlDialect::class)]
 final class DraftJournalBoundariesTest extends TestCase
 {
     use JsonAssertions;

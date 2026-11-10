@@ -1,0 +1,46 @@
+{
+    "name": "janalis/collaborate_drupal",
+    "description": "Live collaboration for Drupal's administration: shared drafts of entity forms, presence and cursors, refreshed listings and notifications, on janalis/collaborate.",
+    "type": "drupal-module",
+    "license": "MIT",
+    "keywords": [
+        "drupal",
+        "collaboration",
+        "mercure",
+        "websocket",
+        "presence",
+        "cursors",
+        "ckeditor"
+    ],
+    "homepage": "https://github.com/janalis/collaborate",
+    "support": {
+        "issues": "https://github.com/janalis/collaborate/issues",
+        "source": "https://github.com/janalis/collaborate"
+    },
+    "require": {
+        "php": "^8.4",
+        "drupal/core": "^11.3 || ^12.0",
+        "janalis/collaborate": "^0.5@dev",
+        "symfony/messenger": "^7.4 || ^8.0",
+        "symfony/security-core": "^7.4 || ^8.0",
+        "symfony/security-csrf": "^7.4 || ^8.0"
+    },
+    "suggest": {
+        "minishlink/web-push": "^11.0 for web push, with nyholm/psr7",
+        "ratchet/rfc6455": "^0.4.1, with react/http ^1.12, react/socket ^1.17 and react/stream ^1.4: the WebSocket hub server (drush collaborate:hub:serve)",
+        "symfony/http-client": "Required by the websocket hub transport, and by Mercure",
+        "symfony/mercure": "Required by the mercure hub transport"
+    },
+    "autoload": {
+        "psr-4": {
+            "Drupal\\collaborate\\": "src/"
+        }
+    },
+    "extra": {
+        "drush": {
+            "services": {
+                "drush.services.yml": "^13"
+            }
+        }
+    }
+}

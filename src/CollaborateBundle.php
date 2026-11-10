@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Janalis\Collaborate;
 
-use EasyCorp\Bundle\EasyAdminBundle\EasyAdminBundle;
 use Gedmo\Translatable\Translatable;
 use Janalis\Collaborate\Access\DraftAccessCheckerInterface;
+use Janalis\Collaborate\Bridge\Bridge;
 use Janalis\Collaborate\DependencyInjection\Configuration;
 use Janalis\Collaborate\Hub\Transport\WebSocket\Keys;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
@@ -48,7 +48,11 @@ final class CollaborateBundle extends AbstractBundle
     /** Named, not imported: symfony/mercure-bundle is optional. */
     private const string MERCURE_BUNDLE = 'Symfony\\Bundle\\MercureBundle\\MercureBundle';
 
-    /** Region name => root selector, EasyAdmin's layout. */
+    /**
+     * Region name => root selector, EasyAdmin's layout.
+     *
+     * @deprecated since 0.5, use {@see Bridge::regions()}: the default regions are the bridge's
+     */
     public const array REGIONS = [
         'modal' => '.modal.show',
         'header' => '.content-top',
@@ -90,6 +94,16 @@ final class CollaborateBundle extends AbstractBundle
     /** @param array<array-key, mixed> $config */
     public function loadExtension(array $config, ContainerConfigurator $configurator, ContainerBuilder $container): void
     {
+        // Registered, not only installed: EasyAdmin or MercureBundle may be a dependency of another package.
+        $bundles = $container->hasParameter('kernel.bundles') ? $container->getParameter('kernel.bundles') : null;
+        $bundles = \is_array($bundles) ? $bundles : null;
+        $bridge = Bridge::resolve(self::string($config, 'bridge'), $bundles);
+        $config['bridge'] = $bridge->value;
+        $cursors = self::branch($config, 'cursors');
+        if ([] === ($cursors['regions'] ?? [])) {
+            $cursors['regions'] = $bridge->regions();
+        }
+        $config['cursors'] = $cursors;
         $drafts = self::branch($config, 'drafts');
         $updates = self::branch($config, 'updates');
         // The raw value: an env-driven `drafts.enabled` is a placeholder here, resolved when the container runs.
@@ -122,7 +136,6 @@ final class CollaborateBundle extends AbstractBundle
         $container->setAlias(CollaboratorProviderInterface::class, self::string($config, 'identity'));
         $container->setAlias(DraftAccessCheckerInterface::class, self::string($config, 'access'));
         $container->setAlias('janalis_collaborate.grant_cache', self::string($drafts, 'grant_cache'));
-        $cursors = self::branch($config, 'cursors');
         if (\is_string($cursors['places'] ?? null) && '' !== $cursors['places']) {
             $container->setAlias('janalis_collaborate.places', $cursors['places']);
         }
@@ -134,13 +147,11 @@ final class CollaborateBundle extends AbstractBundle
             $container->setAlias('janalis_collaborate.limiter.' . $name, $branch['rate_limiter']);
         }
         $configurator->import(__DIR__ . '/../config/services/hub.php');
-        // Registered, not only installed: EasyAdmin or MercureBundle may be a dependency of another package.
-        $bundles = $container->hasParameter('kernel.bundles') ? $container->getParameter('kernel.bundles') : null;
         if ('websocket' === $hub['transport']) {
             $configurator->import(__DIR__ . '/../config/services/hub_websocket.php');
             $container->getDefinition(Keys::class)->setArguments($secrets);
         } else {
-            if (\is_array($bundles) && !\in_array(self::MERCURE_BUNDLE, $bundles, true)) {
+            if (null !== $bundles && !\in_array(self::MERCURE_BUNDLE, $bundles, true)) {
                 throw new \LogicException(
                     'The mercure transport of collaborate.hub needs symfony/mercure-bundle: require and register it, or set collaborate.hub.transport to websocket.',
                 );
@@ -155,8 +166,8 @@ final class CollaborateBundle extends AbstractBundle
         if (true === $notifications['enabled']) {
             $this->loadNotifications($notifications, $configurator, $container);
         }
-        if (\is_array($bundles) && \in_array(EasyAdminBundle::class, $bundles, true)) {
-            $configurator->import(__DIR__ . '/../config/services/easyadmin.php');
+        if (Bridge::EasyAdmin === $bridge) {
+            $configurator->import(__DIR__ . '/../config/services/bridge_easyadmin.php');
         }
         if (interface_exists(Translatable::class)) {
             $configurator->import(__DIR__ . '/../config/services/gedmo.php');

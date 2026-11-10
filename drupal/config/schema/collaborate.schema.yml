@@ -1,0 +1,65 @@
+collaborate.settings:
+  type: config_object
+  label: 'Collaborate settings'
+  mapping:
+    colors:
+      type: sequence
+      label: 'Colours a user''s colour is picked from'
+      sequence:
+        type: string
+        label: 'Colour'
+    cursors:
+      type: mapping
+      label: 'Presence and cursors'
+      mapping:
+        enabled:
+          type: boolean
+          label: 'Show the pointers, carets and fields of the others'
+        presence:
+          type: string
+          label: 'How the others are shown: avatars or menu'
+        max_avatars:
+          type: integer
+          label: 'Avatars shown before a counter'
+        idle:
+          type: integer
+          label: 'Seconds without input after which a user shows as idle; 0 for never'
+        markers:
+          type: boolean
+          label: 'Mark the records the others are on'
+        regions:
+          type: sequence
+          label: 'Regions of a page, name => selector; empty for the admin theme''s'
+          sequence:
+            type: string
+            label: 'Selector'
+    drafts:
+      type: mapping
+      label: 'Shared drafts'
+      mapping:
+        enabled:
+          type: boolean
+          label: 'Share the drafts of entity forms'
+        rich_text:
+          type: boolean
+          label: 'Share CKEditor 5 fields as rich text'
+    updates:
+      type: mapping
+      label: 'Refreshed listings'
+      mapping:
+        enabled:
+          type: boolean
+          label: 'Refresh listings and records shown when a save elsewhere changes them'
+    notifications:
+      type: mapping
+      label: 'Notifications'
+      mapping:
+        enabled:
+          type: boolean
+          label: 'Show the notification bell'
+        web_push:
+          type: boolean
+          label: 'Send web push to browsers with no page open'
+    advanced:
+      type: ignore
+      label: 'Any other option of the collaborate configuration tree'

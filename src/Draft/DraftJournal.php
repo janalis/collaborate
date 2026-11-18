@@ -590,7 +590,6 @@ class DraftJournal implements ResetInterface
      */
     public function listKeys(string $id): array
     {
-        $this->afterSave($id);
         $keys = [];
         foreach ($this->decodeFields($this->db()->fetchAllAssociative("SELECT name, state FROM collaborate_draft_field WHERE draft_id = ? AND type = 'collection' ORDER BY name", [
             $id,
@@ -772,20 +771,23 @@ class DraftJournal implements ResetInterface
     }
 
     /**
-     * Waits for a save of the draft under way, at most as long as a save may hold its lock: the keys a page
-     * opened meanwhile gives its entries are those the save checkpoints. A page read before them would key a
-     * new entry by its record, beside the draft's own key for it, and show it twice. Past the wait, the page
-     * reads the draft as it is; a save of this process (its form shown again) waits for nothing.
+     * Waits for a save of the draft under way, at most as long as a save may hold its lock: the aliases a page
+     * opened meanwhile reads are those the save checkpoints. A page read before them would key an entry the save
+     * created by its record, beside the draft's own key for it, and show it twice. An alias names a record, so
+     * a page that loaded its record before the save still reads them right. Past the wait, the page reads the
+     * draft as it is; a save of this process (its form shown again) waits for nothing.
      */
     private function afterSave(string $id): void
     {
         if (isset($this->held[$id])) {
             return;
         }
-        $name = $this->lockName($id);
-        if ($this->dialect()->lock($this->db(), $name, $this->lockSeconds)) {
-            $this->dialect()->unlock($this->db(), $name);
+        try {
+            $this->lock($id);
+        } catch (ServiceUnavailableHttpException) {
+            return;
         }
+        $this->unlock($id);
     }
 
     /** FrankenPHP workers keep their connection, and with it any lock a request left behind. */

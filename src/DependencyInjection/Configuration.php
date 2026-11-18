@@ -68,7 +68,19 @@ final class Configuration
             ->defaultValue(CollaborateBundle::COLORS)
             ->requiresAtLeastOneElement()
             ->end()
-            ->arrayNode('hub')
+            ->append(self::hub())
+            ->append(self::cursors())
+            ->append(self::drafts())
+            ->append(self::notifications())
+            ->append(self::updates())
+            ->end();
+    }
+
+    /** The `hub` branch: the transport, Mercure's hub or the WebSocket server, and the page subscription. */
+    private static function hub(): ArrayNodeDefinition
+    {
+        $node = new ArrayNodeDefinition('hub');
+        $node
             ->addDefaultsIfNotSet()
             ->beforeNormalization()
             ->ifTrue(static fn(mixed $hub): bool => \is_array($hub) && \array_key_exists('name', $hub))
@@ -271,9 +283,16 @@ final class Configuration
             ->defaultValue(8)
             ->min(1)
             ->end()
-            ->end()
-            ->end()
-            ->arrayNode('cursors')
+            ->end();
+
+        return $node;
+    }
+
+    /** The `cursors` branch: pointers, carets, presence and the markup they find records in. */
+    private static function cursors(): ArrayNodeDefinition
+    {
+        $node = new ArrayNodeDefinition('cursors');
+        $node
             ->canBeDisabled()
             ->children()
             ->scalarNode('rate_limiter')
@@ -456,9 +475,16 @@ final class Configuration
             )
             ->defaultFalse()
             ->end()
-            ->end()
-            ->end()
-            ->arrayNode('drafts')
+            ->end();
+
+        return $node;
+    }
+
+    /** The `drafts` branch: the shared drafts, their limits, locks, purge, replay and rich text. */
+    private static function drafts(): ArrayNodeDefinition
+    {
+        $node = new ArrayNodeDefinition('drafts');
+        $node
             ->canBeEnabled()
             ->children()
             ->scalarNode('rate_limiter')
@@ -600,10 +626,16 @@ final class Configuration
             ->end()
             ->defaultValue(CollaborateBundle::SENSITIVE_FIELDS)
             ->end()
-            ->end()
-            ->end()
-            ->append(self::notifications())
-            ->arrayNode('updates')
+            ->end();
+
+        return $node;
+    }
+
+    /** The `updates` branch: saved-list and saved-detail refresh. */
+    private static function updates(): ArrayNodeDefinition
+    {
+        $node = new ArrayNodeDefinition('updates');
+        $node
             ->info('Saved-list and saved-detail refresh; follows drafts.enabled unless set.')
             ->addDefaultsIfNotSet()
             ->children()
@@ -635,9 +667,9 @@ final class Configuration
             ->defaultValue(100)
             ->min(1)
             ->end()
-            ->end()
-            ->end()
             ->end();
+
+        return $node;
     }
 
     /** The `notifications` branch: the bell, its topics and types, Messenger and web push. */

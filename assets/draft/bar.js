@@ -1,3 +1,4 @@
+// @ts-check
 // The modal module alone, never the `bootstrap` package: EasyAdmin's own Bootstrap already registers
 // the data-api handlers, and a second registration toggles every dropdown twice.
 import Modal from 'bootstrap/js/src/modal.js';

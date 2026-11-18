@@ -5,6 +5,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `Hub\Notice::draft()`, `records()`, `updates()` and `notifications()`: the
+  bundle's notices, each naming its channel and no content.
+
 ### Changed
 
 - Clearing notifications takes a CSRF token (`collaborate-notification-clear`,
@@ -38,11 +43,16 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The notification and web push actions accept exactly the actions their
+  routes name: under a router that matches paths whatever their case
+  (Drupal's), `notifications/CLEAR` skipped the clearing token and cleared,
+  and `SUBSCRIBE` or `UNSUBSCRIBE` did the opposite. Another spelling now
+  answers 404.
 - A page opened while another editor's Save was under way could show a
   collection entry that Save added twice, and save it twice: it named the
   saved entry by its record before the Save recorded the draft's key for it.
   A page now waits for a Save of its draft under way, as long as a Save may
-  hold the draft, before it keys the entries.
+  hold the draft, before it reads the keys of the entries Saves created.
 - Release notes broke their lines where the changelog wraps them: GitHub
   keeps a release body's line breaks. The release tool joins each wrapped
   paragraph and list item onto one line in the notes; the changelog keeps

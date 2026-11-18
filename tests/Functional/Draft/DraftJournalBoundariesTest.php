@@ -14,6 +14,7 @@ use Janalis\Collaborate\Draft\DraftText;
 use Janalis\Collaborate\Draft\DraftValues;
 use Janalis\Collaborate\Draft\EventValidator;
 use Janalis\Collaborate\Draft\FieldDefinitions;
+use Janalis\Collaborate\Draft\RecordAlreadyCreatedException;
 use Janalis\Collaborate\Tests\Fixtures\Draft\InterleavingConnection;
 use Janalis\Collaborate\Tests\Fixtures\Draft\JsonAssertions;
 use Janalis\Collaborate\Tests\Fixtures\Draft\StatementRecordingConnection;
@@ -30,6 +31,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  * and its temporary tables.
  */
 #[CoversClass(DraftJournal::class)]
+#[CoversClass(RecordAlreadyCreatedException::class)]
 #[CoversClass(DraftValues::class)]
 #[CoversClass(EventValidator::class)]
 #[CoversClass(FieldDefinitions::class)]
@@ -346,18 +348,18 @@ final class DraftJournalBoundariesTest extends TestCase
         $this->db->queries = [];
         $this->db->queryParameters = [];
 
-        // Each read of the entry keys waits for the draft's lock, as long as a save may hold it, then lets it go.
+        // The aliases wait for the draft's lock, as long as a save may hold it, then let it go. A plain list's keys
+        // are its positions in the record the page loaded: they read the draft as it is.
         $journal->aliases('record');
         $journal->listKeys('record');
-        self::assertSame([[$this->lockName('record'), 3], [$this->lockName('record'), 3]], $waits());
-        self::assertCount(2, $this->releases());
+        self::assertSame([[$this->lockName('record'), 3]], $waits());
+        self::assertCount(1, $this->releases());
 
         // A save of this process, its form shown again, waits for nothing.
         $journal->lock('record');
         $this->db->queries = [];
         $this->db->queryParameters = [];
         $journal->aliases('record');
-        $journal->listKeys('record');
         $journal->unlock('record');
         self::assertSame([], $waits());
         self::assertCount(1, $this->releases());

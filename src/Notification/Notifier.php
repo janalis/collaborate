@@ -116,10 +116,7 @@ final readonly class Notifier
     public function changed(int $recipient): void
     {
         $this->publisher->defer(
-            new Notice(
-                $this->topics->notifications($recipient),
-                json_encode(['channel' => 'notifications'], \JSON_THROW_ON_ERROR),
-            ),
+            Notice::notifications($this->topics->notifications($recipient)),
             'Collaborate could not tell the pages of a user of their notifications.',
         );
     }

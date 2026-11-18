@@ -121,14 +121,13 @@ final readonly class DraftController
         };
         if (\in_array($action, ['append', 'discard', 'reconcile'], true)) {
             // No draft values in notifications: every read rechecks current authorization.
-            $notice = ['channel' => 'draft', 'draft' => $id, 'kind' => $action];
-            // An append names its place in the journal: a page that has read it already, its author's
-            // included, replays nothing for it.
-            if ('append' === $action && \is_int($event['generation'] ?? null) && \is_int($result['revision'] ?? null)) {
-                $notice += ['generation' => $event['generation'], 'revision' => $result['revision']];
-            }
+            $place = 'append' === $action
+            && \is_int($event['generation'] ?? null)
+            && \is_int($result['revision'] ?? null)
+                ? ['generation' => $event['generation'], 'revision' => $result['revision']]
+                : [];
             $this->publisher->defer(
-                new Notice($this->access->topic($id), json_encode($notice, \JSON_THROW_ON_ERROR)),
+                Notice::draft($this->access->topic($id), $id, $action, $place),
                 'Collaborate draft hub publication failed.',
             );
         }

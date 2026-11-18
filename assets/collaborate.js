@@ -1,3 +1,4 @@
+// @ts-check
 // The entry point of any admin: shared cursors and presence, saved-view refresh and shared drafts, each
 // starting on its own once the page is parsed, on the markup of the bridge the layer names (`collaborate.bridge`).
 // An admin's own entry (`easyadmin.js`, `drupal.js`) registers its bridge's profile first.

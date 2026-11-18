@@ -53,10 +53,7 @@ final readonly class UpdatesSubscriber implements EventSubscriberInterface
             )), $this->strings($request->attributes->all('_collaborate_data_changed'))));
             // sort() lists them again.
             sort($entities);
-            $updates[] = new Notice(
-                $this->topics->updates(),
-                json_encode(['channel' => 'updates', 'kind' => 'saved', 'entities' => $entities], \JSON_THROW_ON_ERROR),
-            );
+            $updates[] = Notice::updates($this->topics->updates(), $entities);
         }
         if ($this->drafts) {
             $updates = [...$updates, ...$this->drafts($request)];
@@ -72,10 +69,7 @@ final readonly class UpdatesSubscriber implements EventSubscriberInterface
         $updates = [];
         $draft = self::stringOrNull($request->attributes->get('_collaborate_committed'));
         if (null !== $draft) {
-            $updates[] = new Notice(
-                $this->access->topic($draft),
-                json_encode(['channel' => 'draft', 'draft' => $draft, 'kind' => 'saved'], \JSON_THROW_ON_ERROR),
-            );
+            $updates[] = Notice::draft($this->access->topic($draft), $draft, 'saved');
         }
         // Edit pages of the other changed records compare their form with the saved record again;
         // the draft saved through its own form has just recorded it.
@@ -85,11 +79,7 @@ final readonly class UpdatesSubscriber implements EventSubscriberInterface
         );
         // array_chunk() lists each chunk again.
         foreach (array_chunk($records, max(1, $this->chunk)) as $chunk) {
-            // One notice names several drafts: it carries none, and every draft session of the page compares again.
-            $updates[] = new Notice(
-                array_map($this->access->topic(...), $chunk),
-                '{"channel":"draft","kind":"record"}',
-            );
+            $updates[] = Notice::records(array_map($this->access->topic(...), $chunk));
         }
 
         return $updates;

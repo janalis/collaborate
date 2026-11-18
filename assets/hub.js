@@ -2,17 +2,14 @@
 // Captured when the module is evaluated, before any module of the bundle that imports it: collaboration traffic
 // is background traffic, and a host that wraps `window.fetch` (a loading indicator, say) must load easyadmin.js
 // before installing its wrapper. Every module sends with this one.
+import { settingsOf } from './settings.js';
+
 export const backgroundFetch = window.fetch.bind(window);
 const hubs = new WeakMap();
 
 /** The layer's `data-config` JSON: an absent or malformed one reads as no settings, each module keeping its defaults. */
 export function layerConfig(layer) {
-  try {
-    const config = JSON.parse(layer?.dataset.config || '{}');
-    return config && typeof config === 'object' && !Array.isArray(config) ? config : {};
-  } catch {
-    return {};
-  }
+  return settingsOf(layer, 'data-config');
 }
 
 /**

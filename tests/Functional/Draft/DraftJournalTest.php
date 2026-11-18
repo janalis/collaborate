@@ -59,6 +59,7 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  */
 /** @phpstan-import-type SignedScope from DraftAccess */
 #[CoversClass(DraftJournal::class)]
+#[CoversClass(RecordAlreadyCreatedException::class)]
 #[CoversClass(DraftValues::class)]
 #[CoversClass(EventValidator::class)]
 #[CoversClass(FieldDefinitions::class)]

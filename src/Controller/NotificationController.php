@@ -126,6 +126,11 @@ final readonly class NotificationController
      */
     public function change(Request $request, string $action): JsonResponse
     {
+        // Exactly the actions the route names: a router that matches paths whatever their case (Drupal's) must not
+        // let another spelling past the token of clearing.
+        if (!\in_array($action, ['read', 'unread', 'clear'], true)) {
+            throw new NotFoundHttpException(\sprintf('No notification action "%s".', $action));
+        }
         $recipient = $this->recipient();
         if ('clear' === $action) {
             $token = $request->headers->get('X-CSRF-Token') ?? $request->request->getString('_token');
@@ -144,7 +149,7 @@ final readonly class NotificationController
         match ($action) {
             'read' => $this->notifications->markRead($recipient, $id, $this->clock->now()),
             'unread' => $this->notifications->markUnread($recipient, $id),
-            default => $this->notifications->clear($recipient, $id),
+            'clear' => $this->notifications->clear($recipient, $id),
         };
         $this->notifier->changed($recipient);
 
@@ -167,6 +172,9 @@ final readonly class NotificationController
     /** `POST <prefix>/notifications/topics/{topic}/{subscribe|unsubscribe}`, with the token of the topics. */
     public function choose(Request $request, string $topic, string $action): JsonResponse
     {
+        if (!\in_array($action, ['subscribe', 'unsubscribe'], true)) {
+            throw new NotFoundHttpException(\sprintf('No notification topic action "%s".', $action));
+        }
         $recipient = $this->recipient();
         $token = $request->headers->get('X-CSRF-Token') ?? $request->request->getString('_token');
         if (!$this->csrf->isTokenValid(new CsrfToken(self::TOPICS_CSRF_TOKEN_ID, $token))) {

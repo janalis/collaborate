@@ -7,6 +7,8 @@
 // An entry point registers the profile of its admin (`easyadmin.js`, `drupal.js`) before any module starts; the
 // layer's `data-config` names the bridge the server resolved, which wins when its profile is registered.
 
+import { settingsOf } from './settings.js';
+
 /**
  * @typedef {object} EmbeddedLists
  * @property {string} selector a list loaded in place
@@ -94,13 +96,8 @@ export function registerBridge(profile) {
 
 /** The bridge the layer names, from its `data-config`; null without a layer or a readable configuration. */
 function named() {
-  try {
-    const layer = /** @type {HTMLElement | null} */ (document.querySelector('[data-collaborate-layer]'));
-    const name = JSON.parse(layer?.dataset.config || '{}')?.bridge;
-    return typeof name === 'string' ? name : null;
-  } catch {
-    return null;
-  }
+  const name = settingsOf(document.querySelector('[data-collaborate-layer]'), 'data-config').bridge;
+  return typeof name === 'string' ? name : null;
 }
 
 /**

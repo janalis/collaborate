@@ -1,3 +1,4 @@
+// @ts-check
 const attributes = (node) => Object.fromEntries(node.getAttributes());
 const sameAttributes = (a, b) => JSON.stringify(attributes(a)) === JSON.stringify(attributes(b));
 const textOf = (node) => Array.from(node.getChildren(), (child) => (child.is('$text') ? child.data : '')).join('');

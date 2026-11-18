@@ -1,3 +1,4 @@
+// @ts-check
 const splitsPair = (text, offset) =>
   offset > 0 &&
   offset < text.length &&

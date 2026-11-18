@@ -60,6 +60,8 @@ use Janalis\Collaborate\Twig\NotificationRuntime;
 use Janalis\Collaborate\Updates\UpdatesSubscriber;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * Notifications in the library: the bell of every page, the page of them all, the topics a user keeps, the
@@ -360,6 +362,32 @@ final class NotificationsApplicationTest extends NotificationsTestCase
             $this->client->request('GET', '/admin/notifications/all?' . $query);
             self::assertResponseStatusCodeSame(400);
         }
+    }
+
+    /** A router that matches paths whatever their case (Drupal's) hands the controllers another spelling. */
+    public function testAnActionSpelledOtherwiseIsRefusedBeforeItChangesAnything(): void
+    {
+        $this->signIn('alice');
+        $this->share(self::ALICE, 'One');
+        $notifications = static::getContainer()->get(NotificationController::class);
+        self::assertInstanceOf(NotificationController::class, $notifications);
+        $pushes = static::getContainer()->get(PushController::class);
+        self::assertInstanceOf(PushController::class, $pushes);
+        $refused = [
+            static fn() => $notifications->change(new Request(), 'CLEAR'),
+            static fn() => $notifications->change(new Request(), 'Clear'),
+            static fn() => $notifications->change(new Request(), 'delete'),
+            static fn() => $notifications->choose(new Request(), 'shares', 'UNSUBSCRIBE'),
+            static fn() => $pushes->subscription(new Request(), 'UNSUBSCRIBE'),
+        ];
+        foreach ($refused as $index => $call) {
+            try {
+                $call();
+                self::fail(\sprintf('Action %d was carried out.', $index));
+            } catch (NotFoundHttpException) {
+            }
+        }
+        self::assertCount(1, $this->rows(self::ALICE));
     }
 
     public function testAUserReadsUnreadsAndClearsTheirOwnNotificationsAlone(): void

@@ -1,3 +1,4 @@
+// @ts-check
 import { diff } from 'ckeditor5';
 import { entrySelector, rowOf } from '../markup.js';
 
@@ -14,7 +15,7 @@ const first = (found) => (found instanceof RadioNodeList ? found[0] : found);
 
 /** The rich editor a source textarea feeds: its model, not the textarea, holds the current text. */
 const editorOf = (element) =>
-  Array.from(document.querySelectorAll('.ck-editor__editable')).find(
+  Array.from(/** @type {NodeListOf<any>} */ (document.querySelectorAll('.ck-editor__editable'))).find(
     (editable) => editable.ckeditorInstance?.sourceElement === element
   )?.ckeditorInstance;
 
@@ -201,10 +202,10 @@ export function renderConflicts(session, conflicts) {
   }
   const actions = document.createElement('div');
   actions.className = 'd-flex flex-wrap gap-2 mt-2';
-  for (const [keep, label] of [
+  for (const [keep, label] of /** @type {[boolean, string][]} */ ([
     [true, 'keepDraft'],
     [false, 'useSaved'],
-  ]) {
+  ])) {
     const button = document.createElement('button');
     button.type = 'button';
     button.dataset.collaborateReconcile = keep ? 'keep' : 'saved';

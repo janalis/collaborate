@@ -1,3 +1,4 @@
+// @ts-check
 // Other editors on the page, drawn beside the header's own avatar. Fed by `cursors.js`.
 export const MAX_SHOWN = 5;
 // On a narrow window the menu's button shows one peer, the others counted (the stylesheet tells which is which).
@@ -57,13 +58,19 @@ let menus = 0;
 // `maxShown` comes from the layer's `data-config.maxAvatars`; past it, a `+n` chip names the rest. `options`
 // carries the rest of the layer's configuration: `presence: 'menu'` makes the peers the button of a menu that
 // finds them, `distinctColors` keeps neighbours' colours apart, `idle` (milliseconds) says a still peer idle.
+/**
+ * @param {() => Iterable<HTMLElement>} [containers]
+ * @param {number} [maxShown]
+ * @param {{ presence?: string, distinctColors?: boolean, colors?: string[], idle?: number, messages?: Record<string, string> }} [options]
+ */
 export function createPresence(
-  containers = () => document.querySelectorAll('[data-collaborate-presence]'),
+  containers = () => /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('[data-collaborate-presence]')),
   maxShown = MAX_SHOWN,
   { presence = 'avatars', distinctColors = false, colors = [], idle = 0, messages = {} } = {}
 ) {
   const users = new Map();
   // What the cursors tell of a peer, and do for them (`cursors.js` binds them).
+  /** @type {{ describe: (user: any) => string, choose: (userId: number) => void, toggle: () => void, shown: () => boolean, change: () => void }} */
   const hooks = {
     describe: () => '',
     choose: () => {},

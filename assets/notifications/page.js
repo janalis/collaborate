@@ -1,3 +1,4 @@
+// @ts-check
 // The page of all notifications (templates/notifications/_page.html.twig).
 //
 // The server renders the newest rows and, when older ones exist, a last row naming where they are
@@ -81,11 +82,13 @@ export function initPage(
 
   /** Remembers what holds the focus in the list, and answers what gives it back once the rows were written again. */
   function keepFocus() {
-    const focused = document.activeElement;
-    const row = focused.closest(ROW);
+    const focused = /** @type {HTMLElement} */ (document.activeElement);
+    const row = /** @type {HTMLElement | null} */ (focused.closest(ROW));
     if (!row || !list.contains(row)) return () => {};
     return () => {
-      const again = [...list.querySelectorAll(ROW)].find((candidate) => candidate.dataset.id === row.dataset.id);
+      const again = [.../** @type {NodeListOf<HTMLElement>} */ (list.querySelectorAll(ROW))].find(
+        (candidate) => candidate.dataset.id === row.dataset.id
+      );
       focusRow(again, focused.dataset.action);
     };
   }
@@ -178,7 +181,7 @@ export function initPage(
     // follows, of the one before when it was the last.
     if (row.contains(document.activeElement)) {
       const neighbour = [row.nextElementSibling, row.previousElementSibling].find((sibling) => sibling?.matches(ROW));
-      focusRow(neighbour, document.activeElement.dataset.action);
+      focusRow(neighbour, /** @type {HTMLElement} */ (document.activeElement).dataset.action);
     }
     row.remove();
     showEmpty();

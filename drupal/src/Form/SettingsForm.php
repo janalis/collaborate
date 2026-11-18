@@ -204,7 +204,8 @@ final class SettingsForm extends ConfigFormBase
     private static function regions(string $lines): ?array
     {
         $regions = [];
-        foreach (preg_split('/\R/', trim($lines)) ?: [] as $line) {
+        $split = preg_split('/\R/', trim($lines));
+        foreach (false === $split ? [] : $split as $line) {
             if ('' === trim($line)) {
                 continue;
             }

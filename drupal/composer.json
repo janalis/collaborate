@@ -45,12 +45,5 @@
         "psr-4": {
             "Drupal\\collaborate\\": "src/"
         }
-    },
-    "extra": {
-        "drush": {
-            "services": {
-                "drush.services.yml": "^13"
-            }
-        }
     }
 }

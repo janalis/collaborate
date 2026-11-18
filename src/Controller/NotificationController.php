@@ -29,12 +29,14 @@ use Twig\Environment;
  * unreads or clears them, and the topics the user subscribes to. Each action reads and changes the user's
  * own alone, and tells their other pages through the hub.
  *
- * Read, unread and clear carry no token: a forged one changes the notifications of whoever was made to send
- * it, and nothing else. A topic does: a forged unsubscribe would silence its user.
+ * Read and unread carry no token: a forged one changes the notifications of whoever was made to send it, and
+ * nothing else, and a service worker reads the notification clicked without one. Clear does: a forged one would
+ * delete them all, past bringing back. A topic does too: a forged unsubscribe would silence its user.
  */
 final readonly class NotificationController
 {
     public const string TOPICS_CSRF_TOKEN_ID = 'collaborate-notification-topics';
+    public const string CLEAR_CSRF_TOKEN_ID = 'collaborate-notification-clear';
 
     public function __construct(
         private NotificationAccess $access,
@@ -118,10 +120,19 @@ final readonly class NotificationController
         );
     }
 
-    /** `POST <prefix>/notifications/{read|unread|clear}`: one notification of the user (`id`), or all of them. */
+    /**
+     * `POST <prefix>/notifications/{read|unread|clear}`: one notification of the user (`id`), or all of them;
+     * clear with the token of clearing.
+     */
     public function change(Request $request, string $action): JsonResponse
     {
         $recipient = $this->recipient();
+        if ('clear' === $action) {
+            $token = $request->headers->get('X-CSRF-Token') ?? $request->request->getString('_token');
+            if (!$this->csrf->isTokenValid(new CsrfToken(self::CLEAR_CSRF_TOKEN_ID, $token))) {
+                throw new AccessDeniedHttpException('Invalid notification clear CSRF token.');
+            }
+        }
         // @mago-expect analysis:mixed-assignment a field of a form is mixed: the next lines narrow it
         $field = $request->request->all()['id'] ?? null;
         $id = null;

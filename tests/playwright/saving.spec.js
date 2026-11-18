@@ -50,7 +50,7 @@ test.describe('saving a shared draft', () => {
 
     const posted = alice.page.waitForRequest((request) => request.method() === 'POST' && request.isNavigationRequest());
     await alice.barSaveButton.click();
-    await posted;
+    await (await posted).response();
     await alice.page.waitForLoadState();
     await alice.joined();
     await expect(alice.page).toHaveURL(new RegExp(`${alice.routes.edit(id)}`));

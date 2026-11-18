@@ -1,0 +1,47 @@
+# The Drupal module (`drupal/`), checked against the Drupal test site's Drupal and Drush (`make drupal-install`):
+# `vendor/bin/mago --config mago.drupal.toml fmt|lint|analyze`. The bundle's own code is mago.toml's.
+php-version = "8.4.0"
+
+[source]
+paths = ["drupal/src", "drupal/tests", "drupal/collaborate.install"]
+includes = ["src", "tests/Application/Drupal/web/core", "tests/Application/Drupal/vendor"]
+# The test site's copy of the bundle is this repository, already included as src/.
+excludes = ["tests/Application/Drupal/vendor/janalis"]
+
+[formatter]
+print-width = 120
+
+[linter]
+integrations = ["phpunit"]
+
+# The bundle's thresholds (mago.toml).
+[linter.rules.cyclomatic-complexity]
+threshold = 250
+[linter.rules.too-many-methods]
+threshold = 60
+exclude = ["drupal/tests/"]
+[linter.rules.too-many-properties]
+threshold = 30
+exclude = ["drupal/tests/"]
+[linter.rules.excessive-parameter-list]
+threshold = 20
+[linter.rules.kan-defect]
+enabled = false
+[linter.rules.halstead]
+enabled = false
+[linter.rules.literal-named-argument]
+enabled = false
+[linter.rules.no-boolean-flag-parameter]
+enabled = false
+[linter.rules.assertion-style]
+style = "self"
+[linter.rules.no-literal-password]
+exclude = ["drupal/tests/"]
+[linter.rules.assert-description]
+enabled = false
+[linter.rules.no-else-clause]
+enabled = false
+[linter.rules.no-isset]
+enabled = false
+[linter.rules.no-empty-catch-clause]
+enabled = false

@@ -5,8 +5,44 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Clearing notifications takes a CSRF token (`collaborate-notification-clear`,
+  the settings' `clearToken`, as `X-CSRF-Token` or a `_token` field): a
+  forged request could delete every notification of the user who sent it.
+  Reading and unreading still take none. A host that posts clear requests
+  itself sends the token.
+- A Save no longer reads and re-encodes the whole draft journal to count
+  its bytes: it adds what it records.
+- `CollaborateFormExtension` takes the `FormDraft` service, the draft of
+  the root form, in place of the five services it built its own from
+  (`DraftSave`, the router, the CSRF token manager, the translator, the
+  logger).
+- A second Save of a new record's draft throws
+  `Draft\RecordAlreadyCreatedException`, a `ConflictHttpException` as before:
+  the save tells it from other conflicts by its class, not its message.
+- The presence avatars stay as they are when a peer moves to another record
+  or popup: only the menu shows where peers are. The marks still follow.
+- The hub's error messages name the hub, not cursors: "Hub request is too
+  large.", "Invalid hub CSRF token.", "Hub rate limit exceeded.", "Invalid
+  hub session drafts.". The hub's guard, sessions and Mercure transport,
+  the draft controller, `FormDraft` and the Twig extension read the time
+  from the `clock` service.
+- Mago formats, lints and analyzes the Drupal module too, in its CI job
+  against the test site's Drupal (`make drupal-quality`,
+  `mago.drupal.toml`); the analyzer's known issues in the module are kept
+  in `mago.drupal-baseline.toml`, and new ones fail.
+- CI keeps Composer's downloads, Chromium and the FrankenPHP binary between
+  runs; FrankenPHP's version and checksum live in the browser setup action
+  alone, and its download is checked against the release's SHA-256.
+
 ### Fixed
 
+- A page opened while another editor's Save was under way could show a
+  collection entry that Save added twice, and save it twice: it named the
+  saved entry by its record before the Save recorded the draft's key for it.
+  A page now waits for a Save of its draft under way, as long as a Save may
+  hold the draft, before it keys the entries.
 - Release notes broke their lines where the changelog wraps them: GitHub
   keeps a release body's line breaks. The release tool joins each wrapped
   paragraph and list item onto one line in the notes; the changelog keeps

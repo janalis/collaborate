@@ -36,10 +36,12 @@ final readonly class Schema
         $tool = new SchemaTool($manager);
         $schema = $this->connection->createSchemaManager();
         foreach ($manager->getMetadataFactory()->getAllMetadata() as $class) {
-            if (!$schema->tablesExist([$this->prefixed($class->getTableName())])) {
-                foreach ($tool->getCreateSchemaSql([$class]) as $sql) {
-                    $this->connection->executeStatement($sql);
-                }
+            if ($schema->tablesExist([$this->prefixed($class->getTableName())])) {
+                continue;
+            }
+
+            foreach ($tool->getCreateSchemaSql([$class]) as $sql) {
+                $this->connection->executeStatement($sql);
             }
         }
         if (!$schema->tablesExist([$this->prefixed(self::GRANT_CACHE)])) {

@@ -23,7 +23,10 @@ final readonly class DrupalUser implements UserInterface
     /** @return non-empty-string */
     public function getUserIdentifier(): string
     {
-        return (string) $this->account->id() ?: 'anonymous';
+        $id = (string) $this->account->id();
+
+        // Drupal's anonymous user is user 0.
+        return '' === $id || '0' === $id ? 'anonymous' : $id;
     }
 
     public function eraseCredentials(): void {}

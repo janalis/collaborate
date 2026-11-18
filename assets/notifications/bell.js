@@ -73,18 +73,16 @@ export async function fetchFragment(url, fetcher = backgroundFetch) {
 
 /**
  * Tells the server what was read, unread or cleared: one notification by its id, all of them without one.
- * Answers the counts `{unread, total}`, or null when the server could not be told.
+ * Clearing takes the settings' `clearToken`. Answers the counts `{unread, total}`, or null when the server
+ * could not be told.
  */
-export async function postChange(url, id = null, fetcher = backgroundFetch) {
+export async function postChange(url, id = null, fetcher = backgroundFetch, token = null) {
   const body = new URLSearchParams();
   if (id) body.set('id', id);
+  const headers = { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
+  if (token) headers['X-CSRF-Token'] = token;
   try {
-    const response = await fetcher(url, {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-      body,
-    });
+    const response = await fetcher(url, { method: 'POST', credentials: 'same-origin', headers, body });
     if (!response.ok || response.redirected) return null;
     const answer = await response.json();
     return Number.isInteger(answer?.unread) ? answer : null;

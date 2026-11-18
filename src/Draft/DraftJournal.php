@@ -415,7 +415,7 @@ class DraftJournal implements ResetInterface
     {
         $draft = $this->read($id);
         if ($new && null !== $draft['recordId']) {
-            throw new ConflictHttpException(self::ALREADY_CREATED);
+            throw new RecordAlreadyCreatedException();
         }
         if ($generation !== $draft['generation'] || $revision !== $draft['revision']) {
             throw new ConflictHttpException('The shared draft changed. Synchronize before saving.');
@@ -460,7 +460,7 @@ class DraftJournal implements ResetInterface
                 $field['version'] = $version + \count($operations);
                 $field['value'] = $result['text'];
                 $field['graveyardLength'] = $result['graveyard'];
-                $this->record($id, [
+                $draft['bytes'] += $this->record($id, [
                     'id' => $this->batchId(),
                     'field' => $name,
                     'kind' => 'operations',
@@ -478,7 +478,7 @@ class DraftJournal implements ResetInterface
                 $version = $field['version'] ?? 0;
                 $field['value'] = $values[$name];
                 $field['version'] = $version + 1;
-                $this->record($id, [
+                $draft['bytes'] += $this->record($id, [
                     'id' => $this->batchId(),
                     'field' => $name,
                     'kind' => 'value',
@@ -512,7 +512,6 @@ class DraftJournal implements ResetInterface
         }
         unset($state);
         $this->settle($draft);
-        $draft['bytes'] = $this->size($id);
         $this->write($id, $draft);
     }
 
@@ -591,6 +590,7 @@ class DraftJournal implements ResetInterface
      */
     public function listKeys(string $id): array
     {
+        $this->afterSave($id);
         $keys = [];
         foreach ($this->decodeFields($this->db()->fetchAllAssociative("SELECT name, state FROM collaborate_draft_field WHERE draft_id = ? AND type = 'collection' ORDER BY name", [
             $id,
@@ -616,6 +616,7 @@ class DraftJournal implements ResetInterface
      */
     public function aliases(string $id): array
     {
+        $this->afterSave($id);
         $aliases = [];
         foreach ($this->members($id) as $name => $field) {
             if (!\is_array($field['saved']) || !\is_scalar($field['saved']['recordId'] ?? null)) {
@@ -767,6 +768,23 @@ class DraftJournal implements ResetInterface
         $this->dialect()->unlock($this->db(), $this->lockName($id));
         if (0 === --$this->held[$id]) {
             unset($this->held[$id]);
+        }
+    }
+
+    /**
+     * Waits for a save of the draft under way, at most as long as a save may hold its lock: the keys a page
+     * opened meanwhile gives its entries are those the save checkpoints. A page read before them would key a
+     * new entry by its record, beside the draft's own key for it, and show it twice. Past the wait, the page
+     * reads the draft as it is; a save of this process (its form shown again) waits for nothing.
+     */
+    private function afterSave(string $id): void
+    {
+        if (isset($this->held[$id])) {
+            return;
+        }
+        $name = $this->lockName($id);
+        if ($this->dialect()->lock($this->db(), $name, $this->lockSeconds)) {
+            $this->dialect()->unlock($this->db(), $name);
         }
     }
 
@@ -1004,10 +1022,17 @@ class DraftJournal implements ResetInterface
         return random_int(1, 2 ** 30);
     }
 
-    /** @param Batch $batch */
-    private function record(string $id, array $batch): void
+    /**
+     * @param Batch $batch
+     *
+     * @return int the bytes the journal grew by
+     */
+    private function record(string $id, array $batch): int
     {
-        $this->insert($id, $batch, $this->encode($batch));
+        $payload = $this->encode($batch);
+        $this->insert($id, $batch, $payload);
+
+        return \strlen($payload);
     }
 
     /** @param Batch $batch */

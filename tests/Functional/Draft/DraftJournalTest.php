@@ -21,6 +21,7 @@ use Janalis\Collaborate\Draft\DraftText;
 use Janalis\Collaborate\Draft\DraftValues;
 use Janalis\Collaborate\Draft\EventValidator;
 use Janalis\Collaborate\Draft\FieldDefinitions;
+use Janalis\Collaborate\Draft\RecordAlreadyCreatedException;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Article;
 use Janalis\Collaborate\Tests\Fixtures\Draft\InterleavingConnection;
 use Janalis\Collaborate\Tests\Fixtures\Draft\JsonAssertions;
@@ -1516,7 +1517,7 @@ final class DraftJournalTest extends TestCase
         }
         $this->journal->created('record', '42');
         self::assertSame('42', $this->journal->replay('record', $this->fields, 0)['recordId']);
-        $this->expectException(ConflictHttpException::class);
+        $this->expectException(RecordAlreadyCreatedException::class);
         $this->journal->lockSave('record', 1, 0, [], true);
     }
 

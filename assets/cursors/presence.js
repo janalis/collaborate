@@ -317,12 +317,9 @@ export function createPresence(
   ) {
     const known = users.get(userId);
     const user = known || { clients: new Map(), moved: now, idle: false, file: null, popup: null };
-    const changed =
-      !known ||
-      user.label !== label ||
-      user.color !== color ||
-      user.avatar !== avatarUrl(avatar) ||
-      placed(user, file, popup);
+    const changed = !known || user.label !== label || user.color !== color || user.avatar !== avatarUrl(avatar);
+    // Where a peer is shows in the menu alone; the avatars stay as they are, and only the marks move.
+    const moved = placed(user, file, popup);
     user.clients.set(clientId, now);
     if (!known || user.color !== color) {
       // Picked among the others.
@@ -334,10 +331,8 @@ export function createPresence(
     users.set(userId, user);
     const wasIdle = user.idle;
     user.idle = isIdle(user, now);
-    if (changed || wasIdle !== user.idle) {
-      render(now);
-      hooks.change();
-    }
+    if (changed || wasIdle !== user.idle || (moved && presence === 'menu')) render(now);
+    if (changed || wasIdle !== user.idle || moved) hooks.change();
   }
 
   function leave(userId, clientId) {

@@ -27,7 +27,7 @@ BUMP ?= patch
 
 .PHONY: help install fmt fmt-check lint analyze validate test test-unit test-functional test-integration test-js lint-js coverage infection app-setup e2e screenshots verify clean
 .PHONY: docs docs-dev lint-md fmt-md lint-editorconfig lint-actions test-tools release-notes
-.PHONY: drupal-assets drupal-install drupal-test drupal-e2e
+.PHONY: drupal-assets drupal-install drupal-quality drupal-test drupal-e2e
 
 help: ## List the targets
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN { FS = ":.*## " } { printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2 }'
@@ -119,6 +119,11 @@ drupal-install: ## Build the Drupal test site (tests/Application/Drupal) on DRUP
 	cd $(DRUPAL) && vendor/bin/drush pm:install collaborate -y
 	cd $(DRUPAL) && vendor/bin/drush php:script bin/fixtures.php
 	cd $(DRUPAL) && vendor/bin/drush cache:rebuild
+
+drupal-quality: ## Format-check, lint and analyze the Drupal module (Mago, mago.drupal.toml; needs `make drupal-install`)
+	vendor/bin/mago --config mago.drupal.toml fmt --check
+	vendor/bin/mago --config mago.drupal.toml lint
+	vendor/bin/mago --config mago.drupal.toml analyze --baseline mago.drupal-baseline.toml
 
 drupal-test: ## Run the Drupal module's unit, kernel and functional tests (the site serving on DRUPAL_PORT; DRUPAL_TEST_DATABASE_URL=pgsql://…|sqlite://localhost//…)
 	cat $(DRUPAL)/web/core/.deprecation-ignore.txt $(DRUPAL)/deprecation-ignore.txt > $(DRUPAL)/web/sites/deprecation-ignore.txt

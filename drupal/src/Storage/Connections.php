@@ -41,13 +41,16 @@ final class Connections
         $configuration = new Configuration();
         // Drupal's prefix, on the tables the bundle names; the comparison of a schema sees those alone.
         $configuration->setMiddlewares([new TablePrefix(self::prefix())]);
-        $configuration->setSchemaAssetsFilter(static fn(mixed $asset): bool => Schema::mapped($asset));
+        $configuration->setSchemaAssetsFilter(Schema::mapped(...));
         $prefix = $info['prefix'] ?? '';
         $database = $info['database'] ?? null;
         $parameters = match ($driver) {
             'sqlite' => [
                 'driver' => 'pdo_sqlite',
-                'path' => \is_string($database) && \is_string($prefix) && '' !== $prefix ? $database . '-' . $prefix : $database,
+                'path' =>
+                    \is_string($database) && \is_string($prefix) && '' !== $prefix
+                        ? $database . '-' . $prefix
+                        : $database,
             ],
             'pgsql' => [
                 'driver' => 'pdo_pgsql',

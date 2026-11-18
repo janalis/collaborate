@@ -122,7 +122,7 @@ final class CursorControllerTest extends CursorTestCase
         self::assertStringContainsString('"color":"blue"', $published[0]);
 
         $this->expectException(BadRequestHttpException::class);
-        $this->expectExceptionMessage('Cursor event is too large.');
+        $this->expectExceptionMessage('Hub request is too large.');
         $controller($this->request('/cursors/events', ['extra' => str_repeat('x', $padding + 1)]));
     }
 
@@ -249,7 +249,7 @@ final class CursorControllerTest extends CursorTestCase
     {
         self::assertSame(204, $this->handle(['extra' => str_repeat('x', 4096)], maxEventBytes: 8192)->getStatusCode());
         $this->expectException(BadRequestHttpException::class);
-        $this->expectExceptionMessage('Cursor event is too large.');
+        $this->expectExceptionMessage('Hub request is too large.');
         $this->handle(['extra' => str_repeat('x', 4096)]);
     }
 }

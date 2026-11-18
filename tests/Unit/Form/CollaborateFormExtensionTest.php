@@ -144,7 +144,7 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         $journal->method('listKeys')->willReturnCallback(fn(): array => $this->listKeys);
         $this->save = $this->createMock(DraftSave::class);
         $this->importMap = $this->importMap(['ckeditor5' => ['version' => '49.1.0']]);
-        $this->extensionFactory = /** @param Options $options */ fn(
+        $this->extensionFactory = /** @param Options $options */ function (
             bool $enabled,
             ?ImportMapConfigReader $importMap = null,
             ?LoggerInterface $logger = null,
@@ -154,34 +154,41 @@ final class CollaborateFormExtensionTest extends TypeTestCase
             ?DraftAccess $access = null,
             bool $importMapped = true,
             bool $defaults = true,
-        ): CollaborateFormExtension => new CollaborateFormExtension(
-            $access ?? $this->access($enabled),
-            $journal,
-            $this->save,
-            $context ? $this->page : null,
-            $requests,
-            $security,
-            new SecurityCollaboratorProvider(),
-            $checker,
-            $urls,
-            $csrf,
-            $translator,
-            $identifier,
-            new TranslatableFieldKeyResolver($requests, 'en'),
-            $importMapped ? $importMap ?? $this->importMap : null,
-            'ROLE_EDITOR',
-            $options
-            + (
-                $defaults
-                    ? [
-                        'rich_text' => ['block_prefixes' => ['rich_text'], 'schema_option' => 'compact'],
-                        'replay' => ['connected' => 20, 'disconnected' => 4, 'join_retry' => 10],
-                        'label_length' => 120,
-                    ] : []
-            ),
-            $logger ?? new NullLogger(),
-            [CrudAutocompleteType::class],
-        );
+        ) use ($journal, $requests, $security, $checker, $urls, $csrf, $translator): CollaborateFormExtension {
+            $access ??= $this->access($enabled);
+            $options += $defaults
+                ? [
+                    'rich_text' => ['block_prefixes' => ['rich_text'], 'schema_option' => 'compact'],
+                    'replay' => ['connected' => 20, 'disconnected' => 4, 'join_retry' => 10],
+                    'label_length' => 120,
+                ] : [];
+
+            return new CollaborateFormExtension(
+                $access,
+                $journal,
+                new FormDraft(
+                    $access,
+                    $this->save,
+                    new SecurityCollaboratorProvider(),
+                    $urls,
+                    $csrf,
+                    $translator,
+                    $logger ?? new NullLogger(),
+                    $options,
+                ),
+                $context ? $this->page : null,
+                $requests,
+                $security,
+                new SecurityCollaboratorProvider(),
+                $checker,
+                $identifier,
+                new TranslatableFieldKeyResolver($requests, 'en'),
+                $importMapped ? $importMap ?? $this->importMap : null,
+                'ROLE_EDITOR',
+                $options,
+                [CrudAutocompleteType::class],
+            );
+        };
         $this->extension = ($this->extensionFactory)(true);
         parent::setUp();
     }

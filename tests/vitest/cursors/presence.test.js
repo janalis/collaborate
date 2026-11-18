@@ -17,6 +17,20 @@ beforeEach(() => {
   presence = createPresence();
 });
 
+test('keeps the avatars as they are when a peer moves to another record, and tells the cursors', () => {
+  const hooks = { change: vi.fn() };
+  presence.bind(hooks);
+  presence.see(peer(1), 0);
+  const avatar = strip.firstElementChild;
+  hooks.change.mockClear();
+  presence.see(peer(1, { file: 'a', popup: { kind: 'share', key: 'a' } }), 0);
+  expect(strip.firstElementChild).toBe(avatar);
+  expect(hooks.change).toHaveBeenCalledTimes(1);
+  presence.see(peer(1, { label: 'Renamed', file: 'a', popup: { kind: 'share', key: 'a' } }), 0);
+  expect(strip.firstElementChild).not.toBe(avatar);
+  expect(strip.firstElementChild.title).toBe('Renamed');
+});
+
 test('keeps avatars on the page origin only', () => {
   expect(avatarUrl('/avatars/a.jpg')).toBe('http://localhost/avatars/a.jpg');
   expect(avatarUrl('http://localhost/media/a.jpg')).toBe('http://localhost/media/a.jpg');

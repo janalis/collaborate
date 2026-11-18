@@ -83,9 +83,7 @@ class DraftSave implements EventSubscriberInterface
             $this->journal->unlock($scope['id']);
             $request->attributes->set(
                 '_collaborate_conflict',
-                DraftJournal::ALREADY_CREATED === $conflict->getMessage()
-                    ? DraftJournal::ALREADY_CREATED
-                    : self::CHANGED,
+                $conflict instanceof RecordAlreadyCreatedException ? DraftJournal::ALREADY_CREATED : self::CHANGED,
             );
             throw $conflict;
         } catch (\Throwable $error) {

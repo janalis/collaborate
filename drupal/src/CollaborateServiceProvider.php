@@ -34,9 +34,11 @@ final class CollaborateServiceProvider implements ServiceProviderInterface
             'kernel.project_dir' => \dirname(\is_string($root) ? $root : \DRUPAL_ROOT),
             'kernel.default_locale' => Options::language(),
         ] as $name => $value) {
-            if (!$container->hasParameter($name)) {
-                $container->setParameter($name, $value);
+            if ($container->hasParameter($name)) {
+                continue;
             }
+
+            $container->setParameter($name, $value);
         }
         $container->setParameter('kernel.secret', Options::secret());
         // The bundle's templates, for Drupal's Twig (`@JanalisCollaborate`).

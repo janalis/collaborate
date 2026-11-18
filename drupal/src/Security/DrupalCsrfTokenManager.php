@@ -32,7 +32,7 @@ final readonly class DrupalCsrfTokenManager implements CsrfTokenManagerInterface
         return null;
     }
 
-    public function isTokenValid(CsrfToken $token): bool
+    public function isTokenValid(#[\SensitiveParameter] CsrfToken $token): bool
     {
         return $this->generator->validate((string) $token->getValue(), $token->getId());
     }

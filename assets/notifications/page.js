@@ -102,7 +102,7 @@ export function initPage(
   async function post(url, id = null) {
     posts += 1;
     try {
-      return await postChange(url, id, fetcher);
+      return await postChange(url, id, fetcher, url === hrefs.clear ? settings.clearToken : null);
     } finally {
       posts -= 1;
     }

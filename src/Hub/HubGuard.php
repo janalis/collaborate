@@ -9,6 +9,8 @@ use Janalis\Collaborate\Cursor\PlaceProviderInterface;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Notification\NotificationAccess;
 use Janalis\Collaborate\Security\CurrentUserInterface;
+use Psr\Clock\ClockInterface;
+use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -38,6 +40,7 @@ final readonly class HubGuard
         private ?RateLimiterFactoryInterface $limiter = null,
         private ?PlaceProviderInterface $places = null,
         private ?NotificationAccess $notifications = null,
+        private ClockInterface $clock = new NativeClock(),
     ) {}
 
     /** @return Admission|JsonResponse the admitted request, or the 429 answer of a user over the rate limit */
@@ -55,19 +58,19 @@ final readonly class HubGuard
             throw new AccessDeniedException('Collaboration requires a signed-in collaborator.');
         }
         if (\strlen($request->getContent()) > $maxBytes) {
-            throw new BadRequestHttpException('Cursor event is too large.');
+            throw new BadRequestHttpException('Hub request is too large.');
         }
         $data = $request->toArray();
         if (!$this->security->isGranted('IS_AUTHENTICATED_REMEMBERED')) {
             throw new AccessDeniedException('Collaboration requires an authenticated session.');
         }
         if (!$this->csrf->isTokenValid(new CsrfToken(self::CSRF_TOKEN_ID, $request->headers->get('X-CSRF-Token')))) {
-            throw new AccessDeniedException('Invalid cursor CSRF token.');
+            throw new AccessDeniedException('Invalid hub CSRF token.');
         }
         $page = $this->pages->verify(
             \is_string($data['grant'] ?? null) ? $data['grant'] : '',
             $userId,
-            time(),
+            $this->clock->now()->getTimestamp(),
             $this->collaborators->authorization($user),
         );
         if (null !== $page['topic'] && !$collaborator) {
@@ -78,7 +81,7 @@ final readonly class HubGuard
             throw new AccessDeniedHttpException('The page grant names a place the user may no longer enter.');
         }
         if (null !== $this->limiter && !$this->limiter->create((string) $userId)->consume()->isAccepted()) {
-            return new JsonResponse(['error' => 'Cursor rate limit exceeded.'], 429, [
+            return new JsonResponse(['error' => 'Hub rate limit exceeded.'], 429, [
                 'Retry-After' => '1',
                 'Cache-Control' => 'no-store',
             ]);

@@ -67,6 +67,7 @@ return static function (ContainerConfigurator $container): void {
         service('translator'),
         service('logger'),
         param('collaborate.drafts'),
+        service('clock'),
     ])->tag('monolog.logger', ['channel' => 'collaborate']);
 
     // Inert while drafts are disabled or no FormContextInterface service (easyadmin.php's, or the
@@ -76,23 +77,19 @@ return static function (ContainerConfigurator $container): void {
         ->args([
             service(DraftAccess::class),
             service(DraftJournal::class),
-            service(DraftSave::class),
+            service(FormDraft::class),
             service(FormContextInterface::class)->nullOnInvalid(),
             service('request_stack'),
             service(CurrentUserInterface::class),
             service(CollaboratorProviderInterface::class),
             service(DraftAccessCheckerInterface::class),
-            service('router'),
-            service('security.csrf.token_manager'),
-            service('translator'),
             service(RecordIdentifierInterface::class),
             service(FieldKeyResolverInterface::class),
             service('asset_mapper.importmap.config_reader')->nullOnInvalid(),
             param('collaborate.role'),
             param('collaborate.drafts'),
-            service('logger'),
         ])
-        ->tag('form.type_extension')->tag('monolog.logger', ['channel' => 'collaborate']);
+        ->tag('form.type_extension');
 
     $services
         ->set(DraftController::class)
@@ -107,6 +104,7 @@ return static function (ContainerConfigurator $container): void {
             param('collaborate.role'),
             service('janalis_collaborate.limiter.drafts')->nullOnInvalid(),
             service('logger'),
+            service('clock'),
         ])
         ->tag('controller.service_arguments')
         ->tag('monolog.logger', ['channel' => 'collaborate']);

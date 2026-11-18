@@ -1,8 +1,12 @@
 name: Browser setup
 description: >-
   PHP, Node, the dependencies, FrankenPHP and Chromium: what the browser scenarios and the documentation's
-  screenshots need to run the test applications. The job provides the database and FRANKENPHP_VERSION and
-  FRANKENPHP (where to install it) in its environment.
+  screenshots need to run the test applications. The job provides the database and FRANKENPHP (where to install
+  FrankenPHP) in its environment.
+inputs:
+  composer-key:
+    description: The key of the job's Composer cache (see composer-cache).
+    default: ${{ github.job }}
 runs:
   using: composite
   steps:
@@ -16,19 +20,58 @@ runs:
       with:
         node-version: 24
         cache: npm
+    # The Drupal test site resolves its own dependencies into the same download cache.
+    - uses: ./.github/actions/composer-cache
+      with:
+        key: ${{ inputs.composer-key }}
+        files: composer.lock tests/Application/Drupal/composer.json
     - run: composer install --no-interaction --prefer-dist
       shell: bash
     - run: npm ci
       shell: bash
     # The static build embeds PHP (with pdo_mysql) and the Mercure hub module. The plain application's
     # `e2e_ws` environment runs without Mercure: Playwright starts collaborate:hub:serve on the runner's PHP.
-    - name: Install FrankenPHP
+    # One version for every job; its SHA-256 is the release asset's digest.
+    - id: frankenphp
       shell: bash
       run: |
-        sudo curl -fsSL -o "$FRANKENPHP" \
-          "https://github.com/php/frankenphp/releases/download/${FRANKENPHP_VERSION}/frankenphp-linux-x86_64"
-        sudo chmod +x "$FRANKENPHP"
+        {
+          echo "version=v1.13.4"
+          echo "sha256=88e4229fb48167418e50bc29b94df5a4f83801ec70ea6637ed44bf0527e74c29"
+          echo "dir=$HOME/.cache/frankenphp"
+        } >> "$GITHUB_OUTPUT"
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.frankenphp.outputs.dir }}
+        key: frankenphp-${{ runner.os }}-${{ steps.frankenphp.outputs.version }}
+    - name: Install FrankenPHP
+      shell: bash
+      env:
+        VERSION: ${{ steps.frankenphp.outputs.version }}
+        SHA256: ${{ steps.frankenphp.outputs.sha256 }}
+        DIR: ${{ steps.frankenphp.outputs.dir }}
+      run: |
+        mkdir -p "$DIR"
+        if [ ! -f "$DIR/frankenphp" ]; then
+          curl -fsSL -o "$DIR/frankenphp" \
+            "https://github.com/php/frankenphp/releases/download/${VERSION}/frankenphp-linux-x86_64"
+        fi
+        echo "$SHA256  $DIR/frankenphp" | sha256sum --check --strict
+        sudo install -m 755 "$DIR/frankenphp" "$FRANKENPHP"
         "$FRANKENPHP" version
         "$FRANKENPHP" list-modules | grep -x http.handlers.mercure
-    - run: npx playwright install --with-deps chromium
+    # Chromium kept between runs, per Playwright version; its system packages are installed on every run.
+    - id: playwright
+      shell: bash
+      run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+    - id: playwright-cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+    - if: steps.playwright-cache.outputs.cache-hit != 'true'
+      run: npx playwright install --with-deps chromium
+      shell: bash
+    - if: steps.playwright-cache.outputs.cache-hit == 'true'
+      run: npx playwright install-deps chromium
       shell: bash

@@ -8,6 +8,8 @@ use Janalis\Collaborate\Cursor\CursorIdentity;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Notification\NotificationAccess;
+use Psr\Clock\ClockInterface;
+use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\PreconditionFailedHttpException;
@@ -30,6 +32,7 @@ final readonly class HubSessions
         private ?CollaboratorProviderInterface $collaborators = null,
         private bool $cursors = false,
         private array $colors = ['blue'],
+        private ClockInterface $clock = new NativeClock(),
     ) {}
 
     public function open(Admission $admission): HubSession
@@ -49,7 +52,9 @@ final readonly class HubSessions
         $denied = [];
         foreach ($this->grants($admission->data['drafts'] ?? []) as $index => $grant) {
             try {
-                $topics[] = $this->drafts->topic($this->drafts->verify($grant, $admission->user, time())['id']);
+                $topics[] = $this->drafts->topic(
+                    $this->drafts->verify($grant, $admission->user, $this->clock->now()->getTimestamp())['id'],
+                );
             } catch (PreconditionFailedHttpException) {
                 $resend[] = $index;
             } catch (AccessDeniedHttpException) {
@@ -85,7 +90,7 @@ final readonly class HubSessions
     private function grants(mixed $drafts): array
     {
         if (!\is_array($drafts) || !array_is_list($drafts) || \count($drafts) > $this->maxDrafts) {
-            throw new BadRequestHttpException('Invalid cursor session drafts.');
+            throw new BadRequestHttpException('Invalid hub session drafts.');
         }
 
         return array_map(static fn(mixed $grant): string => \is_string($grant) ? $grant : '', $drafts);

@@ -1,0 +1,733 @@
+variant = "loose"
+
+[[issues]]
+file = "drupal/src/Bridge/DrupalPlaces.php"
+code = "mixed-argument"
+message = "Invalid argument type for argument #1 of `ksort`: expected `array<('K.ksort() extends array-key), ('V.ksort() extends mixed)>`, but found `mixed`."
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/DrupalPlaces.php"
+code = "mixed-assignment"
+message = "Assigning `mixed` type to a variable may lead to unexpected behavior."
+count = 4
+
+[[issues]]
+file = "drupal/src/Bridge/DrupalPlaces.php"
+code = "mixed-assignment"
+message = "Assigning `nonnull` type to a variable may lead to unexpected behavior."
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/EntityForms.php"
+code = "invalid-operand"
+message = "Right operand in `||` operation is an `array`."
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/EntityForms.php"
+code = "invalid-type-cast"
+message = "Casting `mixed` to `array`."
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/EntityForms.php"
+code = "less-specific-argument"
+message = 'Argument type mismatch for argument #3 of `Drupal\collaborate\Bridge\EntityForms::savedValues`: expected `Drupal\Core\Entity\ContentEntityInterface`, but provided type `Drupal\Core\Entity\EntityInterface` is less specific.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/EntityForms.php"
+code = "less-specific-return-statement"
+message = '''Returned type `array{'entity': Drupal\Core\Entity\EntityInterface, 'permission': string('create')|string('update'), 'record': array{'class': truthy-string, 'draft': null|string, 'entity': Drupal\Core\Entity\EntityInterface, 'id': null|string, 'new': bool}, 'request': Symfony\Component\HttpFoundation\Request, 'user': Symfony\Component\Security\Core\User\UserInterface}` is less specific than the declared return type `array{'entity': Drupal\Core\Entity\ContentEntityInterface, 'permission': string('create')|string('update'), 'record': array{'class': string, 'draft': null|string, 'entity': object, 'id': null|string, 'new': bool}, 'request': Symfony\Component\HttpFoundation\Request, 'user': Symfony\Component\Security\Core\User\UserInterface}|null` for function `Drupal\collaborate\Bridge\EntityForms::sharing`.'''
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/EntityForms.php"
+code = "mixed-argument"
+message = 'Invalid argument type for argument #1 of `Drupal\collaborate\Bridge\EntityForms::fields`: expected `array<array-key, mixed>`, but found `mixed`.'
+count = 2
+
+[[issues]]
+file = "drupal/src/Bridge/EntityForms.php"
+code = "mixed-argument"
+message = '''Invalid argument type for argument #1 of `array_unshift`: expected `array<('K.array_unshift() extends array-key), list{class-string('Drupal\collaborate\Bridge\EntityForms'), string('onValidate')}>`, but found `mixed`.'''
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/EntityForms.php"
+code = "mixed-argument"
+message = '''Invalid argument type for argument #1 of `array_unshift`: expected `array<('K.array_unshift() extends array-key), list{class-string('Drupal\collaborate\Bridge\ItemKeys'), string('onProcess')}>`, but found `nonnull`.'''
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/EntityForms.php"
+code = "mixed-argument"
+message = 'Invalid argument type for argument #2 of `Drupal\Core\Form\FormBuilderInterface::prepareForm`: expected `array<array-key, mixed>`, but found `mixed`.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/EntityForms.php"
+code = "mixed-array-assignment"
+message = "Unsafe array assignment on type `mixed`."
+count = 8
+
+[[issues]]
+file = "drupal/src/Bridge/EntityForms.php"
+code = "mixed-array-assignment"
+message = "Unsafe array assignment on type `nonnull`."
+count = 2
+
+[[issues]]
+file = "drupal/src/Bridge/EntityForms.php"
+code = "mixed-array-index"
+message = "Invalid index type `mixed` used in array assignment on `array<array-key, mixed>`."
+count = 2
+
+[[issues]]
+file = "drupal/src/Bridge/EntityForms.php"
+code = "mixed-assignment"
+message = "Assigning `mixed` type to a variable may lead to unexpected behavior."
+count = 14
+
+[[issues]]
+file = "drupal/src/Bridge/EntityForms.php"
+code = "mixed-assignment"
+message = "Assigning `nonnull` type to a variable may lead to unexpected behavior."
+count = 2
+
+[[issues]]
+file = "drupal/src/Bridge/EntityForms.php"
+code = "mixed-method-access"
+message = "Attempting to call method `getSetting()` on a non-object type (`mixed`)."
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/EntityForms.php"
+code = "mixed-method-access"
+message = "Attempting to call method `getType()` on a non-object type (`mixed`)."
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/EntityForms.php"
+code = "mixed-operand"
+message = "Casting `mixed` to `bool`."
+count = 2
+
+[[issues]]
+file = "drupal/src/Bridge/EntityForms.php"
+code = "non-existent-method"
+message = 'Method `getFieldDefinitions` does not exist on type `Drupal\Core\Entity\EntityInterface`.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/EntityForms.php"
+code = "non-existent-method"
+message = 'Method `get` does not exist on type `Drupal\Core\Entity\EntityInterface`.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/EntityForms.php"
+code = "possibly-null-argument"
+message = 'Argument #1 of method `Drupal\Core\Entity\EntityStorageInterface::loadUnchanged` is possibly `null`, but parameter type `int|string` does not accept it.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/EntityForms.php"
+code = "possibly-null-operand"
+message = "Possibly null middle operand used in string concatenation (type `non-empty-string|null`)."
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/EntityForms.php"
+code = "redundant-docblock-type"
+message = "Redundant docblock type for expression."
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/EntityForms.php"
+code = "unknown-iterator-type"
+message = "Cannot determine the type of the expression provided to `foreach`."
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/ItemKeys.php"
+code = "ambiguous-object-method-access"
+message = "Cannot statically verify method call on a generic `object` type."
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/ItemKeys.php"
+code = "invalid-array-access"
+message = 'Cannot access array index on object `Drupal\Component\Plugin\Definition\PluginDefinitionInterface` that does not implement `ArrayAccess`.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/ItemKeys.php"
+code = "less-specific-argument"
+message = 'Argument type mismatch for argument #1 of `Drupal\Core\Entity\Display\EntityDisplayInterface::setComponent`: expected `string`, but provided type `array-key` is less specific.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/ItemKeys.php"
+code = "mixed-argument"
+message = "Invalid argument type for argument #1 of `array_keys`: expected `array<('K.array_keys() extends array-key), ('V.array_keys() extends mixed)>`, but found `mixed`."
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/ItemKeys.php"
+code = "mixed-argument"
+message = 'Invalid argument type for argument #2 of `Drupal\Core\Entity\Display\EntityDisplayInterface::setComponent`: expected `array<array-key, mixed>`, but found `mixed`.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/ItemKeys.php"
+code = "mixed-argument"
+message = "Invalid argument type for argument #2 of `array_map`: expected `array<('K.array_map() extends array-key), mixed>`, but found `mixed`."
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/ItemKeys.php"
+code = "mixed-array-assignment"
+message = "Unsafe array assignment on type `mixed`."
+count = 7
+
+[[issues]]
+file = "drupal/src/Bridge/ItemKeys.php"
+code = "mixed-array-index"
+message = "Invalid index type `mixed` used in array assignment on `array<array-key, mixed>`."
+count = 4
+
+[[issues]]
+file = "drupal/src/Bridge/ItemKeys.php"
+code = "mixed-assignment"
+message = "Assigning `mixed` type to a variable may lead to unexpected behavior."
+count = 23
+
+[[issues]]
+file = "drupal/src/Bridge/ItemKeys.php"
+code = "mixed-assignment"
+message = "Assigning `nonnull` type to a variable may lead to unexpected behavior."
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/ItemKeys.php"
+code = "mixed-operand"
+message = "Right operand in binary operation has type `mixed`."
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/ItemKeys.php"
+code = "non-documented-property"
+message = 'Ambiguous property access: $_collaborate_key on class `Drupal\Core\Field\FieldItemInterface`.'
+count = 2
+
+[[issues]]
+file = "drupal/src/Bridge/ItemKeys.php"
+code = "non-existent-class-like"
+message = 'Class, Interface, or Trait `Drupal\paragraphs\Plugin\Field\FieldWidget\ParagraphsWidget` does not exist.'
+count = 4
+
+[[issues]]
+file = "drupal/src/Bridge/ItemKeys.php"
+code = "non-existent-method"
+message = 'Method `getAllowedTypes` does not exist on type `Drupal\paragraphs\Plugin\Field\FieldWidget\ParagraphsWidget`.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/ItemKeys.php"
+code = "non-existent-method"
+message = 'Method `getSetting` does not exist on type `Drupal\paragraphs\Plugin\Field\FieldWidget\ParagraphsWidget`.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/ItemKeys.php"
+code = "possibly-invalid-argument"
+message = 'Possible argument type mismatch for argument #1 of `Drupal\collaborate\Bridge\ItemKeys::keyedParents`: expected `list<string>`, but possibly received `non-empty-array<array-key, string>|non-empty-list<string>`.'
+count = 2
+
+[[issues]]
+file = "drupal/src/Bridge/ItemKeys.php"
+code = "possibly-invalid-argument"
+message = 'Possible argument type mismatch for argument #1 of `Drupal\collaborate\Bridge\ItemKeys::name`: expected `list<string>`, but possibly received `non-empty-array<array-key, string>|non-empty-list<string>`.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/ItemKeys.php"
+code = "possibly-invalid-argument"
+message = 'Possible argument type mismatch for argument #1 of `Drupal\collaborate\Bridge\ItemKeys::path`: expected `list<string>`, but possibly received `array<array-key, string>|list<string>`.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/ItemKeys.php"
+code = "possibly-invalid-argument"
+message = 'Possible argument type mismatch for argument #2 of `Drupal\Core\Field\WidgetBase::getWidgetState`: expected `string`, but possibly received `int|null|string`.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/ItemKeys.php"
+code = "possibly-null-argument"
+message = 'Argument #2 of method `Drupal\Core\Field\WidgetBase::getWidgetState` is possibly `null`, but parameter type `string` does not accept it.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/ItemKeys.php"
+code = "possibly-null-array-index"
+message = "Possibly using `null` as an array index to access elementof variable $this->saved[$id]."
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/ItemKeys.php"
+code = "possibly-null-operand"
+message = "Possibly null left operand used in string concatenation (type `null|string`)."
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/ItemKeys.php"
+code = "redundant-logical-operation"
+message = "Redundant `||` operation: left operand is always false and right operand is evaluated."
+count = 1
+
+[[issues]]
+file = "drupal/src/Bridge/ItemKeys.php"
+code = "redundant-type-comparison"
+message = "Redundant type assertion: `$input` is already `array<array-key, mixed>`."
+count = 1
+
+[[issues]]
+file = "drupal/src/CollaborateServiceProvider.php"
+code = "mixed-argument"
+message = "Invalid argument type for argument #1 of `dirname`: expected `string`, but found `mixed`."
+count = 1
+
+[[issues]]
+file = "drupal/src/CollaborateServiceProvider.php"
+code = "mixed-assignment"
+message = "Assigning `mixed` type to a variable may lead to unexpected behavior."
+count = 1
+
+[[issues]]
+file = "drupal/src/CollaborateServiceProvider.php"
+code = "mixed-assignment"
+message = "Assigning `nonnull` type to a variable may lead to unexpected behavior."
+count = 1
+
+[[issues]]
+file = "drupal/src/CollaborateServiceProvider.php"
+code = "non-existent-constant"
+message = "Undefined constant: `DRUPAL_ROOT`."
+count = 2
+
+[[issues]]
+file = "drupal/src/DependencyInjection/DrupalWiringPass.php"
+code = "invalid-destructuring-source"
+message = "Invalid destructuring assignment: Cannot unpack type `mixed` into variables."
+count = 1
+
+[[issues]]
+file = "drupal/src/DependencyInjection/DrupalWiringPass.php"
+code = "mixed-argument"
+message = 'Invalid argument type for argument #1 of `Drupal\collaborate\DependencyInjection\DrupalWiringPass::map`: expected `array<array-key, mixed>`, but found `mixed`.'
+count = 1
+
+[[issues]]
+file = "drupal/src/DependencyInjection/DrupalWiringPass.php"
+code = "mixed-assignment"
+message = "Assigning `mixed` type to a variable may lead to unexpected behavior."
+count = 4
+
+[[issues]]
+file = "drupal/src/DependencyInjection/DrupalWiringPass.php"
+code = "possibly-undefined-variable"
+message = "Variable `$match` might not have been defined on all execution paths leading to this point."
+count = 1
+
+[[issues]]
+file = "drupal/src/DependencyInjection/Options.php"
+code = "less-specific-return-statement"
+message = 'Returned type `array<array-key, mixed>` is less specific than the declared return type `array<string, mixed>` for function `Drupal\collaborate\DependencyInjection\Options::bundle`.'
+count = 1
+
+[[issues]]
+file = "drupal/src/DependencyInjection/Options.php"
+code = "less-specific-return-statement"
+message = 'Returned type `array<array-key, mixed>` is less specific than the declared return type `array<string, mixed>` for function `Drupal\collaborate\DependencyInjection\Options::settings`.'
+count = 1
+
+[[issues]]
+file = "drupal/src/DependencyInjection/Options.php"
+code = "less-specific-return-statement"
+message = 'Returned type `array<array-key, mixed>` is less specific than the declared return type `array<string, mixed>` for function `Drupal\collaborate\DependencyInjection\Options::stored`.'
+count = 1
+
+[[issues]]
+file = "drupal/src/DependencyInjection/Options.php"
+code = "mixed-assignment"
+message = "Assigning `mixed` type to a variable may lead to unexpected behavior."
+count = 3
+
+[[issues]]
+file = "drupal/src/DependencyInjection/Options.php"
+code = "mixed-operand"
+message = "Casting `mixed` to `bool`."
+count = 6
+
+[[issues]]
+file = "drupal/src/DrupalTranslator.php"
+code = "mixed-assignment"
+message = "Assigning `mixed` type to a variable may lead to unexpected behavior."
+count = 1
+
+[[issues]]
+file = "drupal/src/EventSubscriber/RefreshSubscriber.php"
+code = "mixed-assignment"
+message = "Assigning `mixed` type to a variable may lead to unexpected behavior."
+count = 1
+
+[[issues]]
+file = "drupal/src/Form/SettingsForm.php"
+code = "ambiguous-object-method-access"
+message = "Cannot statically verify method call on a generic `object` type."
+count = 1
+
+[[issues]]
+file = "drupal/src/Form/SettingsForm.php"
+code = "invalid-type-cast"
+message = "Casting `mixed` to `array`."
+count = 3
+
+[[issues]]
+file = "drupal/src/Form/SettingsForm.php"
+code = "mixed-argument"
+message = 'Invalid argument type for argument #1 of `Drupal\collaborate\Form\SettingsForm::lines`: expected `array<string, string>`, but found `nonnull`.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Form/SettingsForm.php"
+code = "mixed-argument"
+message = 'Invalid argument type for argument #1 of `Symfony\Component\Config\Definition\Processor::processConfiguration`: expected `Symfony\Component\Config\Definition\ConfigurationInterface`, but found `nonnull`.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Form/SettingsForm.php"
+code = "mixed-assignment"
+message = "Assigning `mixed` type to a variable may lead to unexpected behavior."
+count = 2
+
+[[issues]]
+file = "drupal/src/Form/SettingsForm.php"
+code = "mixed-operand"
+message = "Casting `mixed` to `bool`."
+count = 7
+
+[[issues]]
+file = "drupal/src/Form/SettingsForm.php"
+code = "non-existent-method"
+message = 'Method `getConfiguration` does not exist on type `Symfony\Component\DependencyInjection\Extension\ExtensionInterface`.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Form/SettingsForm.php"
+code = "possibly-undefined-variable"
+message = "Variable `$match` might not have been defined on all execution paths leading to this point."
+count = 1
+
+[[issues]]
+file = "drupal/src/Hub/MercureHubs.php"
+code = "mixed-assignment"
+message = "Assigning `mixed` type to a variable may lead to unexpected behavior."
+count = 5
+
+[[issues]]
+file = "drupal/src/Hub/MercureHubs.php"
+code = "mixed-assignment"
+message = "Assigning `nonnull` type to a variable may lead to unexpected behavior."
+count = 1
+
+[[issues]]
+file = "drupal/src/Page/AssetUrls.php"
+code = "invalid-operand"
+message = 'Invalid left operand: object of type `Drupal\Core\GeneratedUrl` cannot be converted to `string`.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Page/AssetUrls.php"
+code = "non-existent-function"
+message = 'Could not find definition for function `Drupal\collaborate\Page\base_path` (also tried as `base_path` in a broader scope).'
+count = 1
+
+[[issues]]
+file = "drupal/src/Page/Pages.php"
+code = "mixed-array-assignment"
+message = "Unsafe array assignment on type `mixed`."
+count = 9
+
+[[issues]]
+file = "drupal/src/Page/Pages.php"
+code = "reference-to-undefined-variable"
+message = "Reference created from a previously undefined variable `$match`."
+count = 1
+
+[[issues]]
+file = "drupal/src/Plugin/Block/NotificationsBlock.php"
+code = "less-specific-argument"
+message = 'Argument type mismatch for argument #1 of `Janalis\Collaborate\Twig\NotificationRuntime::bell`: expected `Twig\Environment`, but provided type `object` is less specific.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Plugin/Block/PresenceBlock.php"
+code = "less-specific-argument"
+message = 'Argument type mismatch for argument #1 of `Janalis\Collaborate\Twig\CollaborateExtension::presence`: expected `Twig\Environment`, but provided type `object` is less specific.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Plugin/QueueWorker/MessageWorker.php"
+code = "incompatible-parameter-type"
+message = 'Parameter `$configuration` of `Drupal\collaborate\Plugin\QueueWorker\MessageWorker::create()` expects type `array<string, mixed>` but parent `Drupal\Core\Plugin\ContainerFactoryPluginInterface::create()` expects type `array<array-key, mixed>`'
+count = 1
+
+[[issues]]
+file = "drupal/src/Plugin/QueueWorker/MessageWorker.php"
+code = "incompatible-parameter-type"
+message = 'Parameter `$configuration` of `Drupal\collaborate\Plugin\QueueWorker\MessageWorker::create()` expects type `array<string, mixed>` but parent `Drupal\Core\Plugin\PluginBase::create()` expects type `array<array-key, mixed>`'
+count = 1
+
+[[issues]]
+file = "drupal/src/Routing/Routes.php"
+code = "less-specific-nested-argument-type"
+message = '''Argument type mismatch for argument #3 of `Symfony\Component\Routing\Route::__construct`: expected `array<array-key, Stringable|string>`, but provided type `array{'_access': string('TRUE'), ...}` is less specific.'''
+count = 1
+
+[[issues]]
+file = "drupal/src/Routing/Routes.php"
+code = "less-specific-nested-argument-type"
+message = 'Argument type mismatch for argument #5 of `Symfony\Component\Routing\Route::__construct`: expected `array<array-key, string>|string`, but provided type `array<array-key, mixed>` is less specific.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Security/DrupalAccessChecker.php"
+code = "possibly-null-argument"
+message = 'Argument #1 of method `Drupal\Component\Plugin\Discovery\DiscoveryInterface::hasDefinition` is possibly `null`, but parameter type `string` does not accept it.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Security/DrupalAccessChecker.php"
+code = "possibly-null-argument"
+message = 'Argument #1 of method `Drupal\Core\Entity\EntityTypeManagerInterface::getAccessControlHandler` is possibly `null`, but parameter type `string` does not accept it.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Security/DrupalAccessChecker.php"
+code = "possibly-undefined-int-array-index"
+message = "Possibly undefined array index accessed on `array{1: null}|non-empty-list<string>`."
+count = 2
+
+[[issues]]
+file = "drupal/src/Security/DrupalCollaboratorProvider.php"
+code = "invalid-return-statement"
+message = 'Invalid return type for function `Drupal\collaborate\Security\DrupalCollaboratorProvider::authorization`: expected `list<string>`, but found `array<array-key, string>`.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Security/DrupalCollaboratorProvider.php"
+code = "mixed-assignment"
+message = "Assigning `mixed` type to a variable may lead to unexpected behavior."
+count = 1
+
+[[issues]]
+file = "drupal/src/Security/DrupalCollaboratorProvider.php"
+code = "mixed-method-access"
+message = "Attempting to call method `getFileUri()` on a non-object type (`mixed`)."
+count = 1
+
+[[issues]]
+file = "drupal/src/Security/DrupalCollaboratorProvider.php"
+code = "non-documented-property"
+message = 'Ambiguous property access: $entity on class `Drupal\Core\Field\FieldItemListInterface`.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Security/DrupalCsrfTokenManager.php"
+code = "redundant-cast"
+message = "Redundant cast to `(string)`: the expression already has this type."
+count = 1
+
+[[issues]]
+file = "drupal/src/Security/DrupalUser.php"
+code = "less-specific-nested-return-statement"
+message = '''Returned type `list<mixed>` is less specific than the declared return type `list<string>` for function `Drupal\collaborate\Security\DrupalUser::getRoles` due to nested 'mixed'.'''
+count = 1
+
+[[issues]]
+file = "drupal/src/Security/DrupalUser.php"
+code = "redundant-comparison"
+message = "Redundant `===` comparison: left-hand side is never identical to right-hand side."
+count = 1
+
+[[issues]]
+file = "drupal/src/Security/DrupalUser.php"
+code = "redundant-logical-operation"
+message = "Redundant `||` operation: left operand is always false and right operand is evaluated."
+count = 1
+
+[[issues]]
+file = "drupal/src/Storage/Connections.php"
+code = "mixed-assignment"
+message = "Assigning `mixed` type to a variable may lead to unexpected behavior."
+count = 1
+
+[[issues]]
+file = "drupal/src/Storage/Connections.php"
+code = "mixed-assignment"
+message = "Assigning `nonnull` type to a variable may lead to unexpected behavior."
+count = 3
+
+[[issues]]
+file = "drupal/src/Storage/Connections.php"
+code = "possibly-invalid-argument"
+message = '''Possible argument type mismatch for argument #1 of `Doctrine\DBAL\DriverManager::getConnection`: expected `array{'application_name'?: string, 'charset'?: string, 'connectstring'?: string, 'dbname'?: string, 'defaultTableOptions'?: array<string, mixed>, 'driver'?: string('ibm_db2')|string('mysqli')|string('oci8')|string('pdo_mysql')|string('pdo_oci')|string('pdo_pgsql')|string('pdo_sqlite')|string('pdo_sqlsrv')|string('pgsql')|string('sqlite3')|string('sqlsrv'), 'driverClass'?: class-string<Doctrine\DBAL\Driver>, 'driverOptions'?: array<array-key, mixed>, 'gssencmode'?: string, 'host'?: string, 'instancename'?: string, 'keepReplica'?: bool, 'memory'?: bool, 'password'?: string, 'path'?: string, 'persistent'?: bool, 'pooled'?: bool, 'port'?: int, 'primary'?: array{'application_name'?: string, 'charset'?: string, 'connectstring'?: string, 'dbname'?: string, 'defaultTableOptions'?: array<string, mixed>, 'driver'?: string('ibm_db2')|string('mysqli')|string('oci8')|string('pdo_mysql')|string('pdo_oci')|string('pdo_pgsql')|string('pdo_sqlite')|string('pdo_sqlsrv')|string('pgsql')|string('sqlite3')|string('sqlsrv'), 'driverClass'?: class-string<Doctrine\DBAL\Driver>, 'driverOptions'?: array<array-key, mixed>, 'gssencmode'?: string, 'host'?: string, 'instancename'?: string, 'memory'?: bool, 'password'?: string, 'path'?: string, 'persistent'?: bool, 'pooled'?: bool, 'port'?: int, 'serverVersion'?: string, 'service'?: bool, 'servicename'?: string, 'sessionMode'?: int, 'ssl_ca'?: string, 'ssl_capath'?: string, 'ssl_cert'?: string, 'ssl_cipher'?: string, 'ssl_key'?: string, 'sslcert'?: string, 'sslcrl'?: string, 'sslkey'?: string, 'sslmode'?: string, 'sslrootcert'?: string, 'unix_socket'?: string, 'user'?: string, 'wrapperClass'?: class-string<Doctrine\DBAL\Connection>}, 'replica'?: array<array-key, array{'application_name'?: string, 'charset'?: string, 'connectstring'?: string, 'dbname'?: string, 'defaultTableOptions'?: array<string, mixed>, 'driver'?: string('ibm_db2')|string('mysqli')|string('oci8')|string('pdo_mysql')|string('pdo_oci')|string('pdo_pgsql')|string('pdo_sqlite')|string('pdo_sqlsrv')|string('pgsql')|string('sqlite3')|string('sqlsrv'), 'driverClass'?: class-string<Doctrine\DBAL\Driver>, 'driverOptions'?: array<array-key, mixed>, 'gssencmode'?: string, 'host'?: string, 'instancename'?: string, 'memory'?: bool, 'password'?: string, 'path'?: string, 'persistent'?: bool, 'pooled'?: bool, 'port'?: int, 'serverVersion'?: string, 'service'?: bool, 'servicename'?: string, 'sessionMode'?: int, 'ssl_ca'?: string, 'ssl_capath'?: string, 'ssl_cert'?: string, 'ssl_cipher'?: string, 'ssl_key'?: string, 'sslcert'?: string, 'sslcrl'?: string, 'sslkey'?: string, 'sslmode'?: string, 'sslrootcert'?: string, 'unix_socket'?: string, 'user'?: string, 'wrapperClass'?: class-string<Doctrine\DBAL\Connection>}>, 'serverVersion'?: string, 'service'?: bool, 'servicename'?: string, 'sessionMode'?: int, 'sid'?: string, 'ssl_ca'?: string, 'ssl_capath'?: string, 'ssl_cert'?: string, 'ssl_cipher'?: string, 'ssl_key'?: string, 'sslcert'?: string, 'sslcrl'?: string, 'sslkey'?: string, 'sslmode'?: string, 'sslrootcert'?: string, 'unix_socket'?: string, 'user'?: string, 'wrapperClass'?: class-string<Doctrine\DBAL\Connection>}`, but possibly received `array<string('charset')|string('dbname')|string('driver')|string('host')|string('password')|string('path')|string('port')|string('unix_socket')|string('user'), mixed>`.'''
+count = 1
+
+[[issues]]
+file = "drupal/src/Storage/Schema.php"
+code = "deprecated-method"
+message = 'Call to deprecated method: `Doctrine\DBAL\Schema\AbstractAsset::getName`.'
+count = 1
+
+[[issues]]
+file = "drupal/src/Storage/Schema.php"
+code = "mixed-assignment"
+message = "Assigning `mixed` type to a variable may lead to unexpected behavior."
+count = 1
+
+[[issues]]
+file = "drupal/tests/src/Functional/EntityFormTest.php"
+code = "ambiguous-object-method-access"
+message = "Cannot statically verify method call on a generic `object` type."
+count = 2
+
+[[issues]]
+file = "drupal/tests/src/Functional/EntityFormTest.php"
+code = "mixed-argument"
+message = "Invalid argument type for argument #1 of `array_column`: expected `array<array-key, array<string('value'), ('V.array_column() extends mixed)>|object>|list<array<string('value'), ('V.array_column() extends mixed)>|object>`, but found `mixed`."
+count = 1
+
+[[issues]]
+file = "drupal/tests/src/Functional/EntityFormTest.php"
+code = "mixed-argument"
+message = 'Invalid argument type for argument #2 of `PHPUnit\Framework\Assert::assertArrayNotHasKey`: expected `ArrayAccess<array-key, mixed>|array<array-key, mixed>`, but found `mixed`.'
+count = 1
+
+[[issues]]
+file = "drupal/tests/src/Functional/EntityFormTest.php"
+code = "mixed-argument"
+message = 'Invalid argument type for argument #2 of `PHPUnit\Framework\Assert::assertMatchesRegularExpression`: expected `string`, but found `mixed`.'
+count = 1
+
+[[issues]]
+file = "drupal/tests/src/Functional/EntityFormTest.php"
+code = "mixed-argument"
+message = 'Invalid argument type for argument #2 of `PHPUnit\Framework\Assert::assertStringContainsString`: expected `string`, but found `mixed`.'
+count = 1
+
+[[issues]]
+file = "drupal/tests/src/Functional/EntityFormTest.php"
+code = "mixed-argument"
+message = 'Invalid argument type for argument #2 of `PHPUnit\Framework\Assert::assertStringEndsWith`: expected `string`, but found `mixed`.'
+count = 1
+
+[[issues]]
+file = "drupal/tests/src/Functional/EntityFormTest.php"
+code = "mixed-argument"
+message = "Invalid argument type for argument #2 of `explode`: expected `string`, but found `mixed`."
+count = 2
+
+[[issues]]
+file = "drupal/tests/src/Functional/EntityFormTest.php"
+code = "mixed-array-access"
+message = "Unsafe array access on type `mixed`."
+count = 20
+
+[[issues]]
+file = "drupal/tests/src/Functional/EntityFormTest.php"
+code = "mixed-assignment"
+message = "Assigning `mixed` type to a variable may lead to unexpected behavior."
+count = 6
+
+[[issues]]
+file = "drupal/tests/src/Functional/EntityFormTest.php"
+code = "mixed-method-access"
+message = "Attempting to call method `get()` on a non-object type (`mixed`)."
+count = 1
+
+[[issues]]
+file = "drupal/tests/src/Functional/EntityFormTest.php"
+code = "mixed-method-access"
+message = "Attempting to call method `getValue()` on a non-object type (`mixed`)."
+count = 1
+
+[[issues]]
+file = "drupal/tests/src/Functional/EntityFormTest.php"
+code = "mixed-method-access"
+message = "Attempting to call method `loadUnchanged()` on a non-object type (`mixed`)."
+count = 1
+
+[[issues]]
+file = "drupal/tests/src/Functional/EntityFormTest.php"
+code = "mixed-method-access"
+message = "Attempting to call method `save()` on a non-object type (`mixed`)."
+count = 1
+
+[[issues]]
+file = "drupal/tests/src/Functional/EntityFormTest.php"
+code = "mixed-method-access"
+message = "Attempting to call method `setComponent()` on a non-object type (`mixed`)."
+count = 1
+
+[[issues]]
+file = "drupal/tests/src/Functional/EntityFormTest.php"
+code = "possibly-null-operand"
+message = "Possibly null middle operand used in string concatenation (type `int|null|string`)."
+count = 4
+
+[[issues]]
+file = "drupal/tests/src/Kernel/ServicesTest.php"
+code = "ambiguous-object-method-access"
+message = "Cannot statically verify method call on a generic `object` type."
+count = 1
+
+[[issues]]
+file = "drupal/tests/src/Kernel/ServicesTest.php"
+code = "mixed-method-access"
+message = "Attempting to call method `fetchField()` on a non-object type (`mixed`)."
+count = 1
+
+[[issues]]
+file = "drupal/tests/src/Kernel/ServicesTest.php"
+code = "possible-method-access-on-null"
+message = "Attempting to call a method on `null`."
+count = 1
+
+[[issues]]
+file = "drupal/tests/src/Unit/ItemKeysTest.php"
+code = "mixed-array-access"
+message = "Unsafe array access on type `mixed`."
+count = 36
+
+[[issues]]
+file = "drupal/tests/src/Unit/ItemKeysTest.php"
+code = "mixed-assignment"
+message = "Assigning `mixed` type to a variable may lead to unexpected behavior."
+count = 1
+
+[[issues]]
+file = "drupal/tests/src/Unit/ItemKeysTest.php"
+code = "possibly-invalid-argument"
+message = 'Possible argument type mismatch for argument #1 of `Drupal\collaborate\Bridge\ItemKeys::name`: expected `list<string>`, but possibly received `array<array-key, mixed>`.'
+count = 1
+
+[[issues]]
+file = "drupal/tests/src/Unit/OptionsTest.php"
+code = "mixed-array-access"
+message = "Unsafe array access on type `mixed`."
+count = 20

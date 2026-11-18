@@ -66,6 +66,7 @@ final class NotificationRuntimeTest extends TestCase
             'unread' => 'collaborate_notifications_change?action=unread',
             'clear' => 'collaborate_notifications_change?action=clear',
             'topicsToken' => 'token:collaborate-notification-topics',
+            'clearToken' => 'token:collaborate-notification-clear',
             'maxCount' => 99,
             'push' => null,
         ];

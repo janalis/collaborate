@@ -1519,6 +1519,7 @@ final class DraftJournalTest extends TestCase
         $this->journal->created('record', '42');
         self::assertSame('42', $this->journal->replay('record', $this->fields, 0)['recordId']);
         $this->expectException(RecordAlreadyCreatedException::class);
+        $this->expectExceptionMessage(DraftJournal::ALREADY_CREATED);
         $this->journal->lockSave('record', 1, 0, [], true);
     }
 
@@ -2195,6 +2196,61 @@ final class DraftJournalTest extends TestCase
             'record',
         ]);
         self::assertSame(2, $this->journal->join('record', $this->fields)['generation']);
+    }
+
+    public function testASaveCountsWhatItRecordsOnTopOfTheJournal(): void
+    {
+        $fields = [
+            'title' => ['type' => 'text', 'initial' => 'Draft'],
+            'choice' => ['type' => 'value', 'initial' => 'a'],
+        ];
+        $this->journal->join('counted', $fields);
+
+        // A save records the text it diffs and the value it changed; a second save adds to what the first stored.
+        $this->journal->saved('counted', ['title' => 'Saved title', 'choice' => 'b']);
+        self::assertGreaterThan(0, $this->bytes('counted'));
+        self::assertSame($this->storedBytes('counted'), $this->bytes('counted'));
+        $this->journal->saved('counted', ['title' => 'Saved again']);
+        self::assertSame($this->storedBytes('counted'), $this->bytes('counted'));
+    }
+
+    public function testANewEditorSchemaCountsTheEventsOfTheOtherFields(): void
+    {
+        $v1 = [
+            'body' => ['type' => 'rich', 'initial' => 'abcd', 'schema' => 'v1'],
+            'choice' => ['type' => 'value', 'initial' => 'a'],
+        ];
+        $this->journal->join('recount', $v1);
+        $this->journal->append('recount', $v1, $this->event(), 1, 'Alice');
+        $this->journal->saved('recount', ['body' => 'edited', 'choice' => 'b']);
+        $this->journal->saved('recount', ['choice' => 'c']);
+
+        // The new schema drops the body's operations; the choice's two values stay, and the journal counts them.
+        $this->journal->join('recount', ['body' => ['type' => 'rich', 'initial' => 'edited', 'schema' => 'v2']] + $v1);
+        self::assertCount(2, $this->db->fetchFirstColumn('SELECT payload FROM collaborate_draft_event WHERE draft_id = ?', [
+            'recount',
+        ]));
+        self::assertSame($this->storedBytes('recount'), $this->bytes('recount'));
+    }
+
+    private function bytes(string $id): int
+    {
+        return (int) $this->db->fetchOne('SELECT bytes FROM collaborate_draft WHERE id = ?', [$id]);
+    }
+
+    /** The journal's events as PHP stored them: MySQL returns its JSON reformatted. */
+    private function storedBytes(string $id): int
+    {
+        return array_sum(array_map(
+            static fn(mixed $payload): int => \strlen(json_encode(
+                json_decode((string) $payload, flags: \JSON_THROW_ON_ERROR),
+                \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES,
+            )),
+            $this->db->fetchFirstColumn('SELECT payload FROM collaborate_draft_event WHERE draft_id = ? AND batch_id <> ?', [
+                $id,
+                'rebase',
+            ]),
+        ));
     }
 
     public function testSavedModelsAdoptANewEditorSchema(): void

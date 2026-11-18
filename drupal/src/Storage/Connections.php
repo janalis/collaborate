@@ -42,41 +42,42 @@ final class Connections
         // Drupal's prefix, on the tables the bundle names; the comparison of a schema sees those alone.
         $configuration->setMiddlewares([new TablePrefix(self::prefix())]);
         $configuration->setSchemaAssetsFilter(Schema::mapped(...));
-        $prefix = $info['prefix'] ?? '';
-        $database = $info['database'] ?? null;
+        // Drupal's connection info is untyped: each parameter is text or a port, and an empty one is left out.
+        $text = static fn(mixed $value): ?string => \is_scalar($value) && '' !== (string) $value
+            ? (string) $value
+            : null;
+        $prefix = $text($info['prefix'] ?? null);
+        $database = $text($info['database'] ?? null);
+        $port = isset($info['port']) && is_numeric($info['port']) ? (int) $info['port'] : null;
         $parameters = match ($driver) {
             'sqlite' => [
                 'driver' => 'pdo_sqlite',
-                'path' =>
-                    \is_string($database) && \is_string($prefix) && '' !== $prefix
-                        ? $database . '-' . $prefix
-                        : $database,
+                'path' => null !== $database && null !== $prefix ? $database . '-' . $prefix : $database,
             ],
             'pgsql' => [
                 'driver' => 'pdo_pgsql',
-                'host' => $info['host'] ?? null,
-                'port' => isset($info['port']) && '' !== $info['port'] ? (int) $info['port'] : null,
+                'host' => $text($info['host'] ?? null),
+                'port' => $port,
                 'dbname' => $database,
-                'user' => $info['username'] ?? null,
-                'password' => $info['password'] ?? null,
+                'user' => $text($info['username'] ?? null),
+                'password' => $text($info['password'] ?? null),
                 'charset' => 'utf8',
             ],
             default => [
                 'driver' => 'pdo_mysql',
-                'host' => $info['host'] ?? null,
-                'port' => isset($info['port']) && '' !== $info['port'] ? (int) $info['port'] : null,
-                'unix_socket' => $info['unix_socket'] ?? null,
+                'host' => $text($info['host'] ?? null),
+                'port' => $port,
+                'unix_socket' => $text($info['unix_socket'] ?? null),
                 'dbname' => $database,
-                'user' => $info['username'] ?? null,
-                'password' => $info['password'] ?? null,
+                'user' => $text($info['username'] ?? null),
+                'password' => $text($info['password'] ?? null),
                 'charset' => 'utf8mb4',
             ],
         };
+        /** @var array{driver: 'pdo_mysql'|'pdo_pgsql'|'pdo_sqlite', path?: string, host?: string, port?: int, unix_socket?: string, dbname?: string, user?: string, password?: string, charset?: string} $parameters */
+        $parameters = array_filter($parameters, static fn(string|int|null $value): bool => null !== $value);
 
-        return DriverManager::getConnection(
-            array_filter($parameters, static fn(mixed $value): bool => null !== $value && '' !== $value),
-            $configuration,
-        );
+        return DriverManager::getConnection($parameters, $configuration);
     }
 
     /** The type of Drupal's default database: `mysql` for MariaDB and MySQL, `pgsql`, `sqlite`. */

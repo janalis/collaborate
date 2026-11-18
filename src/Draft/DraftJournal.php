@@ -784,10 +784,10 @@ class DraftJournal implements ResetInterface
         }
         try {
             $this->lock($id);
+            $this->unlock($id);
         } catch (ServiceUnavailableHttpException) {
-            return;
+            // Past the wait: the draft as it is.
         }
-        $this->unlock($id);
     }
 
     /** FrankenPHP workers keep their connection, and with it any lock a request left behind. */

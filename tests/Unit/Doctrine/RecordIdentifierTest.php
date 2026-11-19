@@ -6,7 +6,6 @@ namespace Janalis\Collaborate\Tests\Unit\Doctrine;
 
 use Doctrine\Persistence\ManagerRegistry;
 use Doctrine\Persistence\Mapping\ClassMetadata;
-use Doctrine\Persistence\Mapping\ClassMetadataFactory;
 use Doctrine\Persistence\ObjectManager;
 use Janalis\Collaborate\Doctrine\RecordIdentifier;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Article;
@@ -18,16 +17,19 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(RecordIdentifier::class)]
 final class RecordIdentifierTest extends TestCase
 {
-    /** @param array<string, mixed> $ids */
-    private function identifier(array $ids): RecordIdentifier
+    /**
+     * @param array<string, mixed>                $ids    the identifier of every Tag but $owner
+     * @param array<string, mixed>                $owned  the identifier of $owner
+     */
+    private function identifier(array $ids, ?Tag $owner = null, array $owned = []): RecordIdentifier
     {
         $metadata = $this->createStub(ClassMetadata::class);
-        $metadata->method('getIdentifierValues')->willReturn($ids);
-        $factory = $this->createStub(ClassMetadataFactory::class);
-        $factory->method('isTransient')->willReturnCallback(static fn(string $class): bool => Tag::class !== $class);
+        $metadata->method('getIdentifierValues')->willReturnCallback(static fn(object $entity): array => $entity
+            === $owner
+                ? $owned
+                : $ids);
         $manager = $this->createStub(ObjectManager::class);
         $manager->method('getClassMetadata')->willReturn($metadata);
-        $manager->method('getMetadataFactory')->willReturn($factory);
         $registry = $this->createStub(ManagerRegistry::class);
         $registry
             ->method('getManagerForClass')
@@ -41,12 +43,13 @@ final class RecordIdentifierTest extends TestCase
         self::assertSame(42, $this->identifier(['id' => 42])->value(new Tag()));
     }
 
-    public function testAValueObjectIdentifierIsKeptAndAnEntityOneIsNone(): void
+    public function testAValueObjectIdentifierIsKeptAndADerivedOneIsItsEntitysOwn(): void
     {
         $uuid = new RecordKey('u-1');
         self::assertSame($uuid, $this->identifier(['id' => $uuid])->value(new Tag()));
-        // A key derived from an association to another mapped entity.
-        self::assertNull($this->identifier(['owner' => new Tag()])->value(new Tag()));
+        // A key derived from an association: the associated entity's identifier, never the entity.
+        $owner = new Tag();
+        self::assertSame(5, $this->identifier(['owner' => $owner], $owner, ['id' => 5])->value(new Tag()));
     }
 
     public function testCompositeUnassignedOrUnmappedIdentifiersAreNone(): void

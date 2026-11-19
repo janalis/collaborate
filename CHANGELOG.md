@@ -48,13 +48,15 @@ versions follow [Semantic Versioning](https://semver.org/).
 - A new record whose identifier is a UUID or ULID (a Stringable `Uid`, or
   any value object) is recorded as created by its draft, and saved views of
   it are announced; `Draft\RecordId::string()` is the one conversion the
-  three callers share. A key derived from an association (another entity)
-  still names no record.
+  three callers share. A key derived from an association is the associated
+  entity's own identifier, a lazy-loading proxy's included, as Doctrine's
+  unit of work flattens it: never the entity's label.
 - Web push builds its HTTP client once, not on every push.
 - Drupal: a sentence of the bundle the site has not translated is read in
   the bundle's catalogue of the language, so a French site shows the shared
   draft's bar in French without importing anything; a translation entered
-  in Drupal still wins.
+  in Drupal still wins. `pt-br` (or `pt_BR`) reads `collaborate.pt_BR.yaml`,
+  else `collaborate.pt.yaml`.
 
 ## [0.5.2] - 2026-11-19
 

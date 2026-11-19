@@ -52,18 +52,27 @@ final class DrupalTranslator implements TranslatorInterface
         return $this->languages->getCurrentLanguage()->getId();
     }
 
-    /** @return array<string, string> the bundle's sentences in a language (`fr`, `fr-ca`), none for another */
+    /**
+     * The bundle's sentences in a language, its catalogues named as Symfony names locales: `pt-br` (Drupal's) or
+     * `pt_BR` reads `collaborate.pt_BR.yaml`, else `collaborate.pt.yaml`; none for a language without either.
+     *
+     * @return array<string, string>
+     */
     private function catalogue(string $langcode): array
     {
         if (!isset($this->catalogues[$langcode])) {
             $catalogue = [];
             // A language code names a file: nothing but its letters, digits and dashes.
-            if (1 === preg_match('/^[a-z]{2,3}(?:-[a-z0-9]+)*$/iD', $langcode)) {
+            if (1 === preg_match('/^[a-z]{2,3}(?:[-_][a-z0-9]+)*$/iD', $langcode)) {
                 $directory =
                     $this->directory
                     ?? \dirname((string) new \ReflectionClass(CollaborateBundle::class)->getFileName(), 2)
                         . '/translations';
-                foreach ([strtolower($langcode), strtolower(explode('-', $langcode)[0])] as $name) {
+                $parts = explode('-', str_replace('_', '-', $langcode));
+                $language = strtolower($parts[0]);
+                $region = $parts[1] ?? null;
+                $names = null === $region ? [$language] : [$language . '_' . strtoupper($region), $language];
+                foreach ($names as $name) {
                     $file = $directory . '/collaborate.' . $name . '.yaml';
                     if (is_file($file)) {
                         /** @var array<string, string> $catalogue the bundle's catalogues map sentences to sentences */

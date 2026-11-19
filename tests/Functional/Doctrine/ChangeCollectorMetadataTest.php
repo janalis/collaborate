@@ -370,17 +370,14 @@ final class ChangeCollectorMetadataTest extends TestCase
         );
     }
 
-    public function testAValueObjectKeyIsItsStringAndAnEntityKeyNoRecord(): void
+    public function testAValueObjectKeyIsItsString(): void
     {
         $article = new Article();
         $uuid = new Section();
-        $derived = new Section();
-        $collection = $this->collection(Article::class, 'categories', Category::class, $article, [$uuid, $derived]);
+        $collection = $this->collection(Article::class, 'categories', Category::class, $article, [$uuid]);
         $ids = new \WeakMap();
         $ids[$article] = 11;
         $ids[$uuid] = new RecordKey('0193a6c4-8f2e-7c1a-9b3d-5e6f7a8b9c0d');
-        // A key derived from an association: the entity it points to, whose string is a label.
-        $ids[$derived] = new Category();
 
         self::assertEqualsCanonicalizing(
             [

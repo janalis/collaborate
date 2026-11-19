@@ -20,6 +20,7 @@ final class FieldNamesTest extends TestCase
         self::assertSame('items[__member__]', FieldNames::prototype('items'));
         self::assertSame('items[__name__]', FieldNames::entryPrototype('items'));
         self::assertSame('__name__', FieldNames::PLACEHOLDER);
+        self::assertSame('__member__', FieldNames::MEMBER_PLACEHOLDER);
     }
 
     public function testAMembershipNamesItsCollectionKeyAndEntry(): void

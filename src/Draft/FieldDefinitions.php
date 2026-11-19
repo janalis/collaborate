@@ -30,7 +30,7 @@ final class FieldDefinitions
             $this->prototypes[] = [
                 '#^'
                     . str_replace(
-                        ['__name__', '__member__'],
+                        [FieldNames::PLACEHOLDER, FieldNames::MEMBER_PLACEHOLDER],
                         ['[a-zA-Z0-9_-]{1,80}', '@[a-zA-Z0-9_-]{1,80}'],
                         preg_quote($pattern, '#'),
                     )
@@ -44,7 +44,7 @@ final class FieldDefinitions
     /** A collection's entry template names its placeholders literally; no edit targets the template itself. */
     public static function prototype(string $name): bool
     {
-        return str_contains($name, '__name__') || str_contains($name, '__member__');
+        return str_contains($name, FieldNames::PLACEHOLDER) || str_contains($name, FieldNames::MEMBER_PLACEHOLDER);
     }
 
     /** @return SchemaField|null */

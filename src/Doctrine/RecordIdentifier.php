@@ -15,12 +15,17 @@ final readonly class RecordIdentifier implements RecordIdentifierInterface
     ) {}
 
     /**
-     * The identifier of a mapped entity with a single-column key, or null (unmapped, composite, not assigned yet,
-     * or another entity: a key derived from an association names no edit page by itself).
+     * The identifier of a mapped entity with a single-column key, or null (unmapped, composite or not assigned yet).
+     * A key derived from an association is the associated entity's own identifier, as Doctrine's unit of work
+     * flattens it: never the entity, whose string is a label.
      */
     public function value(object $entity): mixed
     {
-        $manager = $this->doctrine?->getManagerForClass($entity::class);
+        $doctrine = $this->doctrine;
+        if (null === $doctrine) {
+            return null;
+        }
+        $manager = $doctrine->getManagerForClass($entity::class);
         if (null === $manager) {
             return null;
         }
@@ -28,6 +33,7 @@ final readonly class RecordIdentifier implements RecordIdentifierInterface
         // @mago-expect analysis:mixed-assignment an identifier is mixed: the next line narrows it
         $id = 1 === \count($ids) ? reset($ids) : null;
 
-        return \is_object($id) && !$manager->getMetadataFactory()->isTransient($id::class) ? null : $id;
+        // The registry, unlike a metadata factory, reads a lazy-loading proxy as the entity it stands for.
+        return \is_object($id) && null !== $doctrine->getManagerForClass($id::class) ? $this->value($id) : $id;
     }
 }

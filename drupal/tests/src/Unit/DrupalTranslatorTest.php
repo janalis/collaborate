@@ -23,11 +23,28 @@ final class DrupalTranslatorTest extends UnitTestCase
         self::assertSame('Synchronisation des modifications…', $translator->trans(self::SYNCING));
         // A region without a catalogue of its own reads its language's; a language without one keeps the sentence.
         self::assertSame('Synchronisation des modifications…', $translator->trans(self::SYNCING, locale: 'fr-ca'));
+        self::assertSame('Synchronisation des modifications…', $translator->trans(self::SYNCING, locale: 'FR_CA'));
         self::assertSame(self::SYNCING, $translator->trans(self::SYNCING, locale: 'de'));
         // No file is named after anything but a language code.
         self::assertSame(self::SYNCING, $translator->trans(self::SYNCING, locale: '../fr'));
         // Another domain is Drupal's alone.
         self::assertSame(self::SYNCING, $translator->trans(self::SYNCING, domain: 'other'));
+    }
+
+    public function testARegionsOwnCatalogueComesBeforeItsLanguages(): void
+    {
+        $directory = sys_get_temp_dir() . '/collaborate-translator-' . bin2hex(random_bytes(4));
+        mkdir($directory);
+        try {
+            file_put_contents($directory . '/collaborate.pt.yaml', "'Synchronizing changes…': 'pt'\n");
+            file_put_contents($directory . '/collaborate.pt_BR.yaml', "'Synchronizing changes…': 'pt_BR'\n");
+            $translator = $this->translator('pt-br', directory: $directory);
+            self::assertSame('pt_BR', $translator->trans(self::SYNCING));
+            self::assertSame('pt', $translator->trans(self::SYNCING, locale: 'pt-pt'));
+        } finally {
+            array_map(unlink(...), glob($directory . '/*') ?: []);
+            rmdir($directory);
+        }
     }
 
     public function testATranslationEnteredInDrupalWins(): void
@@ -49,7 +66,7 @@ final class DrupalTranslatorTest extends UnitTestCase
     }
 
     /** @param array<string, string> $drupal what Drupal translates, the rest answered as given */
-    private function translator(string $language, array $drupal = []): DrupalTranslator
+    private function translator(string $language, array $drupal = [], ?string $directory = null): DrupalTranslator
     {
         $strings = $this->getStringTranslationStub();
         \assert($strings instanceof TranslationInterface);
@@ -69,6 +86,6 @@ final class DrupalTranslatorTest extends UnitTestCase
         $languages = $this->createStub(LanguageManagerInterface::class);
         $languages->method('getCurrentLanguage')->willReturn($current);
 
-        return new DrupalTranslator($translation, $languages);
+        return new DrupalTranslator($translation, $languages, $directory);
     }
 }

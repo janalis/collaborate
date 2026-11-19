@@ -155,15 +155,10 @@ final class ChangeCollector
             return [];
         }
         $identifier = $uow->getEntityIdentifier($entity);
-        // @mago-expect analysis:mixed-assignment an identifier is mixed: the next lines narrow it
-        $value = reset($identifier);
-        $id = RecordId::string($value);
-        // An edit page addresses single-column ids only, and no key derived from another entity.
-        if (
-            null === $id
-            || 1 !== \count($identifier)
-            || \is_object($value) && !$em->getMetadataFactory()->isTransient($value::class)
-        ) {
+        // The unit of work keeps identifiers flattened: a key derived from an association is the associated id.
+        $id = RecordId::string(reset($identifier));
+        // An edit page addresses single-column ids only.
+        if (null === $id || 1 !== \count($identifier)) {
             return [];
         }
 

@@ -322,16 +322,16 @@ final class EntityForms
             }
             $values[$key] = $saved;
             foreach ($values as $member => $state) {
+                $parsed = FieldNames::parseMember($member);
                 if (
-                    !(
-                        (FieldNames::parseMember($member)[0] ?? null) === $path
-                        && 'member' === ($fields[$member] ?? $submitted[$member])['type']
-                    )
+                    null === $parsed
+                    || $parsed[0] !== $path
+                    || 'member' !== ($fields[$member] ?? $submitted[$member])['type']
                 ) {
                     continue;
                 }
 
-                $entry = substr($member, \strlen($path) + 2, -1);
+                $entry = $parsed[1];
                 $order = array_search($entry, $saved, true);
                 $values[$member] = [
                     'alive' => false !== $order,
@@ -559,7 +559,7 @@ final class EntityForms
                 $state->setFormObject($this->form);
             }
             $subform = [
-                '#parents' => [...ItemKeys::segments($path), '__name__', 'subform'],
+                '#parents' => [...ItemKeys::segments($path), FieldNames::PLACEHOLDER, 'subform'],
                 '#array_parents' => [],
                 '#tree' => true,
             ];

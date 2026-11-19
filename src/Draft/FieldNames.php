@@ -15,9 +15,12 @@ final class FieldNames
     /** The placeholder of an entry's key in the fields of an entry added later. */
     public const string PLACEHOLDER = '__name__';
 
+    /** The placeholder of an entry's key in the membership of an entry added later. */
+    public const string MEMBER_PLACEHOLDER = '__member__';
+
     private const string COLLECTION = '[__collection__]';
 
-    private const string PROTOTYPE = '[__member__]';
+    private const string PROTOTYPE = '[' . self::MEMBER_PLACEHOLDER . ']';
 
     private const string MODE = '[__mode__]';
 

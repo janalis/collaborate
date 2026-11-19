@@ -802,6 +802,8 @@ class DraftJournal implements ResetInterface
             }
         }
         $this->held = [];
+        // A worker's next request may run on another database (a tenant's): its locks are named after that one.
+        $this->lockPrefix = null;
     }
 
     /** @template T
@@ -1273,32 +1275,43 @@ class DraftJournal implements ResetInterface
      */
     private static function memberNames(string $name): array
     {
-        $names = [];
-        $prefix = '';
-        foreach (explode(']', $name, -1) as $part) {
-            $prefix .= $part . ']';
-            $open = strrpos($prefix, '[');
-            if (false !== $open) {
-                $names[] = substr($prefix, 0, $open) . '[@' . substr($prefix, $open + 1);
-            }
-        }
-
-        return $names;
+        // The entry's last key takes the member's `@`; a prefix of no collection names no member, and reads nothing.
+        return array_map(
+            static fn(string $entry): string => (string) preg_replace('/\[([^[\]]*)]$/D', '[@$1]', $entry),
+            self::entryPrefixes($name),
+        );
     }
 
     /** @param array<string, string> $entries */
     private function removed(array $entries, string $name): bool
     {
-        // A compound entry's fields sit below it; a scalar entry's value is the entry itself.
-        $prefix = '';
-        foreach (explode(']', $name, -1) as $part) {
-            $prefix .= $part . ']';
-            $rest = substr($name, \strlen($prefix));
-            if (isset($entries[$prefix]) && ('' === $rest || '[' === $rest[0])) {
+        foreach (self::entryPrefixes($name) as $entry) {
+            if (isset($entries[$entry])) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /**
+     * The entries a field may sit in: each prefix of its name that closes a bracket. A compound entry's fields sit
+     * below it; a scalar entry's value is the entry itself.
+     *
+     * @return list<string>
+     */
+    private static function entryPrefixes(string $name): array
+    {
+        $prefixes = [];
+        $prefix = '';
+        foreach (explode(']', $name, -1) as $part) {
+            $prefix .= $part . ']';
+            $rest = substr($name, \strlen($prefix));
+            if ('' === $rest || '[' === $rest[0]) {
+                $prefixes[] = $prefix;
+            }
+        }
+
+        return $prefixes;
     }
 }

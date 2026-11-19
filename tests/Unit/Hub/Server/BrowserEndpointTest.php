@@ -590,7 +590,8 @@ final class BrowserEndpointTest extends ServerTestCase
         $this->until(static fn(): bool => '' !== $client->received);
         $client->received = '';
         $this->clock->sleep(19.9);
-        $this->wait(0.03);
+        // Until the ping arrives, not a set time: a loaded machine runs the loop late.
+        $this->until(static fn(): bool => '' !== $client->received);
         self::assertFalse($client->closed);
         self::assertSame("\x89\x00", $client->received);
         $this->clock->sleep(0.1);

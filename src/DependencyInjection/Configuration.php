@@ -686,7 +686,7 @@ final class Configuration
             // Doctrine mapping of the notifications, and an env placeholder would be read as off.
             ->ifTrue(static fn(array $branch): bool => !\is_bool($branch['enabled']))
             ->thenInvalid(
-                'collaborate.notifications.enabled is read as the container is built (it loads services, routes and a Doctrine mapping): set it to true or false, not to an environment variable: %s',
+                'collaborate.notifications.enabled must be true or false: it is read as the container is built (it loads services and a Doctrine mapping), so an environment variable or a string is refused: %s',
             )
             ->end()
             ->validate()

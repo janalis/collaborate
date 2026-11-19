@@ -14,7 +14,10 @@ final readonly class RecordIdentifier implements RecordIdentifierInterface
         private ?ManagerRegistry $doctrine = null,
     ) {}
 
-    /** The identifier of a mapped entity with a single-column key, or null (unmapped, composite or not assigned yet). */
+    /**
+     * The identifier of a mapped entity with a single-column key, or null (unmapped, composite, not assigned yet,
+     * or another entity: a key derived from an association names no edit page by itself).
+     */
     public function value(object $entity): mixed
     {
         $manager = $this->doctrine?->getManagerForClass($entity::class);
@@ -22,7 +25,9 @@ final readonly class RecordIdentifier implements RecordIdentifierInterface
             return null;
         }
         $ids = $manager->getClassMetadata($entity::class)->getIdentifierValues($entity);
+        // @mago-expect analysis:mixed-assignment an identifier is mixed: the next line narrows it
+        $id = 1 === \count($ids) ? reset($ids) : null;
 
-        return 1 === \count($ids) ? reset($ids) : null;
+        return \is_object($id) && !$manager->getMetadataFactory()->isTransient($id::class) ? null : $id;
     }
 }

@@ -111,7 +111,7 @@ final class CollaborateBundleTest extends TestCase
         // Notifications load services, routes and a Doctrine mapping as the container is built: a flag the
         // environment sets later would leave them half on, so it is refused instead of read as off.
         $this->expectException(InvalidConfigurationException::class);
-        $this->expectExceptionMessage('collaborate.notifications.enabled is read as the container is built');
+        $this->expectExceptionMessage('collaborate.notifications.enabled must be true or false');
         $this->merge(['notifications' => ['enabled' => '%env(bool:COLLABORATE_TEST_NOTIFICATIONS)%']], [
             'env(COLLABORATE_TEST_NOTIFICATIONS)' => '1',
         ]);

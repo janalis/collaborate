@@ -6,10 +6,12 @@ namespace Janalis\Collaborate\Tests\Unit\Doctrine;
 
 use Doctrine\Persistence\ManagerRegistry;
 use Doctrine\Persistence\Mapping\ClassMetadata;
+use Doctrine\Persistence\Mapping\ClassMetadataFactory;
 use Doctrine\Persistence\ObjectManager;
 use Janalis\Collaborate\Doctrine\RecordIdentifier;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Article;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Tag;
+use Janalis\Collaborate\Tests\Fixtures\RecordKey;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -21,8 +23,11 @@ final class RecordIdentifierTest extends TestCase
     {
         $metadata = $this->createStub(ClassMetadata::class);
         $metadata->method('getIdentifierValues')->willReturn($ids);
+        $factory = $this->createStub(ClassMetadataFactory::class);
+        $factory->method('isTransient')->willReturnCallback(static fn(string $class): bool => Tag::class !== $class);
         $manager = $this->createStub(ObjectManager::class);
         $manager->method('getClassMetadata')->willReturn($metadata);
+        $manager->method('getMetadataFactory')->willReturn($factory);
         $registry = $this->createStub(ManagerRegistry::class);
         $registry
             ->method('getManagerForClass')
@@ -34,6 +39,14 @@ final class RecordIdentifierTest extends TestCase
     public function testReadsTheSingleColumnIdentifierOfAMappedEntity(): void
     {
         self::assertSame(42, $this->identifier(['id' => 42])->value(new Tag()));
+    }
+
+    public function testAValueObjectIdentifierIsKeptAndAnEntityOneIsNone(): void
+    {
+        $uuid = new RecordKey('u-1');
+        self::assertSame($uuid, $this->identifier(['id' => $uuid])->value(new Tag()));
+        // A key derived from an association to another mapped entity.
+        self::assertNull($this->identifier(['owner' => new Tag()])->value(new Tag()));
     }
 
     public function testCompositeUnassignedOrUnmappedIdentifiersAreNone(): void

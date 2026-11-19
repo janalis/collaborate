@@ -75,6 +75,27 @@ final class DraftJournalBoundariesTest extends TestCase
         $this->journal->join('record', $this->fields);
     }
 
+    public function testTheLockNamesReadTheDatabaseOnceUntilAReset(): void
+    {
+        $reads = fn(): int => \count(array_filter($this->db->queries, static fn(string $query): bool => str_contains(
+            $query,
+            'DATABASE()',
+        )));
+        $this->db->queries = [];
+        $locks = function (): void {
+            foreach (['a', 'b', 'a'] as $id) {
+                $this->journal->lock($id);
+                $this->journal->unlock($id);
+            }
+        };
+        // The join of setUp() read it.
+        $locks();
+        self::assertSame(0, $reads());
+        $this->journal->reset();
+        $locks();
+        self::assertSame(1, $reads());
+    }
+
     protected function tearDown(): void
     {
         foreach ($this->connections as $connection) {

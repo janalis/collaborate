@@ -8,7 +8,7 @@ versions follow [Semantic Versioning](https://semver.org/).
 ### Added
 
 - `Notification\Preferences::subscribers()`: which of several users are
-  subscribed to a topic, in one query.
+  subscribed to a topic, a thousand per query.
 
 ### Changed
 
@@ -26,7 +26,8 @@ versions follow [Semantic Versioning](https://semver.org/).
   their Doctrine mapping as the container is built, and the placeholder was
   silently read as off. Set it to `true` or `false`.
 - A draft's named lock no longer asks the database its name on every lock
-  and unlock: the name is read once per connection.
+  and unlock: the name is read once until the journal is reset (once per
+  request in a worker).
 - `bridge()` parses the layer's `data-config` again only once it changes,
   not on every row, entry and caret lookup.
 - The pointers read the open popup in their next frame instead of on every
@@ -36,9 +37,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- A new record whose identifier is a UUID or ULID (a Stringable `Uid`) is
-  recorded as created by its draft, and saved views of it are announced;
-  `Draft\RecordId::string()` is the one conversion the three callers share.
+- A new record whose identifier is a UUID or ULID (a Stringable `Uid`, or
+  any value object) is recorded as created by its draft, and saved views of
+  it are announced; `Draft\RecordId::string()` is the one conversion the
+  three callers share. A key derived from an association (another entity)
+  still names no record.
 - Web push builds its HTTP client once, not on every push.
 
 ## [0.5.2] - 2026-11-19

@@ -72,6 +72,36 @@ final class PreferencesTest extends TestCase
         self::assertSame([5 => true], $preferences->subscribers([3, 4, 5], 'news'));
     }
 
+    public function testTheChoicesOfManyUsersAreReadAThousandAtATime(): void
+    {
+        $sizes = [];
+        $repository = $this->createStub(EntityRepository::class);
+        $repository
+            ->method('findBy')
+            ->willReturnCallback(
+                /** @param array{recipient: list<int>, topic: string} $criteria */
+                static function (array $criteria) use (&$sizes): array {
+                    $sizes[] = \count($criteria['recipient']);
+
+                    return [];
+                },
+            );
+        $em = $this->createStub(EntityManagerInterface::class);
+        $em->method('getRepository')->willReturn($repository);
+        $preferences = new Preferences($em, self::catalog(), new MockClock());
+        self::assertCount(1000, $preferences->subscribers(range(1, 1000), 'library'));
+        self::assertSame([1000], $sizes);
+        self::assertCount(1001, $preferences->subscribers(range(1, 1001), 'library'));
+        self::assertSame([1000, 1000, 1], $sizes);
+    }
+
+    public function testATopicNobodyConfiguredHasNoSubscriber(): void
+    {
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->never())->method('getRepository');
+        self::assertSame([], new Preferences($em, self::catalog(), new MockClock())->subscribers([3], 'nope'));
+    }
+
     public function testNoSubscriberIsLookedForAmongNobody(): void
     {
         $em = $this->createMock(EntityManagerInterface::class);

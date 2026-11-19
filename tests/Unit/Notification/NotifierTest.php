@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Janalis\Collaborate\Tests\Unit\Notification;
 
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\EntityRepository;
 use Janalis\Collaborate\Hub\HubPublisher;
 use Janalis\Collaborate\Hub\Notice;
 use Janalis\Collaborate\Hub\Topics;
@@ -12,6 +13,7 @@ use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
 use Janalis\Collaborate\Hub\Transport\PublishFailedException;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Notification\Entity\Notification;
+use Janalis\Collaborate\Notification\Entity\NotificationPreference;
 use Janalis\Collaborate\Notification\Messenger\SendNotification;
 use Janalis\Collaborate\Notification\NotificationCatalog;
 use Janalis\Collaborate\Notification\NotificationRepository;
@@ -38,6 +40,7 @@ use Symfony\Component\Security\Core\User\UserInterface;
 #[UsesClass(NotificationCatalog::class)]
 #[UsesClass(NotificationRepository::class)]
 #[UsesClass(Preferences::class)]
+#[UsesClass(NotificationPreference::class)]
 final class NotifierTest extends TestCase
 {
     public function testWritesWithoutWebPush(): void
@@ -75,6 +78,22 @@ final class NotifierTest extends TestCase
         $em->expects($this->never())->method('persist');
         $em->expects($this->never())->method('flush');
         $this->notifier($em)->notify($this->createStub(UserInterface::class), 'shared');
+    }
+
+    public function testOnlyTheSubscribersOfItsTopicAreWritten(): void
+    {
+        $repository = $this->createStub(EntityRepository::class);
+        $repository
+            ->method('findBy')
+            ->willReturn([new NotificationPreference(4, 'news', true, new \DateTimeImmutable())]);
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->method('getRepository')->willReturn($repository);
+        $em
+            ->expects($this->once())
+            ->method('persist')
+            ->with(self::callback(static fn(Notification $row): bool => 4 === $row->recipient));
+        $em->expects($this->once())->method('flush');
+        $this->notifier($em)->notifyAll([3, 4], 'posted');
     }
 
     public function testNobodyToTellFlushesNothing(): void
@@ -172,19 +191,41 @@ final class NotifierTest extends TestCase
 
     private function notifier(EntityManagerInterface $em, ?MessageBusInterface $bus = null): Notifier
     {
-        $catalog = new NotificationCatalog(['library' => [
-            'label' => 'Library',
-            'description' => null,
-            'default' => true,
-            'mandatory' => true,
-            'domain' => 'messages',
-        ]], ['shared' => [
-            'topic' => 'library',
-            'sentence' => '%name% shared',
-            'label' => null,
-            'icon' => null,
-            'domain' => 'messages',
-        ]]);
+        $catalog = new NotificationCatalog(
+            [
+                'library' => [
+                    'label' => 'Library',
+                    'description' => null,
+                    'default' => true,
+                    'mandatory' => true,
+                    'domain' => 'messages',
+                ],
+                // Nobody is subscribed unless they chose to.
+                'news' => [
+                    'label' => 'News',
+                    'description' => null,
+                    'default' => false,
+                    'mandatory' => false,
+                    'domain' => 'messages',
+                ],
+            ],
+            [
+                'shared' => [
+                    'topic' => 'library',
+                    'sentence' => '%name% shared',
+                    'label' => null,
+                    'icon' => null,
+                    'domain' => 'messages',
+                ],
+                'posted' => [
+                    'topic' => 'news',
+                    'sentence' => 'Posted',
+                    'label' => null,
+                    'icon' => null,
+                    'domain' => 'messages',
+                ],
+            ],
+        );
         $clock = new MockClock();
 
         return new Notifier(

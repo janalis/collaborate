@@ -30,6 +30,7 @@ use Janalis\Collaborate\Tests\Fixtures\Draft\Section;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Setting;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Tag;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Tagging;
+use Janalis\Collaborate\Tests\Fixtures\RecordKey;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -363,6 +364,27 @@ final class ChangeCollectorMetadataTest extends TestCase
         self::assertEqualsCanonicalizing(
             [
                 ...$this->drafts('14', Section::class, Category::class),
+                ...$this->drafts('11', Article::class, Publication::class),
+            ],
+            $this->records([], [], $ids, deletions: [$collection]),
+        );
+    }
+
+    public function testAValueObjectKeyIsItsStringAndAnEntityKeyNoRecord(): void
+    {
+        $article = new Article();
+        $uuid = new Section();
+        $derived = new Section();
+        $collection = $this->collection(Article::class, 'categories', Category::class, $article, [$uuid, $derived]);
+        $ids = new \WeakMap();
+        $ids[$article] = 11;
+        $ids[$uuid] = new RecordKey('0193a6c4-8f2e-7c1a-9b3d-5e6f7a8b9c0d');
+        // A key derived from an association: the entity it points to, whose string is a label.
+        $ids[$derived] = new Category();
+
+        self::assertEqualsCanonicalizing(
+            [
+                ...$this->drafts('0193a6c4-8f2e-7c1a-9b3d-5e6f7a8b9c0d', Section::class, Category::class),
                 ...$this->drafts('11', Article::class, Publication::class),
             ],
             $this->records([], [], $ids, deletions: [$collection]),

@@ -104,8 +104,7 @@ final readonly class Notifier
         }
         $this->em->flush();
         foreach ($written as $notification) {
-            $this->changed($notification->recipient);
-            $this->pushes?->push($notification);
+            $this->tell($notification);
         }
     }
 
@@ -135,10 +134,16 @@ final readonly class Notifier
             $this->em->persist($notification);
             $this->em->flush();
         }
-        $this->changed($recipient);
-        $this->pushes?->push($notification);
+        $this->tell($notification);
 
         return $notification;
+    }
+
+    /** Once its row is flushed: the pages of its reader are told, and their browsers pushed to. */
+    private function tell(Notification $notification): void
+    {
+        $this->changed($notification->recipient);
+        $this->pushes?->push($notification);
     }
 
     /** Tells the pages of a user that their notifications changed: they ask for them again. */

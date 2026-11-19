@@ -14,6 +14,9 @@ use Psr\Clock\ClockInterface;
  */
 final readonly class Preferences
 {
+    /** The recipients {@see subscribers()} reads the choices of in one query. */
+    private const int CHUNK = 1000;
+
     public function __construct(
         private EntityManagerInterface $em,
         private NotificationCatalog $catalog,
@@ -44,12 +47,16 @@ final readonly class Preferences
     public function subscribers(array $recipients, string $topic): array
     {
         $definition = $this->catalog->topic($topic);
-        \assert(null !== $definition, 'A notification type names a configured topic.');
+        if (null === $definition) {
+            return [];
+        }
         $choices = [];
-        if (!$definition['mandatory'] && [] !== $recipients) {
+        // In chunks: a database binds a bounded number of parameters (SQLite 32766, PostgreSQL 65535).
+        $chunks = $definition['mandatory'] ? [] : array_chunk(array_unique($recipients), self::CHUNK);
+        foreach ($chunks as $chunk) {
             foreach ($this->em
                 ->getRepository(NotificationPreference::class)
-                ->findBy(['recipient' => array_values(array_unique($recipients)), 'topic' => $topic]) as $choice) {
+                ->findBy(['recipient' => $chunk, 'topic' => $topic]) as $choice) {
                 $choices[$choice->recipient] = $choice->subscribed;
             }
         }

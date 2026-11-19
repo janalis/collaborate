@@ -19,6 +19,7 @@ use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftSave;
 use Janalis\Collaborate\Draft\EventValidator;
 use Janalis\Collaborate\Draft\FormDraft;
+use Janalis\Collaborate\Draft\RecordId;
 use Janalis\Collaborate\Form\CollaborateFormExtension;
 use Janalis\Collaborate\Grant;
 use Janalis\Collaborate\Hub\HubPublisher;
@@ -111,6 +112,7 @@ use Symfony\Component\Messenger\Worker;
 #[UsesClass(JournalDialect::class)]
 #[UsesClass(MySqlDialect::class)]
 #[UsesClass(PortableSchema::class)]
+#[UsesClass(RecordId::class)]
 final class NotificationsMessengerTest extends NotificationsTestCase
 {
     protected static function kernel(): string

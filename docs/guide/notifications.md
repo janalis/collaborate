@@ -55,6 +55,10 @@ import '@janalis/collaborate/notifications/topics.js';
 @use 'collaborate/assets/scss/notifications';
 ```
 
+`notifications.enabled` is read as the container is built (it decides the
+services and the Doctrine mapping): set it to `true` or `false`, not to an
+environment variable, which the bundle refuses.
+
 The three tables are mapped only while notifications are on: create
 `collaborate_notification`, `collaborate_notification_preference` and
 `collaborate_push_subscription` with a migration (their SQL is in

@@ -133,6 +133,8 @@ export function initCursors(
   // peer changed record or popup, the marks those make.
   let layoutDirty = true;
   let marksDirty = false;
+  // Whether the page changed since the open popup was last read: read in the next frame, with the rest.
+  let popupDirty = false;
   let pending = null;
   let pendingHello = null;
   let sending = false;
@@ -567,6 +569,11 @@ export function initCursors(
   }
 
   function paint(now) {
+    // Read before the frame writes anything: in the observer, it would lay the page out on every mutation.
+    if (popupDirty) {
+      popupDirty = false;
+      updatePopup();
+    }
     const layout = layoutDirty;
     const marked = layout || marksDirty;
     layoutDirty = false;
@@ -805,7 +812,7 @@ export function initCursors(
     if (records.some((record) => record.target.localName === 'dialog' && record.attributeName === 'open')) raise();
     // The layer's own writes outside it, the announcement and the line of a popup, move nothing.
     if (records.some((record) => !layer.contains(record.target) && !own(record.target))) {
-      updatePopup();
+      popupDirty = true;
       redraw();
     }
   });

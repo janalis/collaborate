@@ -86,7 +86,7 @@ Host markup the scripts read: the key attribute (`cursors.key_attribute`) on rec
 
 CSS classes: `.collaborate-cursor*`, `.collaborate-caret*`, `.collaborate-presence*`, `.collaborate-marker*`, `.collaborate-edge`, `.collaborate-popup-presence*`, `.collaborate-pulse`, `.collaborate-announce`, `.collaborate-bar*`, `.collaborate-conflicts*`; colours by `[data-color]`, field marks by `[data-peer-focus]` / `data-peer-focus-label`.
 
-Storage keys: `collaborate-notice:<draft id>`, `collaborate-update:<path><search>`, `collaborate.pointers` (`shown`/`hidden`). Events: `collaborate:applied` (a received value written to a control), `collaborate:enter` (`detail.grant`: enter another place). Web Lock: `collaborate-cursors` (`share_stream`).
+Storage keys: `collaborate-notice:<draft id>`, `collaborate-update:<path><search>`, `collaborate.pointers` (`shown`/`hidden`). Events: `collaborate:applied` (a received value written to a control), `collaborate:enter` (`detail.grant`: enter another place), `collaborate:rows-changed` (a host added or removed collection rows; Drupal's AJAX), and the notifications' `collaborate:notification`, `collaborate:notifications-changed` and `collaborate:notifications-confirm` ([notifications guide](../guide/notifications.md)). Web Lock: `collaborate-cursors` (`share_stream`).
 
 ## JS modules (`assets/`, AssetMapper namespace `@janalis/collaborate`)
 
@@ -95,6 +95,8 @@ Storage keys: `collaborate-notice:<draft id>`, `collaborate-update:<path><search
 | `hub.js` | One hub stream per page; members by `channel` (`cursors`, `updates`, `draft`, `notifications`). Loads `hub/<transport>.js` as the session names it. |
 | `hub/mercure.js` (`mercureSource`), `hub/websocket.js` (`websocketSource`, `websocketUrl`) | `source(url, {signal, token, topics, fetch, onopen(handle?), onmessage({data})}) → Promise`: resolves on abort, rejects on failure (a WebSocket's with the close `code`). The WebSocket handle's `renew(token)` subscribes again on the same socket. |
 | `markup.js` | The form markup the scripts read, whatever the form theme: a field's row, a collection's entries, its prototype and placeholder. |
+| `settings.js` (`settingsOf`, `parseSettings`) | The JSON settings rendered into an attribute; an absent or malformed one reads as none. |
+| `notifications/bell.js`, `page.js`, `topics.js`, `push-worker.js` | The bell, the page of all notifications, the topic switches, the push service worker. |
 | `cursors/cursors.js` (`initCursors`, `cursorsFor`), `carets.js`, `geometry.js` (`configureGeometry`), `presence.js`, `marks.js`, `turn.js`, `shapes.js` | Pointers, carets, field marks, header avatars or menu, markers, edge arrows, popup lines, the turn of a tab. |
 | `updates.js` | Saved-list and saved-detail refresh. |
 | `draft/session.js` (`sessionFor`), `bar.js`, `collections.js`, `conflicts.js`, `fields.js`, `hooks.js` (`addRowInitializer`) | Shared drafts. |

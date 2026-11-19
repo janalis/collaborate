@@ -14,6 +14,7 @@ use Doctrine\ORM\UnitOfWork;
 use Janalis\Collaborate\Access\RoleDraftAccessChecker;
 use Janalis\Collaborate\Doctrine\ChangeCollector;
 use Janalis\Collaborate\Draft\DraftAccess;
+use Janalis\Collaborate\Draft\RecordId;
 use Janalis\Collaborate\Hub\HubPublisher;
 use Janalis\Collaborate\Hub\Notice;
 use Janalis\Collaborate\Hub\Topics;
@@ -44,6 +45,7 @@ use Symfony\Component\Mercure\Update;
 #[UsesClass(MercureTransport::class)]
 #[UsesClass(PublishFailedException::class)]
 #[UsesClass(Topics::class)]
+#[UsesClass(RecordId::class)]
 final class UpdatesSubscriberTest extends TestCase
 {
     private function access(bool $enabled = true): DraftAccess

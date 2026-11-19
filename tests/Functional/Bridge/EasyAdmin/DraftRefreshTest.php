@@ -31,6 +31,7 @@ use Janalis\Collaborate\Draft\EventValidator;
 use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\Draft\FieldKeyResolverInterface;
 use Janalis\Collaborate\Draft\FormDraft;
+use Janalis\Collaborate\Draft\RecordId;
 use Janalis\Collaborate\Form\CollaborateFormExtension;
 use Janalis\Collaborate\Form\FormContextInterface;
 use Janalis\Collaborate\Gedmo\TranslatableFieldKeyResolver;
@@ -97,6 +98,7 @@ use Symfony\Component\Console\Command\LazyCommand;
 #[UsesClass(JournalDialect::class)]
 #[UsesClass(MySqlDialect::class)]
 #[UsesClass(PortableSchema::class)]
+#[UsesClass(RecordId::class)]
 final class DraftRefreshTest extends WebTestCase
 {
     protected static function getKernelClass(): string

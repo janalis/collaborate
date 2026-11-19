@@ -17,6 +17,7 @@ use Gedmo\Translatable\Entity\MappedSuperclass\AbstractTranslation;
 use Janalis\Collaborate\Access\RoleDraftAccessChecker;
 use Janalis\Collaborate\Doctrine\ChangeCollector;
 use Janalis\Collaborate\Draft\DraftAccess;
+use Janalis\Collaborate\Draft\RecordId;
 use Janalis\Collaborate\Gedmo\TranslationMapper;
 use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
@@ -40,6 +41,7 @@ use Symfony\Component\HttpFoundation\RequestStack;
 #[UsesClass(DraftAccess::class)]
 #[UsesClass(TranslationMapper::class)]
 #[UsesClass(Topics::class)]
+#[UsesClass(RecordId::class)]
 final class ChangeCollectorMetadataTest extends TestCase
 {
     private static ?EntityManagerInterface $em = null;

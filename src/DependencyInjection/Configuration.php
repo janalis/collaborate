@@ -682,6 +682,14 @@ final class Configuration
             )
             ->canBeEnabled()
             ->validate()
+            // Unlike the other flags, this one is no runtime parameter alone: it loads services, routes and the
+            // Doctrine mapping of the notifications, and an env placeholder would be read as off.
+            ->ifTrue(static fn(array $branch): bool => !\is_bool($branch['enabled']))
+            ->thenInvalid(
+                'collaborate.notifications.enabled is read as the container is built (it loads services, routes and a Doctrine mapping): set it to true or false, not to an environment variable: %s',
+            )
+            ->end()
+            ->validate()
             ->ifTrue(static fn(array $branch): bool => [] !== self::unknownTopics($branch))
             ->then(static function (array $branch): never {
                 throw new \InvalidArgumentException(\sprintf('Every notification type names a configured topic: %s.', implode(

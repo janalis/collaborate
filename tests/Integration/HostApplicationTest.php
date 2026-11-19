@@ -27,6 +27,7 @@ use Janalis\Collaborate\Draft\DraftValues;
 use Janalis\Collaborate\Draft\EventValidator;
 use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\Draft\FormDraft;
+use Janalis\Collaborate\Draft\RecordId;
 use Janalis\Collaborate\Form\CollaborateFormExtension;
 use Janalis\Collaborate\Grant;
 use Janalis\Collaborate\Hub\Admission;
@@ -114,6 +115,7 @@ use Symfony\Component\DomCrawler\Crawler;
 #[UsesClass(JournalDialect::class)]
 #[UsesClass(MySqlDialect::class)]
 #[UsesClass(PortableSchema::class)]
+#[UsesClass(RecordId::class)]
 final class HostApplicationTest extends ApplicationTestCase
 {
     private const array EVENT = [

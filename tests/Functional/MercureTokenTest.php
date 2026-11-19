@@ -21,6 +21,7 @@ use Janalis\Collaborate\Draft\DraftValues;
 use Janalis\Collaborate\Draft\EventValidator;
 use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\Draft\FormDraft;
+use Janalis\Collaborate\Draft\RecordId;
 use Janalis\Collaborate\Form\CollaborateFormExtension;
 use Janalis\Collaborate\Grant;
 use Janalis\Collaborate\Hub\Admission;
@@ -83,6 +84,7 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 #[UsesClass(Bridge::class)]
 #[UsesClass(SymfonyCurrentUser::class)]
 #[UsesClass(FormDraft::class)]
+#[UsesClass(RecordId::class)]
 final class MercureTokenTest extends CollaborateWebTestCase
 {
     public function testTheSessionTokenIsAnAccessTokenForTheHubCarryingItsConfiguredClaims(): void

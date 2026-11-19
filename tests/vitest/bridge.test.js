@@ -65,6 +65,25 @@ describe('bridge', () => {
     expect(bridge().name).toBe('cms');
   });
 
+  it('parses the configuration again only once it changes', () => {
+    const cms = registerBridge({ name: 'cms' });
+    const other = registerBridge({ name: 'other' });
+    layer('{"bridge":"cms"}');
+    const parse = vi.spyOn(JSON, 'parse');
+    try {
+      expect(bridge()).toBe(cms);
+      expect(bridge()).toBe(cms);
+      expect(parse).toHaveBeenCalledTimes(1);
+      document.querySelector('[data-collaborate-layer]')?.setAttribute('data-config', '{"bridge":"other"}');
+      expect(bridge()).toBe(other);
+      document.body.innerHTML = '';
+      expect(bridge()).toBe(other);
+      expect(parse).toHaveBeenCalledTimes(3);
+    } finally {
+      parse.mockRestore();
+    }
+  });
+
   it('forgets the registered profiles', () => {
     registerBridge({ name: 'cms' });
     resetBridges();

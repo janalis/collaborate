@@ -14,6 +14,7 @@ use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftSave;
 use Janalis\Collaborate\Draft\FormDraft;
+use Janalis\Collaborate\Draft\RecordId;
 use Janalis\Collaborate\Form\CollaborateFormExtension;
 use Janalis\Collaborate\Gedmo\TranslatableFieldKeyResolver;
 use Janalis\Collaborate\Grant;
@@ -84,6 +85,7 @@ use Twig\RuntimeLoader\FactoryRuntimeLoader;
 #[UsesClass(Topics::class)]
 #[UsesClass(SecurityCollaboratorProvider::class)]
 #[AllowMockObjectsWithoutExpectations]
+#[UsesClass(RecordId::class)]
 final class CollaborateFormExtensionTest extends TypeTestCase
 {
     private CollaborateFormExtension $extension;

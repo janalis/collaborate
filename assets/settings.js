@@ -8,8 +8,16 @@
  * @returns {Record<string, any>}
  */
 export function settingsOf(element, attribute) {
+  return parseSettings(element?.getAttribute(attribute));
+}
+
+/**
+ * @param {string | null | undefined} json the attribute's value
+ * @returns {Record<string, any>}
+ */
+export function parseSettings(json) {
   try {
-    const settings = JSON.parse(element?.getAttribute(attribute) || '{}');
+    const settings = JSON.parse(json || '{}');
     return settings && typeof settings === 'object' && !Array.isArray(settings) ? settings : {};
   } catch {
     return {};

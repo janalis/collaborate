@@ -38,7 +38,7 @@ final class RefreshSubscriber implements EventSubscriberInterface
                 'tokens' => \is_array($refresh) ? $refresh['tokens'] ?? [] : [],
             ],
             200,
-            ['Cache-Control' => 'no-store'],
+            ['Cache-Control' => 'no-store', 'Vary' => 'X-Collaborate-Refresh'],
         ));
     }
 }

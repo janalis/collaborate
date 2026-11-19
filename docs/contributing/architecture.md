@@ -11,14 +11,16 @@ keep it current when you change one.
 
 | Path | Contents |
 |---|---|
-| `src/CollaborateBundle.php` | The configuration tree, the container parameters (`collaborate.<path>`), the service aliases and the prepended Doctrine, Twig and AssetMapper configuration. |
+| `src/CollaborateBundle.php` | The container parameters (`collaborate.<path>`), the service aliases, the service files it loads and the prepended Doctrine, Twig and AssetMapper configuration. |
+| `src/DependencyInjection/Configuration.php` | The configuration tree, its defaults and its validation. |
 | `config/services/*.php` | Explicit service definitions, no autowiring of the bundle's namespace. |
-| `config/routes.php` | The three routes, imported by the application under its own prefix. |
+| `config/routes.php` | The session, cursor-event and draft routes, imported by the application under its own prefix. |
+| `config/routes/notifications.php` | The notification, topic and push routes, imported by the application next to them; they answer 404 while notifications are off. |
 | `src/` | PHP, by concern (below). |
 | `templates/` | The layer and presence markup (`@JanalisCollaborate`). |
 | `translations/` | The `collaborate` domain, English and French; keys are the English strings. |
 | `assets/` | Native ES modules and Sass partials, served by AssetMapper as `@janalis/collaborate`. |
-| `docs/schema.sql` | Reference DDL of the three tables. |
+| `docs/schema.sql` | Reference DDL of the six tables: three for drafts, three for notifications. |
 | `docs/deploy/` | Copy-ready proxy, process-manager and platform files for the WebSocket hub. |
 
 ## Service files
@@ -33,9 +35,15 @@ keep it current when you change one.
 | `drafts.php` | always | `DraftText`, `DraftJournal`, `DraftSave`, `FormDraft`, the record identifier (`RecordIdentifierInterface`), the field-key resolver, the form type extension, `DraftController`, `PurgeDraftsCommand`, and the saved-view collection and announcement (`ChangeCollector`, `UpdatesSubscriber`). |
 | `bridge_easyadmin.php` | when `collaborate.bridge` resolves to `easyadmin` (`auto` with EasyAdminBundle registered) | `EasyAdminFormContext` (aliased as `FormContextInterface`), `DraftRefreshSubscriber`, `SaveSubscriber`, and the autocomplete's mapper for the form extension. |
 | `gedmo.php` | when Gedmo's `Translatable` interface exists | `TranslatableFieldKeyResolver`, `TranslationMapper`. |
+| `notifications.php` | always | The notification services every page may ask for (access, the bell's runtime, the controllers); each reads `notifications.enabled` and the routes answer 404 while it is off. |
+| `notifications_push.php` | with `notifications.enabled` and `notifications.web_push.enabled` | The web push sender, dispatcher and subscriptions. |
+| `notifications_messenger.php`, `notifications_push_messenger.php` | with notifications (and web push) on, when Messenger is installed | The handlers of the messages `Notifier` and the push dispatcher send through a bus. |
 
 Everything is registered whatever the feature flags say; the services
-read `collaborate.*.enabled` and stay inert when their feature is off.
+read `collaborate.*.enabled` and stay inert when their feature is off. The
+exception is `notifications.enabled`, which also decides the push and
+Messenger files and the notifications' Doctrine mapping as the container is
+built: it must be a boolean, not an environment variable.
 
 ## PHP
 
@@ -50,7 +58,7 @@ read `collaborate.*.enabled` and stay inert when their feature is off.
 | `Hub\Transport\WebSocket\` | Shared by the application and the server, with no ReactPHP type: `WebSocketTransport` (signed publish and presence requests, token minting), `Keys` (HKDF derivation and rotation), `SubscriberToken`, `TokenClaims`, `RequestSigner`, `Origin`. |
 | `Hub\Server\` | The ReactPHP server, never a container service: `ServerConfig`, `ServerFactory`, `Server` (listeners, signals, shutdown, the shared timer), `BrowserEndpoint` (handshake and subscribe protocol), `PublishEndpoint` (`/publish`, `/subscriptions`, `/health`), `Router` (topic to connections), `Connection`, `ClientAddress`, `Sockets`, `Limits`, `Timings`. |
 | `Cursor\` | `PageGrant` (rooms and page grants), `CursorEvent` and `CursorPosition` (validation of what clients send). |
-| `Controller\` | `HubController` (session), `CursorController` (events), `DraftController` (draft actions). |
+| `Controller\` | `HubController` (session), `CursorController` (events), `DraftController` (draft actions), `NotificationController` (the bell, the page, topics), `PushController` (push subscriptions, the service worker). |
 | `Draft\` | `DraftAccess` (field grants and their cache), `DraftJournal` (the journal: one class per protocol), `Dialect\` (its SQL where MariaDB and MySQL, PostgreSQL and SQLite differ: upserts, row and named locks), `DraftText` (plain-text operations on the server), `DraftSave` (the locked save), field-key resolvers. |
 | `Form\` | `CollaborateFormExtension` (the field schema of a Symfony form, stable collection keys, the save hooks) and `FormContextInterface`. |
 | `Doctrine\` | `ChangeCollector` (the `onFlush` half of saved-view updates), `RecordIdentifier`, `TranslationMapperInterface`. |
@@ -58,9 +66,11 @@ read `collaborate.*.enabled` and stay inert when their feature is off.
 | `Updates\` | `UpdatesSubscriber`: the response half of saved-view updates. |
 | `Security\` | `CurrentUserInterface` (the user and their access decisions) and Symfony's, `SymfonyCurrentUser`. |
 | `Gedmo\` | Per-locale field keys and the translation-to-record mapping. |
-| `Entity\` | `Draft`, `DraftField`, `DraftEvent`: the mapping of the three tables. |
+| `Entity\` | `Draft`, `DraftField`, `DraftEvent`: the mapping of the three draft tables. |
+| `Notification\` | `Notifier` (stores and announces a notification), `Preferences` (a user's topics), `NotificationRepository`, `NotificationAccess`, `NotificationCatalog`; `Entity\` (`Notification`, `NotificationPreference`, `PushSubscription`), `Messenger\` (the messages and their handlers), `Push\` (VAPID keys, the web push sender and dispatcher, subscriptions). |
+| `DependencyInjection\` | `Configuration`, the configuration tree. |
 | `Command\` | `collaborate:purge`, `collaborate:push:setup`, `collaborate:hub:serve` (checks the server's packages, then builds and runs it). |
-| `Twig\` | `collaborate_layer()`, `collaborate_presence()`, `collaborate_enabled()`, `collaborate_grant()`. |
+| `Twig\` | `collaborate_layer()`, `collaborate_presence()`, `collaborate_enabled()`, `collaborate_grant()`; `NotificationRuntime`, the bell and the notification pages. |
 
 ## JavaScript
 
@@ -68,6 +78,7 @@ read `collaborate.*.enabled` and stay inert when their feature is off.
 |---|---|
 | `collaborate.js` | Entry point: starts cursors, updates and drafts; re-exports `sessionFor`, `addRowInitializer` and `registerBridge`. |
 | `easyadmin.js`, `drupal.js` | Entry points of the bridges: their profile, then `collaborate.js`. |
+| `settings.js` | `settingsOf()`: the JSON settings the server renders into an attribute, an absent or malformed one read as none. |
 | `bridge.js`, `bridges/*.js` | The bridges' script profiles (regions, rows and entries, the page shown, embedded lists, selection, overlays, collection and slug widgets, save buttons), and the active one: the layer's `bridge` when registered. |
 | `hub.js` | One hub stream per page, whatever the transport; members join by `channel` (`cursors`, `updates`, `draft`, `notifications`); renewal (in place on a WebSocket), backoff with jitter, resend of unknown grant signatures, background renewal of the page grant. |
 | `hub/mercure.js`, `hub/websocket.js` | The two sources `hub.js` loads on demand, after the session names its `transport`: a Mercure stream through `@microsoft/fetch-event-source`, or a WebSocket with its subscribe and acknowledgement messages. |
@@ -76,6 +87,7 @@ read `collaborate.*.enabled` and stay inert when their feature is off.
 | `updates.js` | Saved-list and saved-detail refresh. |
 | `draft/session.js` | `DraftSession`: one ordered network queue per form, join, replay, save, discard, conflicts, grant renewal; `sessionFor()`. |
 | `draft/fields.js`, `collections.js`, `conflicts.js`, `bar.js`, `hooks.js` | Field adapters, collection rows, the conflict review, the state bar and dialogs, `addRowInitializer()`. |
+| `notifications/bell.js`, `page.js`, `topics.js`, `push-worker.js` | The bell, the page of all notifications, the topic switches, the push service worker. |
 | `ckeditor5/collaborate.js` | The `Collaborate` CKEditor plugin. |
 | `ckeditor5/operation-buffer.js`, `source.js`, `text-change.js` | Operation batching and transformation, Markdown source reconciliation, text diffs. |
 | `scss/_layer.scss`, `_cursors.scss`, `_draft.scss`, `_notifications.scss` | Styles; `_cursors.scss` is the Bootstrap 5 entry. |

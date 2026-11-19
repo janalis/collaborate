@@ -8,6 +8,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Event\OnFlushEventArgs;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Janalis\Collaborate\Draft\DraftAccess;
+use Janalis\Collaborate\Draft\RecordId;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 
@@ -154,7 +155,7 @@ final class ChangeCollector
             return [];
         }
         $identifier = $uow->getEntityIdentifier($entity);
-        $id = self::idString(reset($identifier));
+        $id = RecordId::string(reset($identifier));
         // An edit page addresses single-column ids only.
         if (null === $id || 1 !== \count($identifier)) {
             return [];
@@ -180,11 +181,6 @@ final class ChangeCollector
         }
 
         return $objects;
-    }
-
-    private static function idString(mixed $id): ?string
-    {
-        return \is_int($id) || \is_string($id) ? (string) $id : null;
     }
 
     /** @param ClassMetadata<object> $metadata

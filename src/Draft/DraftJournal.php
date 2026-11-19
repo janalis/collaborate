@@ -70,6 +70,9 @@ class DraftJournal implements ResetInterface
 
     private ?JournalDialect $dialect = null;
 
+    /** The hashed database name of {@see lockName()}: DBAL reads it with a query on every call. */
+    private ?string $lockPrefix = null;
+
     /**
      * @param string $systemLabel the name of the writes no editor made (a compaction, a reconciliation)
      * @param array{max_update_bytes?: int, max_draft_bytes?: int, max_fields?: int, max_value_depth?: int, label_length?: int, compact?: array{bytes?: int, fields?: int, idle?: int, ...}, locks?: array{save?: int, writer?: int, ...}, purge?: array{clean_days?: int, unsaved_days?: int, ...}, ...} $limits
@@ -848,7 +851,9 @@ class DraftJournal implements ResetInterface
      */
     private function lockName(string $id): string
     {
-        return 'collaborate:' . substr(hash('xxh128', (string) $this->db()->getDatabase()), 0, 16) . ':' . md5($id);
+        $this->lockPrefix ??= 'collaborate:' . substr(hash('xxh128', (string) $this->db()->getDatabase()), 0, 16) . ':';
+
+        return $this->lockPrefix . md5($id);
     }
 
     /** @param Field $field */

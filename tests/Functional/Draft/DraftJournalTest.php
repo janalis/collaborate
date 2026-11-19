@@ -22,6 +22,7 @@ use Janalis\Collaborate\Draft\DraftValues;
 use Janalis\Collaborate\Draft\EventValidator;
 use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\Draft\RecordAlreadyCreatedException;
+use Janalis\Collaborate\Draft\RecordId;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Article;
 use Janalis\Collaborate\Tests\Fixtures\Draft\InterleavingConnection;
 use Janalis\Collaborate\Tests\Fixtures\Draft\JsonAssertions;
@@ -68,6 +69,7 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 #[UsesClass(DraftText::class)]
 #[CoversClass(JournalDialect::class)]
 #[CoversClass(MySqlDialect::class)]
+#[UsesClass(RecordId::class)]
 final class DraftJournalTest extends TestCase
 {
     use JsonAssertions;

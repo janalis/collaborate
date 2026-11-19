@@ -65,13 +65,16 @@ final class WebPushSender implements PushSenderInterface, ResetInterface
 
     private function client(): WebPush
     {
+        if (null !== $this->client) {
+            return $this->client;
+        }
         // A push service answers; it never sends the request elsewhere, and a slow one holds no worker for long.
         $http = new Psr18Client(($this->http ?? HttpClient::create())->withOptions([
             'timeout' => 10,
             'max_redirects' => 0,
         ]));
 
-        return $this->client ??= new WebPush(
+        return $this->client = new WebPush(
             ['VAPID' => [
                 'subject' => $this->subject,
                 'publicKey' => $this->publicKey,

@@ -34,6 +34,7 @@ use PHPUnit\Framework\Attributes\IgnoreDeprecations;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
 use Symfony\Bundle\MercureBundle\MercureBundle;
+use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
 use Symfony\Component\Config\Resource\FileResource;
 use Symfony\Component\DependencyInjection\Compiler\MergeExtensionConfigurationPass;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -96,33 +97,24 @@ final class CollaborateBundleTest extends TestCase
     public function testUpdatesFollowAnEnvDrivenSharedDraftsFlagAtRuntime(): void
     {
         foreach (['1' => true, '0' => false] as $flag => $expected) {
-            // As a kernel loads it: the env placeholder reaches the extension as a placeholder string.
-            $container = self::container();
-            // The bundle prepends the configuration of these extensions.
-            foreach (['framework', 'twig', 'doctrine'] as $prepended) {
-                $container->registerExtension(new class($prepended) extends Extension {
-                    public function __construct(
-                        private readonly string $name,
-                    ) {}
-
-                    public function getAlias(): string
-                    {
-                        return $this->name;
-                    }
-
-                    public function load(array $configs, ContainerBuilder $container): void {}
-                });
-            }
-            $container->registerExtension($this->extension());
-            $container->loadFromExtension('collaborate', ['drafts' => [
-                'enabled' => '%env(bool:COLLABORATE_TEST_DRAFTS)%',
-            ]]);
-            $container->setParameter('env(COLLABORATE_TEST_DRAFTS)', (string) $flag);
-            new MergeExtensionConfigurationPass()->process($container);
+            $container = $this->merge(['drafts' => ['enabled' => '%env(bool:COLLABORATE_TEST_DRAFTS)%']], [
+                'env(COLLABORATE_TEST_DRAFTS)' => (string) $flag,
+            ]);
             $updates = $container->getParameter('collaborate.updates.enabled');
             self::assertSame($container->getParameter('collaborate.drafts.enabled'), $updates);
             self::assertSame($expected, $container->resolveEnvPlaceholders($updates, true));
         }
+    }
+
+    public function testAnEnvDrivenNotificationsFlagIsRefused(): void
+    {
+        // Notifications load services, routes and a Doctrine mapping as the container is built: a flag the
+        // environment sets later would leave them half on, so it is refused instead of read as off.
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessage('collaborate.notifications.enabled is read as the container is built');
+        $this->merge(['notifications' => ['enabled' => '%env(bool:COLLABORATE_TEST_NOTIFICATIONS)%']], [
+            'env(COLLABORATE_TEST_NOTIFICATIONS)' => '1',
+        ]);
     }
 
     public function testAliasesTheConfiguredServices(): void
@@ -352,6 +344,40 @@ final class CollaborateBundleTest extends TestCase
         $container = $this->load(['hub' => ['name' => 'collaboration']]);
         self::assertSame('collaboration', $container->getParameter('collaborate.hub.name'));
         self::assertSame('mercure.hub.collaboration', (string) $container->getAlias('janalis_collaborate.mercure_hub'));
+    }
+
+    /**
+     * Loads the configuration as a kernel does: an env placeholder reaches the extension as a placeholder string.
+     *
+     * @param array<string, mixed>  $config
+     * @param array<string, string> $parameters
+     */
+    private function merge(array $config, array $parameters): ContainerBuilder
+    {
+        $container = self::container();
+        // The bundle prepends the configuration of these extensions.
+        foreach (['framework', 'twig', 'doctrine'] as $prepended) {
+            $container->registerExtension(new class($prepended) extends Extension {
+                public function __construct(
+                    private readonly string $name,
+                ) {}
+
+                public function getAlias(): string
+                {
+                    return $this->name;
+                }
+
+                public function load(array $configs, ContainerBuilder $container): void {}
+            });
+        }
+        $container->registerExtension($this->extension());
+        $container->loadFromExtension('collaborate', $config);
+        foreach ($parameters as $name => $value) {
+            $container->setParameter($name, $value);
+        }
+        new MergeExtensionConfigurationPass()->process($container);
+
+        return $container;
     }
 
     /** A container as a kernel starts it; Symfony 7.4.0 reads the environment while loading a bundle extension. */

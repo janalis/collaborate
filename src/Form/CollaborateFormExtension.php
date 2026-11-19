@@ -14,6 +14,7 @@ use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\FieldKeyResolver;
 use Janalis\Collaborate\Draft\FieldKeyResolverInterface;
 use Janalis\Collaborate\Draft\FormDraft;
+use Janalis\Collaborate\Draft\RecordId;
 use Janalis\Collaborate\Draft\RecordIdentifierInterface;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Security\CurrentUserInterface;
@@ -655,12 +656,7 @@ final class CollaborateFormExtension extends AbstractTypeExtension
             return null;
         }
 
-        return self::idString($this->identifier->value($item) ?? get_object_vars($item)['id'] ?? null);
-    }
-
-    private static function idString(mixed $id): ?string
-    {
-        return \is_int($id) || \is_string($id) || $id instanceof \Stringable ? (string) $id : null;
+        return RecordId::string($this->identifier->value($item) ?? get_object_vars($item)['id'] ?? null);
     }
 
     /** @return array<array-key, mixed>|Collection<array-key, mixed>|null A collection form's data, when it holds entries. */

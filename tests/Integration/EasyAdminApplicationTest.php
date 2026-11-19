@@ -34,6 +34,7 @@ use Janalis\Collaborate\Draft\EventValidator;
 use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\Draft\FieldKeyResolver;
 use Janalis\Collaborate\Draft\FormDraft;
+use Janalis\Collaborate\Draft\RecordId;
 use Janalis\Collaborate\Entity\Draft;
 use Janalis\Collaborate\Entity\DraftEvent;
 use Janalis\Collaborate\Entity\DraftField;
@@ -117,6 +118,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(JournalDialect::class)]
 #[UsesClass(MySqlDialect::class)]
 #[UsesClass(PortableSchema::class)]
+#[UsesClass(RecordId::class)]
 final class EasyAdminApplicationTest extends CollaborationTestCase
 {
     protected static function kernel(): string

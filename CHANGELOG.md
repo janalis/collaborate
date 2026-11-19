@@ -5,6 +5,28 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- `notifications.enabled` set to an environment variable is refused with an
+  `InvalidConfigurationException`: it decides the notification services and
+  their Doctrine mapping as the container is built, and the placeholder was
+  silently read as off. Set it to `true` or `false`.
+- A draft's named lock no longer asks the database its name on every lock
+  and unlock: the name is read once per connection.
+- `bridge()` parses the layer's `data-config` again only once it changes,
+  not on every row, entry and caret lookup.
+- The pointers read the open popup in their next frame instead of on every
+  mutation of the page, which laid the page out each time.
+- Drupal's refresh answer carries `Vary: X-Collaborate-Refresh`, as
+  EasyAdmin's does.
+
+### Fixed
+
+- A new record whose identifier is a UUID or ULID (a Stringable `Uid`) is
+  recorded as created by its draft, and saved views of it are announced;
+  `Draft\RecordId::string()` is the one conversion the three callers share.
+- Web push builds its HTTP client once, not on every push.
+
 ## [0.5.2] - 2026-11-19
 
 ### Added

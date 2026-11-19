@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace Janalis\Collaborate\Tests\Unit\Draft;
 
 use Janalis\Collaborate\Draft\DraftJournal;
+use Janalis\Collaborate\Draft\DraftLocks;
 use Janalis\Collaborate\Draft\DraftSave;
+use Janalis\Collaborate\Draft\FieldNames;
 use Janalis\Collaborate\Draft\RecordId;
 use Janalis\Collaborate\Draft\RecordIdentifierInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Symfony\Component\HttpFoundation\Request;
@@ -17,6 +20,8 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 
 #[CoversClass(DraftSave::class)]
 #[CoversClass(RecordId::class)]
+#[UsesClass(DraftLocks::class)]
+#[UsesClass(FieldNames::class)]
 final class DraftSaveTest extends TestCase
 {
     public function testANewRecordWithAnObjectIdentifierIsCheckpointedUnderItsString(): void

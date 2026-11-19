@@ -27,12 +27,14 @@ use Janalis\Collaborate\Draft\Dialect\JournalDialect;
 use Janalis\Collaborate\Draft\Dialect\MySqlDialect;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
+use Janalis\Collaborate\Draft\DraftLocks;
 use Janalis\Collaborate\Draft\DraftSave;
 use Janalis\Collaborate\Draft\DraftText;
 use Janalis\Collaborate\Draft\DraftValues;
 use Janalis\Collaborate\Draft\EventValidator;
 use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\Draft\FieldKeyResolver;
+use Janalis\Collaborate\Draft\FieldNames;
 use Janalis\Collaborate\Draft\FormDraft;
 use Janalis\Collaborate\Draft\RecordId;
 use Janalis\Collaborate\Entity\Draft;
@@ -119,6 +121,8 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(MySqlDialect::class)]
 #[UsesClass(PortableSchema::class)]
 #[UsesClass(RecordId::class)]
+#[UsesClass(DraftLocks::class)]
+#[UsesClass(FieldNames::class)]
 final class EasyAdminApplicationTest extends CollaborationTestCase
 {
     protected static function kernel(): string

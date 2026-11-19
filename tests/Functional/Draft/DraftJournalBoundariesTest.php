@@ -10,10 +10,12 @@ use Doctrine\DBAL\Exception\LockWaitTimeoutException;
 use Janalis\Collaborate\Draft\Dialect\JournalDialect;
 use Janalis\Collaborate\Draft\Dialect\MySqlDialect;
 use Janalis\Collaborate\Draft\DraftJournal;
+use Janalis\Collaborate\Draft\DraftLocks;
 use Janalis\Collaborate\Draft\DraftText;
 use Janalis\Collaborate\Draft\DraftValues;
 use Janalis\Collaborate\Draft\EventValidator;
 use Janalis\Collaborate\Draft\FieldDefinitions;
+use Janalis\Collaborate\Draft\FieldNames;
 use Janalis\Collaborate\Draft\RecordAlreadyCreatedException;
 use Janalis\Collaborate\Tests\Fixtures\Draft\InterleavingConnection;
 use Janalis\Collaborate\Tests\Fixtures\Draft\JsonAssertions;
@@ -38,6 +40,8 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 #[UsesClass(DraftText::class)]
 #[CoversClass(JournalDialect::class)]
 #[CoversClass(MySqlDialect::class)]
+#[CoversClass(DraftLocks::class)]
+#[UsesClass(FieldNames::class)]
 final class DraftJournalBoundariesTest extends TestCase
 {
     use JsonAssertions;

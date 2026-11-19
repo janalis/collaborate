@@ -16,10 +16,12 @@ use Janalis\Collaborate\Doctrine\ChangeCollector;
 use Janalis\Collaborate\Doctrine\RecordIdentifier;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
+use Janalis\Collaborate\Draft\DraftLocks;
 use Janalis\Collaborate\Draft\DraftSave;
 use Janalis\Collaborate\Draft\DraftValues;
 use Janalis\Collaborate\Draft\EventValidator;
 use Janalis\Collaborate\Draft\FieldDefinitions;
+use Janalis\Collaborate\Draft\FieldNames;
 use Janalis\Collaborate\Draft\FormDraft;
 use Janalis\Collaborate\Draft\RecordId;
 use Janalis\Collaborate\Form\CollaborateFormExtension;
@@ -85,6 +87,8 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 #[UsesClass(SymfonyCurrentUser::class)]
 #[UsesClass(FormDraft::class)]
 #[UsesClass(RecordId::class)]
+#[UsesClass(DraftLocks::class)]
+#[UsesClass(FieldNames::class)]
 final class MercureTokenTest extends CollaborateWebTestCase
 {
     public function testTheSessionTokenIsAnAccessTokenForTheHubCarryingItsConfiguredClaims(): void

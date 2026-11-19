@@ -6,7 +6,9 @@ namespace Janalis\Collaborate\Tests\Unit\Draft;
 
 use Janalis\Collaborate\Access\RoleDraftAccessChecker;
 use Janalis\Collaborate\Draft\DraftAccess;
+use Janalis\Collaborate\Draft\DraftLocks;
 use Janalis\Collaborate\Draft\DraftSave;
+use Janalis\Collaborate\Draft\FieldNames;
 use Janalis\Collaborate\Draft\FormDraft;
 use Janalis\Collaborate\Grant;
 use Janalis\Collaborate\Hub\Topics;
@@ -30,6 +32,8 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 #[UsesClass(Grant::class)]
 #[UsesClass(SecurityCollaboratorProvider::class)]
 #[UsesClass(RoleDraftAccessChecker::class)]
+#[UsesClass(DraftLocks::class)]
+#[UsesClass(FieldNames::class)]
 final class FormDraftTest extends TestCase
 {
     private const array FIELDS = ['title' => ['type' => 'text', 'initial' => 'Saved', 'formName' => 'title']];

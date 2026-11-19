@@ -12,10 +12,12 @@ use Janalis\Collaborate\Draft\Dialect\JournalDialect;
 use Janalis\Collaborate\Draft\Dialect\MySqlDialect;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
+use Janalis\Collaborate\Draft\DraftLocks;
 use Janalis\Collaborate\Draft\DraftSave;
 use Janalis\Collaborate\Draft\DraftValues;
 use Janalis\Collaborate\Draft\EventValidator;
 use Janalis\Collaborate\Draft\FieldDefinitions;
+use Janalis\Collaborate\Draft\FieldNames;
 use Janalis\Collaborate\Draft\RecordId;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Article;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -50,6 +52,8 @@ use Symfony\Component\Translation\IdentityTranslator;
 #[UsesClass(MySqlDialect::class)]
 #[UsesClass(PortableSchema::class)]
 #[UsesClass(RecordId::class)]
+#[UsesClass(DraftLocks::class)]
+#[UsesClass(FieldNames::class)]
 final class DraftSaveTest extends TestCase
 {
     /** @var array<string, array{type: string, initial: mixed}> */

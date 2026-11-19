@@ -13,6 +13,7 @@ use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\FieldKeyResolver;
 use Janalis\Collaborate\Draft\FieldKeyResolverInterface;
+use Janalis\Collaborate\Draft\FieldNames;
 use Janalis\Collaborate\Draft\FormDraft;
 use Janalis\Collaborate\Draft\RecordId;
 use Janalis\Collaborate\Draft\RecordIdentifierInterface;
@@ -412,7 +413,7 @@ final class CollaborateFormExtension extends AbstractTypeExtension
                 $keys = [];
                 foreach ($child as $key => $entry) {
                     $keys[] = $key;
-                    $fields[$path . '[@' . $key . ']'] =
+                    $fields[FieldNames::member($path, (string) $key)] =
                         [
                             'type' => 'member',
                             'initial' => [
@@ -422,16 +423,16 @@ final class CollaborateFormExtension extends AbstractTypeExtension
                             ],
                         ] + $unordered;
                 }
-                $fields[$path . '[__collection__]'] = ['type' => 'collection', 'initial' => $keys] + $unordered;
+                $fields[FieldNames::collection($path)] = ['type' => 'collection', 'initial' => $keys] + $unordered;
                 if ($prototype instanceof FormInterface) {
-                    $fields[$path . '[__member__]'] =
+                    $fields[FieldNames::prototype($path)] =
                         [
                             'type' => 'member',
                             'initial' => ['alive' => false, 'order' => 0, 'recordId' => null],
                         ] + $unordered;
                     $fields += $prototype->getConfig()->getCompound()
-                        ? $this->fields($prototype, $new, $path . '[__name__]')
-                        : $this->describe($prototype, $path . '[__name__]', $new, null, $fresh);
+                        ? $this->fields($prototype, $new, FieldNames::entryPrototype($path))
+                        : $this->describe($prototype, FieldNames::entryPrototype($path), $new, null, $fresh);
                 }
             }
             if ($config->getCompound() && !\in_array('choice', $types, true)) {
@@ -499,10 +500,10 @@ final class CollaborateFormExtension extends AbstractTypeExtension
             $fields[$key]['schema'] = $this->editor() . ':collaborate-2:' . $kind . ':' . ($reduced ? 'basic' : 'full');
         }
         if ('rich' === $kind) {
-            $fields[$key . '[__mode__]'] = [
+            $fields[FieldNames::mode($key)] = [
                 'type' => 'value',
                 'initial' => 'wysiwyg',
-                'formName' => $path . '[__mode__]',
+                'formName' => FieldNames::mode($path),
             ];
         }
 

@@ -65,13 +65,9 @@ class DraftJournal implements ResetInterface
 
     private int $unsavedDays;
 
-    /** @var array<string, int> */
-    private array $held = [];
-
     private ?JournalDialect $dialect = null;
 
-    /** The hashed database name of {@see lockName()}: DBAL reads it with a query on every call. */
-    private ?string $lockPrefix = null;
+    private DraftLocks $locks;
 
     /**
      * @param string $systemLabel the name of the writes no editor made (a compaction, a reconciliation)
@@ -98,6 +94,7 @@ class DraftJournal implements ResetInterface
         $this->writerLockSeconds = $limits['locks']['writer'] ?? 1;
         $this->cleanDays = $limits['purge']['clean_days'] ?? 7;
         $this->unsavedDays = $limits['purge']['unsaved_days'] ?? 90;
+        $this->locks = new DraftLocks($connection, $this->dialect(...), $this->lockSeconds);
     }
 
     /** @param array<string, SchemaField> $fields
@@ -298,7 +295,7 @@ class DraftJournal implements ResetInterface
         }
 
         return $this->exclusive($id, function () use ($id, $event, $field, $size, $userId, $label, $definition): array {
-            $draft = $this->read($id, true, [$field, ...self::memberNames($definition['formName'] ?? $field)]);
+            $draft = $this->read($id, true, [$field, ...FieldNames::membersAround($definition['formName'] ?? $field)]);
             // A retried batch whose response was lost gets its stored result, whatever happened to the draft since.
             $accepted = $this->batch($id, $event['id']);
             if (null !== $accepted) {
@@ -397,7 +394,7 @@ class DraftJournal implements ResetInterface
                 throw new HttpException(413, 'Collaborate draft is full. Save or discard before continuing.');
             }
             // Source mode is shared UI state, not a persisted form value: switching it leaves the draft saved.
-            if ($this->mode($field)) {
+            if (FieldNames::isMode($field)) {
                 $state['savedVersion'] = $state['version'];
                 if ($clean) {
                     $draft['savedRevision'] = $draft['revision'];
@@ -476,7 +473,7 @@ class DraftJournal implements ResetInterface
             } elseif (
                 'value' === $field['type']
                 && !DraftValues::same($field['value'], $values[$name])
-                && !$this->mode($name)
+                && !FieldNames::isMode($name)
             ) {
                 $version = $field['version'] ?? 0;
                 $field['value'] = $values[$name];
@@ -500,11 +497,8 @@ class DraftJournal implements ResetInterface
         $removed = $this->removedEntries($draft);
         foreach ($draft['fields'] as $name => &$state) {
             if ('member' === $state['type'] && !\array_key_exists($name, $values)) {
-                $position = strrpos($name, '[@');
-                if (
-                    false !== $position
-                    && \array_key_exists(substr($name, 0, $position) . '[__collection__]', $values)
-                ) {
+                $member = FieldNames::parseMember($name);
+                if (null !== $member && \array_key_exists(FieldNames::collection($member[0]), $values)) {
                     $state['saved'] = ['alive' => false, 'order' => 0, 'recordId' => null];
                     $state['savedVersion'] = $state['version'];
                 }
@@ -597,17 +591,12 @@ class DraftJournal implements ResetInterface
         foreach ($this->decodeFields($this->db()->fetchAllAssociative("SELECT name, state FROM collaborate_draft_field WHERE draft_id = ? AND type = 'collection' ORDER BY name", [
             $id,
         ])) as $name => $field) {
-            if (
-                !(
-                    \is_array($field['saved'])
-                    && str_ends_with($name, '[__collection__]')
-                    && array_is_list($field['saved'])
-                )
-            ) {
+            $path = FieldNames::collectionPath($name);
+            if (null === $path || !\is_array($field['saved']) || !array_is_list($field['saved'])) {
                 continue;
             }
 
-            $keys[substr($name, 0, -\strlen('[__collection__]'))] = array_map(strval(...), $field['saved']);
+            $keys[$path] = array_map(strval(...), $field['saved']);
         }
 
         return $keys;
@@ -618,19 +607,17 @@ class DraftJournal implements ResetInterface
      */
     public function aliases(string $id): array
     {
-        $this->afterSave($id);
+        // A page read before a save under way checkpoints its aliases would key an entry the save created by its
+        // record, beside the draft's own key for it, and show it twice.
+        $this->locks->waitForSave($id);
         $aliases = [];
         foreach ($this->members($id) as $name => $field) {
             if (!\is_array($field['saved']) || !\is_scalar($field['saved']['recordId'] ?? null)) {
                 continue;
             }
-            $position = strrpos($name, '[@');
-            if (false !== $position) {
-                $aliases[substr($name, 0, $position)][(string) $field['saved']['recordId']] = substr(
-                    $name,
-                    $position + 2,
-                    -1,
-                );
+            $member = FieldNames::parseMember($name);
+            if (null !== $member) {
+                $aliases[$member[0]][(string) $field['saved']['recordId']] = $member[1];
             }
         }
 
@@ -751,59 +738,24 @@ class DraftJournal implements ResetInterface
         return $purged;
     }
 
-    /** Serializes the writers of one draft, a save included. A named lock is not
-     * transactional: EasyAdmin's flush commits before its postFlush side effects run.
+    /** Serializes the writers of one draft, a save included ({@see DraftLocks}).
+     *
+     * @throws ServiceUnavailableHttpException past the wait: another process holds it
      */
     public function lock(string $id, ?int $seconds = null): void
     {
-        if (!$this->dialect()->lock($this->db(), $this->lockName($id), $seconds ?? $this->lockSeconds)) {
-            throw new ServiceUnavailableHttpException(1, 'Collaborate draft is busy.');
-        }
-        $this->held[$id] = ($this->held[$id] ?? 0) + 1;
+        $this->locks->lock($id, $seconds);
     }
 
     public function unlock(string $id): void
     {
-        if (!isset($this->held[$id])) {
-            return;
-        }
-        $this->dialect()->unlock($this->db(), $this->lockName($id));
-        if (0 === --$this->held[$id]) {
-            unset($this->held[$id]);
-        }
-    }
-
-    /**
-     * Waits for a save of the draft under way, at most as long as a save may hold its lock: the aliases a page
-     * opened meanwhile reads are those the save checkpoints. A page read before them would key an entry the save
-     * created by its record, beside the draft's own key for it, and show it twice. An alias names a record, so
-     * a page that loaded its record before the save still reads them right. Past the wait, the page reads the
-     * draft as it is; a save of this process (its form shown again) waits for nothing.
-     */
-    private function afterSave(string $id): void
-    {
-        if (isset($this->held[$id])) {
-            return;
-        }
-        try {
-            $this->lock($id);
-            $this->unlock($id);
-        } catch (ServiceUnavailableHttpException) {
-            // Past the wait: the draft as it is.
-        }
+        $this->locks->unlock($id);
     }
 
     /** FrankenPHP workers keep their connection, and with it any lock a request left behind. */
     public function reset(): void
     {
-        foreach ($this->held as $id => $count) {
-            foreach (range(1, $count) as $_) {
-                $this->dialect()->unlock($this->db(), $this->lockName($id));
-            }
-        }
-        $this->held = [];
-        // A worker's next request may run on another database (a tenant's): its locks are named after that one.
-        $this->lockPrefix = null;
+        $this->locks->reset();
     }
 
     /** @template T
@@ -831,7 +783,7 @@ class DraftJournal implements ResetInterface
      */
     private function guarded(string $id, \Closure $work): mixed
     {
-        return isset($this->held[$id]) ? $this->db()->transactional($work) : $this->exclusive($id, $work);
+        return $this->locks->holds($id) ? $this->db()->transactional($work) : $this->exclusive($id, $work);
     }
 
     /** The connection, once its platform is one the journal speaks ({@see JournalDialect}). */
@@ -848,25 +800,10 @@ class DraftJournal implements ResetInterface
         return $this->dialect ??= JournalDialect::for($this->connection);
     }
 
-    /** Named locks are global to the database server, and a record's draft id is the same in every database;
-     * the hashed database name keeps environments and test instances apart under the 64-character cap.
-     */
-    private function lockName(string $id): string
-    {
-        $this->lockPrefix ??= 'collaborate:' . substr(hash('xxh128', (string) $this->db()->getDatabase()), 0, 16) . ':';
-
-        return $this->lockPrefix . md5($id);
-    }
-
     /** @param Field $field */
     private function unsaved(array $field): bool
     {
         return $field['version'] !== ($field['savedVersion'] ?? null);
-    }
-
-    private function mode(string $name): bool
-    {
-        return str_ends_with($name, '[__mode__]');
     }
 
     /** One form saves or discards its own fields: another locale's unsaved edits keep the draft unsaved,
@@ -1256,62 +1193,25 @@ class DraftJournal implements ResetInterface
             ) {
                 continue;
             }
-            $position = strrpos($memberName, '[@');
-            if (false === $position) {
+            $entry = FieldNames::entryOf($memberName);
+            if (null === $entry) {
                 continue;
             }
-            $entries[substr($memberName, 0, $position) . '[' . substr($memberName, $position + 2, -1) . ']'] =
-                $memberName;
+            $entries[$entry] = $memberName;
         }
 
         return $entries;
     }
 
-    /**
-     * The members that would remove the entries `$name` sits in, as {@see removedEntries()} reads them back:
-     * `items[3][title]` is in the entry `items[3]`, which the member `items[@3]` removes.
-     *
-     * @return list<string>
-     */
-    private static function memberNames(string $name): array
-    {
-        // The entry's last key takes the member's `@`; a prefix of no collection names no member, and reads nothing.
-        return array_map(
-            static fn(string $entry): string => (string) preg_replace('/\[([^[\]]*)]$/D', '[@$1]', $entry),
-            self::entryPrefixes($name),
-        );
-    }
-
     /** @param array<string, string> $entries */
     private function removed(array $entries, string $name): bool
     {
-        foreach (self::entryPrefixes($name) as $entry) {
+        foreach (FieldNames::entryPrefixes($name) as $entry) {
             if (isset($entries[$entry])) {
                 return true;
             }
         }
 
         return false;
-    }
-
-    /**
-     * The entries a field may sit in: each prefix of its name that closes a bracket. A compound entry's fields sit
-     * below it; a scalar entry's value is the entry itself.
-     *
-     * @return list<string>
-     */
-    private static function entryPrefixes(string $name): array
-    {
-        $prefixes = [];
-        $prefix = '';
-        foreach (explode(']', $name, -1) as $part) {
-            $prefix .= $part . ']';
-            $rest = substr($name, \strlen($prefix));
-            if ('' === $rest || '[' === $rest[0]) {
-                $prefixes[] = $prefix;
-            }
-        }
-
-        return $prefixes;
     }
 }

@@ -21,6 +21,7 @@ use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftSave;
 use Janalis\Collaborate\Draft\FieldDefinitions;
+use Janalis\Collaborate\Draft\FieldNames;
 use Janalis\Collaborate\Draft\FormDraft;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Security\CurrentUserInterface;
@@ -302,18 +303,15 @@ final class EntityForms
             if (FieldDefinitions::prototype($key)) {
                 continue;
             }
-            $values[$key] = str_ends_with($key, '[__mode__]')
+            $values[$key] = FieldNames::isMode($key)
                 ? $field['initial']
                 : self::typed(($submitted[$key] ?? $field)['initial'], $field['initial']);
         }
         foreach ($values as $key => $value) {
-            if (
-                'collection' !== ($fields[$key] ?? $submitted[$key])['type']
-                || !str_ends_with($key, '[__collection__]')
-            ) {
+            $path = FieldNames::collectionPath($key);
+            if ('collection' !== ($fields[$key] ?? $submitted[$key])['type'] || null === $path) {
                 continue;
             }
-            $path = substr($key, 0, -\strlen('[__collection__]'));
             $name = ItemKeys::segments($path);
             if (1 !== \count($name) || !$entity->hasField($name[0])) {
                 continue;
@@ -326,7 +324,7 @@ final class EntityForms
             foreach ($values as $member => $state) {
                 if (
                     !(
-                        str_starts_with($member, $path . '[@')
+                        (FieldNames::parseMember($member)[0] ?? null) === $path
                         && 'member' === ($fields[$member] ?? $submitted[$member])['type']
                     )
                 ) {
@@ -498,14 +496,14 @@ final class EntityForms
         $keys = [];
         foreach ($entries as [$key, , $delta]) {
             $keys[] = $key;
-            $fields[$path . '[@' . $key . ']'] = [
+            $fields[FieldNames::member($path, $key)] = [
                 'type' => 'member',
                 'initial' => ['alive' => true, 'order' => \count($keys), 'recordId' => null],
             ];
             $fields += self::unweighted($this->fields($widget[$delta], false, $fresh), $path, $key);
         }
-        $fields[$path . '[__collection__]'] = ['type' => 'collection', 'initial' => $keys];
-        $fields[$path . '[__member__]'] = [
+        $fields[FieldNames::collection($path)] = ['type' => 'collection', 'initial' => $keys];
+        $fields[FieldNames::prototype($path)] = [
             'type' => 'member',
             'initial' => ['alive' => false, 'order' => 0, 'recordId' => null],
         ];
@@ -533,9 +531,9 @@ final class EntityForms
                 };
             }
             if (isset($field['formName'])) {
-                $field['formName'] = $path . '[__name__]' . substr($field['formName'], \strlen($prefix));
+                $field['formName'] = FieldNames::entryPrototype($path) . substr($field['formName'], \strlen($prefix));
             }
-            $fields[$path . '[__name__]' . substr($name, \strlen($prefix))] = $field;
+            $fields[FieldNames::entryPrototype($path) . substr($name, \strlen($prefix))] = $field;
         }
 
         return $fields;
@@ -608,10 +606,10 @@ final class EntityForms
                 'schema' => 'ckeditor5-' . $this->editorVersion . ':collaborate-2:' . $kind . ':full',
             ]];
             if ($rich) {
-                $fields[$name . '[__mode__]'] = [
+                $fields[FieldNames::mode($name)] = [
                     'type' => 'value',
                     'initial' => 'wysiwyg',
-                    'formName' => $name . '[__mode__]',
+                    'formName' => FieldNames::mode($name),
                 ];
             }
 

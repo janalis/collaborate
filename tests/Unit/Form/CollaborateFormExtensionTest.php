@@ -12,7 +12,9 @@ use Janalis\Collaborate\Access\DraftAccessCheckerInterface;
 use Janalis\Collaborate\Doctrine\RecordIdentifier;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
+use Janalis\Collaborate\Draft\DraftLocks;
 use Janalis\Collaborate\Draft\DraftSave;
+use Janalis\Collaborate\Draft\FieldNames;
 use Janalis\Collaborate\Draft\FormDraft;
 use Janalis\Collaborate\Draft\RecordId;
 use Janalis\Collaborate\Form\CollaborateFormExtension;
@@ -86,6 +88,8 @@ use Twig\RuntimeLoader\FactoryRuntimeLoader;
 #[UsesClass(SecurityCollaboratorProvider::class)]
 #[AllowMockObjectsWithoutExpectations]
 #[UsesClass(RecordId::class)]
+#[UsesClass(DraftLocks::class)]
+#[UsesClass(FieldNames::class)]
 final class CollaborateFormExtensionTest extends TypeTestCase
 {
     private CollaborateFormExtension $extension;

@@ -7,6 +7,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `Draft\FieldNames`: the names a draft gives a collection's keys, its
+  entries' memberships, an entry added later and a rich-text field's source
+  mode, which the form extension, the journal and the Drupal module now all
+  build through it instead of spelling them each.
 - `Notification\Preferences::subscribers()`: which of several users are
   subscribed to a topic, a thousand per query.
 

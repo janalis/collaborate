@@ -24,6 +24,7 @@ How the parts of the bundle talk to each other. Every name here is fixed: PHP, T
 | `Controller\CursorController` | `POST <prefix>/cursors/events`, route `collaborate_cursor_events`. |
 | `Controller\DraftController` | `POST <prefix>/collaborate/{action}`, route `collaborate_draft`, `action` ∈ join, replay, append, discard, reconcile, report. |
 | `Twig\CollaborateExtension` | `collaborate_layer()`, `collaborate_presence()`, `collaborate_enabled()`, `collaborate_grant()`. |
+| `Draft\FieldNames` | The names beyond a form's controls: `path[__collection__]` (a collection's keys), `path[@key]` (an entry's membership), `path[__member__]` (an entry added later), `path[__name__]…` (its fields), `name[__mode__]` (a rich-text field's source mode). Both bridges build them through it. |
 | `Draft\DraftJournal`, `DraftText`, `DraftSave`, `FormDraft` | The journal (its SQL per platform in `Draft\Dialect\`), plain-text operations, the locked save, a form's draft whatever builds the form; a host without a bridge calls `DraftSave::completed($record)` once it has persisted the record. |
 | `Form\CollaborateFormExtension` + `Form\FormContextInterface` | Field schema, member keys, the `data-collaborate` attribute; the context says which record the root form edits. |
 | `Doctrine\ChangeCollector` | The `onFlush` half of the saved-view updates. |

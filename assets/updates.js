@@ -1,16 +1,24 @@
+// @ts-check
 import { bridge } from './bridge.js';
 import { hubFor } from './hub.js';
 
 // Read when used: a host that changes the address without loading (`history.pushState`) has another page.
 const stateKey = () => `collaborate-update:${location.pathname}${location.search}`;
 
+/**
+ * @param {HTMLElement | null} [layer]
+ * @param {ReturnType<typeof hubFor>} [hub]
+ * @param {() => void} [reload]
+ */
 export function initUpdates(
-  layer = document.querySelector('[data-collaborate-layer]'),
+  layer = /** @type {HTMLElement | null} */ (document.querySelector('[data-collaborate-layer]')),
   hub = hubFor(layer),
   reload = () => location.reload()
 ) {
   if (!layer?.dataset.updates || !hub) return null;
   const { lists, selection, overlays } = bridge();
+  // The list's selection checkboxes, as the page shows them now.
+  const inputs = () => /** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll(selection));
   let leave;
   let refresh;
   let stopped = false;
@@ -35,14 +43,14 @@ export function initUpdates(
       const state = JSON.parse(saved);
       requestAnimationFrame(() => {
         window.scrollTo(state.x, state.y);
-        for (const checkbox of document.querySelectorAll(selection)) {
+        for (const checkbox of inputs()) {
           if (state.selected.includes(checkbox.value)) {
             checkbox.checked = true;
             checkbox.dispatchEvent(new Event('change', { bubbles: true }));
           }
         }
         const focus = state.focusRow
-          ? Array.from(document.querySelectorAll(selection)).find((input) => input.value === state.focusRow)
+          ? Array.from(inputs()).find((input) => input.value === state.focusRow)
           : document.getElementById(state.focusId);
         focus?.focus({ preventScroll: true });
       });
@@ -119,8 +127,10 @@ export function initUpdates(
   // Text typed into a search or filter box and left unsubmitted would be lost to the refresh; ticked rows are restored.
   function typed() {
     return Array.from(
-      document.querySelectorAll(
-        'input:not([type="checkbox"], [type="radio"], [type="hidden"], [type="submit"], [type="button"]), textarea'
+      /** @type {NodeListOf<HTMLInputElement | HTMLTextAreaElement>} */ (
+        document.querySelectorAll(
+          'input:not([type="checkbox"], [type="radio"], [type="hidden"], [type="submit"], [type="button"]), textarea'
+        )
       )
     ).some((control) => control.value !== control.defaultValue);
   }
@@ -173,11 +183,11 @@ export function initUpdates(
         JSON.stringify({
           x: window.scrollX,
           y: window.scrollY,
-          selected: Array.from(document.querySelectorAll(selection), (input) => input.checked && input.value).filter(
-            Boolean
-          ),
+          selected: Array.from(inputs(), (input) => input.checked && input.value).filter(Boolean),
           focusId: document.activeElement?.id,
-          focusRow: document.activeElement?.matches(selection) ? document.activeElement.value : null,
+          focusRow: document.activeElement?.matches(selection)
+            ? /** @type {HTMLInputElement} */ (document.activeElement).value
+            : null,
         })
       );
       reload();

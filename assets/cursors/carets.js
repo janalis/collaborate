@@ -1,3 +1,4 @@
+// @ts-check
 import { entrySelector, rowOf } from '../markup.js';
 import { anchorPath, isTextControl, resolvePath, sharesCaret } from './geometry.js';
 
@@ -68,10 +69,11 @@ export function captureCaret(element = document.activeElement) {
   let start;
   let end;
   if (isTextControl(element)) {
-    if (element.selectionStart === null || element.selectionEnd === null) return null;
-    [start, end] = [element.selectionStart, element.selectionEnd];
-    if (element.selectionDirection === 'backward') [start, end] = [end, start];
-  } else if (element.isContentEditable) {
+    const control = /** @type {HTMLInputElement | HTMLTextAreaElement} */ (element);
+    if (control.selectionStart === null || control.selectionEnd === null) return null;
+    [start, end] = [control.selectionStart, control.selectionEnd];
+    if (control.selectionDirection === 'backward') [start, end] = [end, start];
+  } else if (element instanceof HTMLElement && element.isContentEditable) {
     const selection = getSelection();
     if (!selection?.rangeCount || !element.contains(selection.anchorNode) || !element.contains(selection.focusNode))
       return null;
@@ -171,6 +173,7 @@ function editableRanges(field, from, to, focus) {
   const point = focus === from ? start : end;
   range.setStart(point.node, point.offset);
   range.collapse(true);
+  /** @type {{ left: number, top: number, height: number }} */
   let bar = range.getClientRects()[0];
   if (!bar?.height) {
     // A collapsed range in an empty block has no box: use the line box of the block itself.
@@ -218,7 +221,7 @@ export function resolveCaret(caret, layer) {
   return { bar: { x, y, height }, rects: clipped };
 }
 
-const UNSHARED = ['password', 'file', 'hidden'];
+const UNSHARED = ['password', 'file', 'hidden', 'submit', 'button', 'reset', 'image'];
 
 /**
  * The name of the shared form control `element` is in, a choice widget or a rich editor's included,
@@ -226,7 +229,8 @@ const UNSHARED = ['password', 'file', 'hidden'];
  */
 export function focusedField(element = document.activeElement) {
   if (!(element instanceof Element) || !element.closest('form[data-collaborate]')) return null;
-  let control = element.name ? element : null;
+  /** @type {any} */
+  let control = /** @type {any} */ (element).name ? element : null;
   // A rich editor edits its source textarea; a widget's search input sits beside the select it fills.
   control ||= element.closest('.ck-editor__editable')?.ckeditorInstance?.sourceElement;
   // A collection entry's own row holds its buttons and help, not a field: focus there names none.

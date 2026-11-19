@@ -345,7 +345,12 @@ const CURSOR_ALIASES = {
 
 const TEXT_INPUT_TYPES = ['text', 'search', 'url', 'tel'];
 
-// Controls whose value and selection can be shared: never passwords, hidden or non-text inputs.
+/**
+ * Controls whose value and selection can be shared: never passwords, hidden or non-text inputs.
+ *
+ * @param {unknown} element
+ * @returns {boolean}
+ */
 export function isTextControl(element) {
   return (
     element instanceof HTMLTextAreaElement ||

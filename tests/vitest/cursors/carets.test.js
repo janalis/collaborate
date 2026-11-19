@@ -230,6 +230,8 @@ test('names the shared form control in focus, through a choice widget or a rich 
     '<textarea name="Record[body]"></textarea><div class="ck-editor__editable"><p>Text</p></div>' +
     '<input type="password" name="Record[password]"><input type="file" name="Record[file]">' +
     `<input name="${'x'.repeat(513)}"><span id="loose"></span>` +
+    '<button name="save"></button><button type="button" name="more"></button><button type="reset" name="undo"></button>' +
+    '<input type="submit" name="go"><input type="button" name="press"><input type="reset" name="clear"><input type="image" name="map">' +
     '</form><input name="outside">';
   const form = document.querySelector('form');
   expect(focusedField(form.querySelector('[name="Record[title]"]'))).toBe('Record[title]');
@@ -239,6 +241,9 @@ test('names the shared form control in focus, through a choice widget or a rich 
   expect(focusedField(editable.querySelector('p'))).toBe('Record[body]');
   expect(focusedField(form.querySelector('[type="password"]'))).toBeNull();
   expect(focusedField(form.querySelector('[type="file"]'))).toBeNull();
+  // A button is no field: peers have nothing of it to mark.
+  for (const name of ['save', 'more', 'undo', 'go', 'press', 'clear', 'map'])
+    expect(focusedField(form.querySelector(`[name="${name}"]`))).toBeNull();
   expect(focusedField(form.querySelector(`[name="${'x'.repeat(513)}"]`))).toBeNull();
   expect(focusedField(form.querySelector('#loose'))).toBeNull();
   expect(focusedField(document.querySelector('[name="outside"]'))).toBeNull();

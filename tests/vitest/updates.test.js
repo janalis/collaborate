@@ -2,6 +2,11 @@
 import '../../assets/bridges/easyadmin.js';
 import { initUpdates } from '../../assets/updates.js';
 
+// jsdom's document never has the focus; the page under test is in the window the user is in.
+beforeEach(() => {
+  vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+});
+
 afterEach(() => {
   vi.useRealTimers();
   document.body.innerHTML = '';
@@ -500,6 +505,93 @@ test('never cancels a navigation that started before the refresh, and refreshes 
   window.dispatchEvent(new Event('keydown'));
   await vi.advanceTimersByTimeAsync(1000);
   expect(reload).toHaveBeenCalledOnce();
+});
+
+test('hears of a save during a navigation without cancelling it, and catches up once the page stays', async () => {
+  const { reload, updates } = readView('Product');
+  updates.changed();
+  window.dispatchEvent(new Event('beforeunload'));
+  // The next page is slow to answer: a save heard meanwhile must not reload over the navigation.
+  updates.changed();
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(reload).not.toHaveBeenCalled();
+  window.dispatchEvent(new Event('pointerdown'));
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(reload).toHaveBeenCalledOnce();
+  updates.stop();
+});
+
+test('follows the page a host entered without loading', async () => {
+  const { reload, updates, receive } = readView('Product');
+  document.body.className = 'ea-index ea-index-Category';
+  receive({ channel: 'updates', kind: 'saved', entities: ['Product'] });
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(reload).not.toHaveBeenCalled();
+  receive({ channel: 'updates', kind: 'saved', entities: ['Category'] });
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(reload).toHaveBeenCalledOnce();
+  updates.stop();
+});
+
+test('takes an untouched range or colour for no typed text', async () => {
+  vi.useFakeTimers();
+  document.body.className = 'ea-index';
+  // Their value is sanitized: 50 and #000000, against an empty default.
+  const { updates, reload } = start('<input type="range"><input type="color">');
+  updates.changed();
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(reload).toHaveBeenCalledOnce();
+  updates.stop();
+});
+
+test('keeps a deferred embedded list while the window loses the focus', async () => {
+  vi.useFakeTimers();
+  const { updates } = start(
+    '<form data-collaborate><div class="field-embedded-list" data-src="/list" data-loaded="true"><input id="a"></div></form>'
+  );
+  const list = document.querySelector('.field-embedded-list');
+  const reload = vi.fn();
+  list.addEventListener('ea.embedded-list.reload', reload);
+  const input = document.getElementById('a');
+  input.focus();
+  updates.changed();
+  await vi.advanceTimersByTimeAsync(1000);
+  const focused = vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+  input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reload).not.toHaveBeenCalled();
+  // Back in the window, leaving the list refreshes it.
+  focused.mockReturnValue(true);
+  input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reload).toHaveBeenCalledOnce();
+  updates.stop();
+});
+
+test('refreshes without keeping the view when the browser refuses to store it', async () => {
+  const { reload, updates } = readView('Product');
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new DOMException('Full', 'QuotaExceededError');
+  });
+  updates.changed();
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(reload).toHaveBeenCalledOnce();
+  updates.stop();
+});
+
+test('ignores a stored view of another shape', async () => {
+  vi.useFakeTimers();
+  // The frame runs after the page started, as a browser's does.
+  const frames = [];
+  vi.spyOn(window, 'requestAnimationFrame').mockImplementation((frame) => frames.push(frame));
+  vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+  for (const stored of ['null', '{"x":1,"y":2}']) {
+    sessionStorage.setItem('collaborate-update:/', stored);
+    const { updates } = start('<input type="checkbox" class="form-batch-checkbox" value="42">');
+    expect(sessionStorage.getItem('collaborate-update:/')).toBeNull();
+    expect(() => frames.pop()(0)).not.toThrow();
+    updates.stop();
+  }
 });
 
 test('waits once for a loading embedded list, however many saves it hears meanwhile', async () => {

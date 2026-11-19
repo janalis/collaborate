@@ -1,18 +1,28 @@
+// @ts-check
 import { bridge } from './bridge.js';
 import { hubFor } from './hub.js';
 
 // Read when used: a host that changes the address without loading (`history.pushState`) has another page.
 const stateKey = () => `collaborate-update:${location.pathname}${location.search}`;
 
+/**
+ * @param {HTMLElement | null} [layer]
+ * @param {ReturnType<typeof hubFor>} [hub]
+ * @param {() => void} [reload]
+ */
 export function initUpdates(
-  layer = document.querySelector('[data-collaborate-layer]'),
+  layer = /** @type {HTMLElement | null} */ (document.querySelector('[data-collaborate-layer]')),
   hub = hubFor(layer),
   reload = () => location.reload()
 ) {
   if (!layer?.dataset.updates || !hub) return null;
   const { lists, selection, overlays } = bridge();
+  // The list's selection checkboxes, as the page shows them now.
+  const inputs = () => /** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll(selection));
   let leave;
   let refresh;
+  // The user's own navigation is pending: saves heard meanwhile wait to see whether the page stays.
+  let leaving = false;
   let stopped = false;
   let suspended = false;
   // The page's grant was refused: another one entered without loading (`collaborate:enter`) follows saves again.
@@ -27,22 +37,25 @@ export function initUpdates(
     for (const list of document.querySelectorAll(`${lists.selector}${lists.loading}`))
       reloadingLists.set(list, Date.now());
   // What the page shows: the host names it on its body (`data-collaborate-page`), EasyAdmin in its body class.
-  const page = bridge().page(document.body);
+  // Read when used: a host that enters another page without loading names it on its body.
+  const page = () => bridge().page(document.body);
   const saved = sessionStorage.getItem(stateKey());
   if (saved) {
     sessionStorage.removeItem(stateKey());
     try {
       const state = JSON.parse(saved);
       requestAnimationFrame(() => {
+        // A snapshot of another shape (an earlier version's) restores what it can.
+        if (!Array.isArray(state?.selected)) return;
         window.scrollTo(state.x, state.y);
-        for (const checkbox of document.querySelectorAll(selection)) {
+        for (const checkbox of inputs()) {
           if (state.selected.includes(checkbox.value)) {
             checkbox.checked = true;
             checkbox.dispatchEvent(new Event('change', { bubbles: true }));
           }
         }
         const focus = state.focusRow
-          ? Array.from(document.querySelectorAll(selection)).find((input) => input.value === state.focusRow)
+          ? Array.from(inputs()).find((input) => input.value === state.focusRow)
           : document.getElementById(state.focusId);
         focus?.focus({ preventScroll: true });
       });
@@ -55,7 +68,8 @@ export function initUpdates(
     if (deferredLists.has(list)) return;
     // Focus has not landed on the next control yet while focusout runs, nor in its microtasks: the event names it.
     const blur = (event) => {
-      if (list.contains(event.relatedTarget)) return;
+      // Another window taking the focus leaves it on the control, and the text typed there.
+      if (list.contains(event.relatedTarget) || !document.hasFocus()) return;
       list.removeEventListener('focusout', blur);
       deferredLists.delete(list);
       reloadList(list);
@@ -113,14 +127,17 @@ export function initUpdates(
 
   // Saved events name the entities they can affect; a page that cannot tell refreshes for all of them.
   function concerns({ entities }) {
-    return !page?.entity || !Array.isArray(entities) || entities.includes(page.entity);
+    const entity = page()?.entity;
+    return !entity || !Array.isArray(entities) || entities.includes(entity);
   }
 
   // Text typed into a search or filter box and left unsubmitted would be lost to the refresh; ticked rows are restored.
   function typed() {
     return Array.from(
-      document.querySelectorAll(
-        'input:not([type="checkbox"], [type="radio"], [type="hidden"], [type="submit"], [type="button"]), textarea'
+      /** @type {NodeListOf<HTMLInputElement | HTMLTextAreaElement>} */ (
+        document.querySelectorAll(
+          'input:not([type="checkbox"], [type="radio"], [type="hidden"], [type="submit"], [type="button"], [type="range"], [type="color"]), textarea'
+        )
       )
     ).some((control) => control.value !== control.defaultValue);
   }
@@ -129,6 +146,7 @@ export function initUpdates(
   function postpone() {
     clearTimeout(refresh);
     refresh = null;
+    leaving = true;
     window.removeEventListener('beforeunload', postpone);
     // A download or a 204 leaves the page in place: refresh on the next interaction.
     window.addEventListener('pointerdown', resume, true);
@@ -136,6 +154,7 @@ export function initUpdates(
   }
 
   function resume() {
+    leaving = false;
     window.removeEventListener('pointerdown', resume, true);
     window.removeEventListener('keydown', resume, true);
     changed();
@@ -144,7 +163,7 @@ export function initUpdates(
   // One refresh a second at most, counted from the first change: a steady stream of saves elsewhere
   // must not postpone it indefinitely.
   function changed() {
-    if (stopped || suspended || refresh) return;
+    if (stopped || suspended || leaving || refresh) return;
     window.addEventListener('beforeunload', postpone);
     refresh = setTimeout(() => {
       refresh = null;
@@ -167,19 +186,24 @@ export function initUpdates(
         return;
       }
       // Only a list or a record's detail reloads: a page the bridge cannot tell keeps its content.
-      if (page?.kind !== 'index' && page?.kind !== 'detail') return;
-      sessionStorage.setItem(
-        stateKey(),
-        JSON.stringify({
-          x: window.scrollX,
-          y: window.scrollY,
-          selected: Array.from(document.querySelectorAll(selection), (input) => input.checked && input.value).filter(
-            Boolean
-          ),
-          focusId: document.activeElement?.id,
-          focusRow: document.activeElement?.matches(selection) ? document.activeElement.value : null,
-        })
-      );
+      const kind = page()?.kind;
+      if (kind !== 'index' && kind !== 'detail') return;
+      try {
+        sessionStorage.setItem(
+          stateKey(),
+          JSON.stringify({
+            x: window.scrollX,
+            y: window.scrollY,
+            selected: Array.from(inputs(), (input) => input.checked && input.value).filter(Boolean),
+            focusId: document.activeElement?.id,
+            focusRow: document.activeElement?.matches(selection)
+              ? /** @type {HTMLInputElement} */ (document.activeElement).value
+              : null,
+          })
+        );
+      } catch {
+        /* Storage full or refused: the refresh matters more than the scroll position. */
+      }
       reload();
     }, 1000);
   }
@@ -231,6 +255,7 @@ export function initUpdates(
 
   function suspend() {
     suspended = true;
+    leaving = false;
     leave?.();
     leave = null;
     clearTimeout(refresh);

@@ -34,6 +34,10 @@ versions follow [Semantic Versioning](https://semver.org/).
   mutation of the page, which laid the page out each time.
 - Drupal's refresh answer carries `Vary: X-Collaborate-Refresh`, as
   EasyAdmin's does.
+- Every script is type-checked (`checkJs`): `DraftSession` declares the
+  fields the other modules set on it, a refused request throws an
+  `HttpError` with its `status`, and the push worker reads its scope
+  through a declared type.
 
 ### Fixed
 

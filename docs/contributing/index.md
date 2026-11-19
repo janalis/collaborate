@@ -54,7 +54,7 @@ from a local `phpunit.xml` when you keep one.
 |---|---|---|
 | PHP | [Mago](https://mago.carthage.software) | `mago.toml`: formatting (120 columns), linting with the Symfony and PHPUnit integrations, and static analysis over `src`, `tests`, `config` and `tools`. |
 | JavaScript | [Biome](https://biomejs.dev) | `biome.json`: two spaces, single quotes, semicolons, 120 columns. |
-| JavaScript types | [TypeScript](https://www.typescriptlang.org) | `tsconfig.json`: the modules that start with `// @ts-check` are type-checked from their JSDoc, the others by their tests alone; `typings/` describes what the DOM library lacks. |
+| JavaScript types | [TypeScript](https://www.typescriptlang.org) | `tsconfig.json`: every module is type-checked from its JSDoc (`checkJs`, `strict` off for now); `typings/` describes what the DOM library lacks, and the service worker's scope. |
 | Markdown | [markdownlint](https://github.com/DavidAnson/markdownlint) | `.markdownlint-cli2.jsonc`: the default rules, without line length, inline HTML and code-span spacing checks. |
 | All text files | [editorconfig-checker](https://github.com/editorconfig-checker/editorconfig-checker) | `.editorconfig`: UTF-8, LF, final newline, no trailing whitespace; four spaces in PHP and Twig, two in JavaScript, Sass, YAML and Markdown, tabs in `Makefile` and `Caddyfile`. |
 | GitHub workflows | [actionlint](https://github.com/rhysd/actionlint) | Workflow syntax and expressions. Third-party actions are pinned to a commit. |

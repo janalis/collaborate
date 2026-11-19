@@ -230,6 +230,35 @@ test('resolves scroll and layout changes and hides missing anchors', async () =>
   expect(document.querySelector('.collaborate-cursor').hidden).toBe(true);
 });
 
+test('lays the pointers out again once the page resizes', async () => {
+  let resized;
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(callback) {
+        resized = callback;
+      }
+      observe() {}
+      disconnect() {}
+    }
+  );
+  await start();
+  receive();
+  await vi.advanceTimersByTimeAsync(20);
+  document.querySelector('button').getBoundingClientRect = () => ({
+    left: 200,
+    top: 100,
+    width: 200,
+    height: 100,
+    right: 400,
+    bottom: 200,
+  });
+  // With its entries, as an observer calls back: the next frame measures the page again.
+  resized([{}]);
+  await vi.advanceTimersByTimeAsync(140);
+  expect(instance.peers.get(2).point).toEqual({ x: 300, y: 150 });
+});
+
 test('throttles and coalesces movement and switches to a transient touch cursor', async () => {
   await start();
   pointer('pointermove');

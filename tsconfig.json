@@ -1,8 +1,8 @@
 {
-  // Type-checks the modules that opt in with `// @ts-check`; the others are checked by their tests alone.
+  // Type-checks every module (`strict` stays off for now); typings/ declares what the DOM library lacks.
   "compilerOptions": {
     "allowJs": true,
-    "checkJs": false,
+    "checkJs": true,
     "noEmit": true,
     "strict": false,
     "target": "es2024",

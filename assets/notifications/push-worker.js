@@ -11,11 +11,14 @@
 // It imports nothing and exports nothing, so that it also loads as a module (its tests import it, with a
 // stubbed `self`): what a worker scope has it reads through `self`, the standard constructors (URL) aside.
 
-const settings = () => self.collaborateNotifications || {};
+/** @type {CollaborateWorkerScope} */
+const worker = /** @type {any} */ (self);
+
+const settings = () => worker.collaborateNotifications || {};
 
 const sameOrigin = (client) => {
   try {
-    return new URL(client.url).origin === self.location.origin;
+    return new URL(client.url).origin === worker.location.origin;
   } catch {
     return false;
   }
@@ -23,7 +26,7 @@ const sameOrigin = (client) => {
 
 /** The pages of the origin, whether this worker controls them yet or not. */
 const windows = async () =>
-  (await self.clients.matchAll({ type: 'window', includeUncontrolled: true })).filter(sameOrigin);
+  (await worker.clients.matchAll({ type: 'window', includeUncontrolled: true })).filter(sameOrigin);
 
 /** What a push says: its payload, or what the server says of a push without one. */
 function payloadOf(event) {
@@ -56,7 +59,7 @@ async function received(event) {
         : { type: 'collaborate:notifications-changed' }
     );
   if (focused.length > 0) return;
-  await self.registration.showNotification(notification.title, {
+  await worker.registration.showNotification(notification.title, {
     body: notification.body,
     icon: notification.icon,
     tag: notification.tag,
@@ -69,7 +72,7 @@ async function clicked(data) {
   const read = settings().read;
   if (data.id !== null && data.id !== undefined && read) {
     try {
-      await self.fetch(read, {
+      await worker.fetch(read, {
         method: 'POST',
         credentials: 'include',
         body: new URLSearchParams({ id: String(data.id) }),
@@ -78,7 +81,7 @@ async function clicked(data) {
       // Unread still: the page shows it so.
     }
   }
-  const target = new URL(data.url || '/', self.location.origin).href;
+  const target = new URL(data.url || '/', worker.location.origin).href;
   const open = await windows();
   // The pages left open count it read at once, whatever the hub told them.
   for (const client of open) client.postMessage({ type: 'collaborate:notifications-changed' });
@@ -93,22 +96,22 @@ async function clicked(data) {
       // The next page, or a new one.
     }
   }
-  return self.clients.openWindow(target);
+  return worker.clients.openWindow(target);
 }
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(self.skipWaiting());
+worker.addEventListener('install', (event) => {
+  event.waitUntil(worker.skipWaiting());
 });
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+worker.addEventListener('activate', (event) => {
+  event.waitUntil(worker.clients.claim());
 });
 
-self.addEventListener('push', (event) => {
+worker.addEventListener('push', (event) => {
   event.waitUntil(received(event));
 });
 
-self.addEventListener('notificationclick', (event) => {
+worker.addEventListener('notificationclick', (event) => {
   event.notification.close();
   event.waitUntil(clicked(event.notification.data || {}));
 });

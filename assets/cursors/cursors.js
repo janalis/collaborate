@@ -78,7 +78,7 @@ export function cursorsFor(layer = document.querySelector('[data-collaborate-lay
 }
 
 export function initCursors(
-  layer = document.querySelector('[data-collaborate-layer]'),
+  layer = /** @type {HTMLElement | null} */ (document.querySelector('[data-collaborate-layer]')),
   fetcher = backgroundFetch,
   hub = hubFor(layer, fetcher),
   presence = createPresence(undefined, layerConfig(layer).maxAvatars, layerConfig(layer)),
@@ -370,7 +370,9 @@ export function initCursors(
     const marked = new Map();
     for (const peer of peers.values()) {
       if (!peer.field) continue;
-      for (const form of document.querySelectorAll('form[data-collaborate]')) {
+      for (const form of /** @type {NodeListOf<HTMLFormElement>} */ (
+        document.querySelectorAll('form[data-collaborate]')
+      )) {
         const found = form.elements.namedItem(peer.field);
         const control = found instanceof RadioNodeList ? found[0] : found;
         const group = rowOf(control) || control;
@@ -809,7 +811,12 @@ export function initCursors(
     (node instanceof Element && node.hasAttribute('data-collaborate-popup-line'));
   const observer = new MutationObserver((records) => {
     // A modal dialog that opens is drawn in the top layer, above the pointers, which are raised above it.
-    if (records.some((record) => record.target.localName === 'dialog' && record.attributeName === 'open')) raise();
+    if (
+      records.some(
+        (record) => /** @type {Element} */ (record.target).localName === 'dialog' && record.attributeName === 'open'
+      )
+    )
+      raise();
     // The layer's own writes outside it, the announcement and the line of a popup, move nothing.
     if (records.some((record) => !layer.contains(record.target) && !own(record.target))) {
       popupDirty = true;
@@ -822,7 +829,8 @@ export function initCursors(
     attributes: true,
     attributeFilter: ['class', 'style', 'hidden', 'open'],
   });
-  const resizer = new ResizeObserver(redraw);
+  // Not `redraw` itself: the observer passes its entries where it takes whether the layout changed.
+  const resizer = new ResizeObserver(() => redraw());
   resizer.observe(document.body);
   const heartbeat = setInterval(() => {
     for (const [id, peer] of peers) {

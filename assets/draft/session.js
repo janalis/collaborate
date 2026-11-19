@@ -7,6 +7,18 @@ import { renderConflicts } from './conflicts.js';
 import { initializeText, initializeValue, valueAdapter } from './fields.js';
 
 const sessions = new WeakMap();
+
+/** A request the server answered with an error: its status tells a refusal from a busy server. */
+class HttpError extends Error {
+  /**
+   * @param {string} message
+   * @param {number} status
+   */
+  constructor(message, status) {
+    super(message);
+    this.status = status;
+  }
+}
 const grantScope = (grant) =>
   JSON.parse(
     new TextDecoder().decode(Uint8Array.from(atob(grant.split('.')[0]), (character) => character.charCodeAt(0)))
@@ -60,6 +72,14 @@ export class DraftSession {
     this.abort = new AbortController();
     this.removers = [];
     this.bound = new WeakSet();
+    // Set by the modules sharing the session: a received value being written to a control (fields.js and the
+    // CKEditor plugin), the scan of the form's collection rows (collections.js), the conflicts the review shows
+    // (conflicts.js, once the join answered).
+    this.applying = false;
+    /** @type {(() => void) | null} */
+    this.scanCollections = null;
+    /** @type {Record<string, unknown> | undefined} */
+    this.conflicts = undefined;
     this.editorWaiters = new Map();
     this.schema = grantScope(configuration.grant).fields;
     // Lock existing content, not the live status/recovery controls added below.
@@ -174,9 +194,7 @@ export class DraftSession {
     }
     if (!response.ok) {
       if (response.status === 413) this.halt('full');
-      const error = new Error(`Collaborate ${action}: ${response.status}`);
-      error.status = response.status;
-      throw error;
+      throw new HttpError(`Collaborate ${action}: ${response.status}`, response.status);
     }
     return response.status === 204 ? null : response.json();
   }
@@ -574,9 +592,7 @@ export class DraftSession {
     });
     // A transient failure keeps the session; Save retries the refresh.
     if (!response.ok && !response.redirected && ![401, 403, 404].includes(response.status)) {
-      const error = new Error(`Collaborate record refresh: ${response.status}`);
-      error.status = response.status;
-      throw error;
+      throw new HttpError(`Collaborate record refresh: ${response.status}`, response.status);
     }
     // A sign-in page, or a form no longer shared, reads as no configuration.
     const refreshed = response.ok && !response.redirected ? await response.json().catch(() => null) : null;
@@ -1052,7 +1068,8 @@ export function sessionFor(field) {
 
 export function initializeCollaboration() {
   for (const form of document.querySelectorAll('form[data-collaborate]')) {
-    const field = Array.from(form.elements).find((element) => element.name && element.type !== 'hidden');
+    const controls = /** @type {HTMLInputElement[]} */ (Array.from(/** @type {HTMLFormElement} */ (form).elements));
+    const field = controls.find((element) => element.name && element.type !== 'hidden');
     if (field) sessionFor(field)?.ready.catch(() => {});
   }
 }

@@ -54,7 +54,7 @@ export default class Collaborate extends Plugin {
           field.setSelectionRange(map(from), map(to));
         }
       };
-      /** @type {any} */ (this.buffer).adopt = (source) => this.applySource(source);
+      this.buffer.adopt = (source) => this.applySource(source);
       this.unregister = session.register(configuration.field, this.buffer);
     });
   }

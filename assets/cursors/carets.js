@@ -69,9 +69,10 @@ export function captureCaret(element = document.activeElement) {
   let start;
   let end;
   if (isTextControl(element)) {
-    if (element.selectionStart === null || element.selectionEnd === null) return null;
-    [start, end] = [element.selectionStart, element.selectionEnd];
-    if (element.selectionDirection === 'backward') [start, end] = [end, start];
+    const control = /** @type {HTMLInputElement | HTMLTextAreaElement} */ (element);
+    if (control.selectionStart === null || control.selectionEnd === null) return null;
+    [start, end] = [control.selectionStart, control.selectionEnd];
+    if (control.selectionDirection === 'backward') [start, end] = [end, start];
   } else if (element instanceof HTMLElement && element.isContentEditable) {
     const selection = getSelection();
     if (!selection?.rangeCount || !element.contains(selection.anchorNode) || !element.contains(selection.focusNode))
@@ -220,7 +221,7 @@ export function resolveCaret(caret, layer) {
   return { bar: { x, y, height }, rects: clipped };
 }
 
-const UNSHARED = ['password', 'file', 'hidden'];
+const UNSHARED = ['password', 'file', 'hidden', 'submit', 'button', 'reset', 'image'];
 
 /**
  * The name of the shared form control `element` is in, a choice widget or a rich editor's included,
@@ -231,7 +232,7 @@ export function focusedField(element = document.activeElement) {
   /** @type {any} */
   let control = /** @type {any} */ (element).name ? element : null;
   // A rich editor edits its source textarea; a widget's search input sits beside the select it fills.
-  control ||= /** @type {any} */ (element.closest('.ck-editor__editable'))?.ckeditorInstance?.sourceElement;
+  control ||= element.closest('.ck-editor__editable')?.ckeditorInstance?.sourceElement;
   // A collection entry's own row holds its buttons and help, not a field: focus there names none.
   const row = rowOf(element);
   if (row && !row.matches(entrySelector())) {

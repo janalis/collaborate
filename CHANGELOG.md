@@ -44,10 +44,16 @@ versions follow [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - The notification and web push actions accept exactly the actions their
-  routes name: under a router that matches paths whatever their case
-  (Drupal's), `notifications/CLEAR` skipped the clearing token and cleared,
-  and `SUBSCRIBE` or `UNSUBSCRIBE` did the opposite. Another spelling now
-  answers 404.
+  routes name. Drupal matches paths whatever their case, so another spelling
+  reached them and was taken for another action: `UNSUBSCRIBE` subscribed,
+  `CLEAR` cleared. It now answers 404.
+- A saved view no longer reloads over a navigation under way when a save is
+  heard meanwhile, follows the page a host entered without loading, takes an
+  untouched range or colour input for no typed text, keeps an embedded list
+  with text typed in it when another window takes the focus, and still
+  refreshes when the browser refuses to store its scroll position. A stored
+  view of another shape is ignored.
+- Peers no longer see a focused button as the field someone is in.
 - A page opened while another editor's Save was under way could show a
   collection entry that Save added twice, and save it twice: it named the
   saved entry by its record before the Save recorded the draft's key for it.

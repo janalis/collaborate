@@ -15,7 +15,7 @@ const first = (found) => (found instanceof RadioNodeList ? found[0] : found);
 
 /** The rich editor a source textarea feeds: its model, not the textarea, holds the current text. */
 const editorOf = (element) =>
-  Array.from(/** @type {NodeListOf<any>} */ (document.querySelectorAll('.ck-editor__editable'))).find(
+  Array.from(document.querySelectorAll('.ck-editor__editable')).find(
     (editable) => editable.ckeditorInstance?.sourceElement === element
   )?.ckeditorInstance;
 

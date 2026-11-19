@@ -349,7 +349,7 @@ const TEXT_INPUT_TYPES = ['text', 'search', 'url', 'tel'];
  * Controls whose value and selection can be shared: never passwords, hidden or non-text inputs.
  *
  * @param {unknown} element
- * @returns {element is HTMLInputElement | HTMLTextAreaElement}
+ * @returns {boolean}
  */
 export function isTextControl(element) {
   return (

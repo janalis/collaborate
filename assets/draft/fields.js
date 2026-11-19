@@ -58,7 +58,7 @@ export function initializeText(session, control, name, state) {
       if (inserted) writer.insertText(inserted, paragraph, prefix);
     });
   };
-  /** @type {any} */ (buffer).adopt = (text) => {
+  buffer.adopt = (text) => {
     control.value = text;
     input();
   };

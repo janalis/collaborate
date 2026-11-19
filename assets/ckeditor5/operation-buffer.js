@@ -6,6 +6,8 @@ export class OperationBuffer {
   constructor(model, changed = () => {}) {
     this.model = model;
     this.changed = changed;
+    /** @type {((text: string) => void) | undefined} What its owner does of a saved text the draft adopts. */
+    this.adopt = undefined;
     this.version = model.document.version;
     this.pending = [];
     this.applying = false;

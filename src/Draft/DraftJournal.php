@@ -298,7 +298,7 @@ class DraftJournal implements ResetInterface
         }
 
         return $this->exclusive($id, function () use ($id, $event, $field, $size, $userId, $label, $definition): array {
-            $draft = $this->read($id, true, $field);
+            $draft = $this->read($id, true, [$field, ...self::memberNames($definition['formName'] ?? $field)]);
             // A retried batch whose response was lost gets its stored result, whatever happened to the draft since.
             $accepted = $this->batch($id, $event['id']);
             if (null !== $accepted) {
@@ -912,9 +912,11 @@ class DraftJournal implements ResetInterface
 
     /** An append reads its own field and the collection members that may have removed it, not the whole draft.
      *
+     * @param list<string>|null $names the fields to read, null for every one
+     *
      * @return Draft
      */
-    private function read(string $id, bool $lock = false, ?string $field = null): array
+    private function read(string $id, bool $lock = false, ?array $names = null): array
     {
         $row = $this->db()->fetchAssociative(
             'SELECT generation, revision, saved_revision, bytes, record_id, saved_by, saved_by_label, updated_at FROM collaborate_draft WHERE id = ?'
@@ -926,14 +928,15 @@ class DraftJournal implements ResetInterface
         }
         // Drivers return the string columns as strings, the integer ones as integers or numeric strings.
         /** @var array{generation: int|string, revision: int|string, saved_revision: int|string, bytes: int|string, record_id: string|null, saved_by: int|string|null, saved_by_label: string|null, updated_at: string} $row */
-        $states = null === $field
+        $states = null === $names
             ? $this->db()->fetchAllAssociative('SELECT name, state FROM collaborate_draft_field WHERE draft_id = ? ORDER BY name', [
                 $id,
             ])
-            : $this->db()->fetchAllAssociative("SELECT name, state FROM collaborate_draft_field WHERE draft_id = ? AND (name = ? OR type = 'member') ORDER BY name", [
-                $id,
-                $field,
-            ]);
+            : $this->db()->fetchAllAssociative(
+                'SELECT name, state FROM collaborate_draft_field WHERE draft_id = ? AND name IN (?) ORDER BY name',
+                [$id, $names],
+                [1 => ArrayParameterType::STRING],
+            );
 
         return [
             'id' => $id,
@@ -1260,6 +1263,27 @@ class DraftJournal implements ResetInterface
         }
 
         return $entries;
+    }
+
+    /**
+     * The members that would remove the entries `$name` sits in, as {@see removedEntries()} reads them back:
+     * `items[3][title]` is in the entry `items[3]`, which the member `items[@3]` removes.
+     *
+     * @return list<string>
+     */
+    private static function memberNames(string $name): array
+    {
+        $names = [];
+        $prefix = '';
+        foreach (explode(']', $name, -1) as $part) {
+            $prefix .= $part . ']';
+            $open = strrpos($prefix, '[');
+            if (false !== $open) {
+                $names[] = substr($prefix, 0, $open) . '[@' . substr($prefix, $open + 1);
+            }
+        }
+
+        return $names;
     }
 
     /** @param array<string, string> $entries */

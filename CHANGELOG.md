@@ -5,7 +5,21 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `Notification\Preferences::subscribers()`: which of several users are
+  subscribed to a topic, in one query.
+
 ### Changed
+
+- An append reads its own field and the members of the entries it sits in,
+  not every collection member of the draft: about 20 times faster on a
+  draft of 2000 entries (7 ms to 0.35 ms, `tests/bench/journal-append.php`),
+  the same on a small one.
+- `Notifier::notifyAll()` reads the recipients' subscriptions in one query
+  and flushes their rows once, before any of their pages is told: 200
+  recipients took 13–17 ms instead of 350–680 ms. Through a bus, it still
+  sends one message per recipient.
 
 - `notifications.enabled` set to an environment variable is refused with an
   `InvalidConfigurationException`: it decides the notification services and

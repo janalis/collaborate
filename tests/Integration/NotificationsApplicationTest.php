@@ -250,6 +250,9 @@ final class NotificationsApplicationTest extends NotificationsTestCase
 
     public function testAUserIsToldThroughTheirIdAndNobodyWithoutOne(): void
     {
+        // The reader's browser takes pushes: each recipient's pages are told and browsers pushed once they are flushed.
+        $this->signIn('reader');
+        $this->subscribe($this->pushToken($this->open('/admin/library/music')));
         $users = new \Janalis\Collaborate\Tests\Fixtures\TestUserProvider();
         $this->notifier()->notifyAll(
             [$users->loadUserByIdentifier('bob'), $users->loadUserByIdentifier('pending'), self::READER],
@@ -262,6 +265,14 @@ final class NotificationsApplicationTest extends NotificationsTestCase
             array_map(static fn(Notification $row): int => $row->recipient, $rows),
         );
         self::assertNull($rows[0]->url);
+        $this->terminate();
+        foreach ([self::BOB, self::READER] as $recipient) {
+            self::assertSame(
+                [['channel' => 'notifications']],
+                self::on($this->published(), 'urn:collaborate:notifications:' . $recipient),
+            );
+        }
+        self::assertCount(1, $this->pushes()->sent);
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage(
             'The notification type "nope" is not configured (collaborate.notifications.types).',

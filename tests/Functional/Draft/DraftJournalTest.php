@@ -1118,6 +1118,39 @@ final class DraftJournalTest extends TestCase
         self::assertSame([], $this->journal->listKeys('list'));
     }
 
+    public function testARemovedEntryIsNoConflictWhateverMemberSortsBeforeIt(): void
+    {
+        // A member named outside any collection removes no entry: the members after it in name order still do.
+        $fields = [
+            'a' => ['type' => 'member', 'initial' => ['alive' => false, 'order' => 0]],
+            'b[@k]' => ['type' => 'member', 'initial' => ['alive' => true, 'order' => 1, 'recordId' => '1']],
+            'b[k][title]' => ['type' => 'value', 'initial' => 'Old'],
+        ];
+        $changed = $fields;
+        $changed['b[k][title]']['initial'] = 'Changed elsewhere';
+        foreach (['kept' => false, 'gone' => true] as $id => $remove) {
+            $this->journal->join($id, $fields);
+            if ($remove) {
+                $this->journal->append(
+                    $id,
+                    $fields,
+                    $this->event([
+                        'field' => 'b[@k]',
+                        'kind' => 'value',
+                        'version' => 0,
+                        'value' => ['alive' => false, 'order' => 1],
+                    ]),
+                    1,
+                    'Alice',
+                );
+            }
+            self::assertSame(
+                $remove ? [] : ['b[k][title]'],
+                array_keys($this->journal->join($id, $changed, microtime(true) + 1)['conflicts']),
+            );
+        }
+    }
+
     public function testRemovedCollectionChildrenCannotBeEditedAndOtherLocaleEventsSurviveDiscard(): void
     {
         $fields = [

@@ -42,6 +42,43 @@ final class PreferencesTest extends TestCase
         );
     }
 
+    public function testTheSubscribersOfAMandatoryTopicAreEveryoneWithoutAQuery(): void
+    {
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->never())->method('getRepository');
+        self::assertSame(
+            [3 => true, 4 => true],
+            new Preferences($em, self::catalog(), new MockClock())->subscribers([3, 4, 3], 'security'),
+        );
+    }
+
+    public function testTheSubscribersOfATopicAreReadInOneQuery(): void
+    {
+        $at = new \DateTimeImmutable();
+        $repository = $this->createMock(EntityRepository::class);
+        $repository
+            ->expects($this->exactly(2))
+            ->method('findBy')
+            ->willReturnCallback(static fn(array $criteria): array => match ($criteria['topic']) {
+                'library' => [new NotificationPreference(4, 'library', false, $at)],
+                default => [new NotificationPreference(5, 'news', true, $at)],
+            })
+            ->with(self::callback(static fn(array $criteria): bool => [3, 4, 5] === $criteria['recipient']));
+        $em = $this->createStub(EntityManagerInterface::class);
+        $em->method('getRepository')->willReturn($repository);
+        $preferences = new Preferences($em, self::catalog(), new MockClock());
+        // Subscribed by default unless they chose otherwise, or not unless they chose to.
+        self::assertSame([3 => true, 5 => true], $preferences->subscribers([3, 4, 3, 5], 'library'));
+        self::assertSame([5 => true], $preferences->subscribers([3, 4, 5], 'news'));
+    }
+
+    public function testNoSubscriberIsLookedForAmongNobody(): void
+    {
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->never())->method('getRepository');
+        self::assertSame([], new Preferences($em, self::catalog(), new MockClock())->subscribers([], 'news'));
+    }
+
     private static function catalog(): NotificationCatalog
     {
         $topic = static fn(bool $default, bool $mandatory): array => [

@@ -56,27 +56,56 @@ final readonly class Notifier
         if (null === $recipient) {
             return;
         }
-        $at = $this->clock->now();
         if (null !== $this->bus) {
-            $this->bus->dispatch(
-                new SendNotification($recipient, $type, $parameters, $url, $at->format(\DATE_ATOM), self::key()),
-            );
+            $this->dispatch($this->bus, $recipient, $type, $parameters, $url);
 
             return;
         }
-        $this->write($recipient, $type, $parameters, $url, $at);
+        $this->write($recipient, $type, $parameters, $url, $this->clock->now());
     }
 
     /**
-     * Notifies each of several users, as {@see notify()} does.
+     * Notifies each of several users, as {@see notify()} does: without a bus, their subscriptions are read in one
+     * query and their rows flushed at once, before any of their pages is told.
      *
      * @param iterable<UserInterface|int> $to
      * @param array<string, string>       $parameters
      */
     public function notifyAll(iterable $to, string $type, array $parameters = [], ?string $url = null): void
     {
-        foreach ($to as $recipient) {
-            $this->notify($recipient, $type, $parameters, $url);
+        $topic = $this->catalog->type($type)['topic'];
+        $recipients = [];
+        foreach ($to as $user) {
+            $recipient = $user instanceof UserInterface ? $this->collaborators->id($user) : $user;
+            if (null !== $recipient) {
+                $recipients[] = $recipient;
+            }
+        }
+        if (null !== $this->bus) {
+            foreach ($recipients as $recipient) {
+                $this->dispatch($this->bus, $recipient, $type, $parameters, $url);
+            }
+
+            return;
+        }
+        $subscribed = $this->preferences->subscribers($recipients, $topic);
+        $at = $this->clock->now();
+        $written = [];
+        foreach ($recipients as $recipient) {
+            if (!isset($subscribed[$recipient])) {
+                continue;
+            }
+            $notification = new Notification($recipient, $topic, $type, $parameters, $url, $at);
+            $this->em->persist($notification);
+            $written[] = $notification;
+        }
+        if ([] === $written) {
+            return;
+        }
+        $this->em->flush();
+        foreach ($written as $notification) {
+            $this->changed($notification->recipient);
+            $this->pushes?->push($notification);
         }
     }
 
@@ -118,6 +147,26 @@ final readonly class Notifier
         $this->publisher->defer(
             Notice::notifications($this->topics->notifications($recipient)),
             'Collaborate could not tell the pages of a user of their notifications.',
+        );
+    }
+
+    /** @param array<string, string> $parameters */
+    private function dispatch(
+        MessageBusInterface $bus,
+        int $recipient,
+        string $type,
+        array $parameters,
+        ?string $url,
+    ): void {
+        $bus->dispatch(
+            new SendNotification(
+                $recipient,
+                $type,
+                $parameters,
+                $url,
+                $this->clock->now()->format(\DATE_ATOM),
+                self::key(),
+            ),
         );
     }
 

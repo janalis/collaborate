@@ -34,6 +34,37 @@ final readonly class Preferences
     }
 
     /**
+     * Which of several users are subscribed to a configured topic, read in one query: what {@see isSubscribed()}
+     * answers for each.
+     *
+     * @param list<int> $recipients
+     *
+     * @return array<int, true> the subscribed recipients, as keys
+     */
+    public function subscribers(array $recipients, string $topic): array
+    {
+        $definition = $this->catalog->topic($topic);
+        \assert(null !== $definition, 'A notification type names a configured topic.');
+        $choices = [];
+        if (!$definition['mandatory'] && [] !== $recipients) {
+            foreach ($this->em
+                ->getRepository(NotificationPreference::class)
+                ->findBy(['recipient' => array_values(array_unique($recipients)), 'topic' => $topic]) as $choice) {
+                $choices[$choice->recipient] = $choice->subscribed;
+            }
+        }
+        $subscribed = [];
+        foreach ($recipients as $recipient) {
+            if (!$definition['mandatory'] && !($choices[$recipient] ?? $definition['default'])) {
+                continue;
+            }
+            $subscribed[$recipient] = true;
+        }
+
+        return $subscribed;
+    }
+
+    /**
      * Every topic, in the configured order, with whether the user is subscribed.
      *
      * @return array<string, bool>

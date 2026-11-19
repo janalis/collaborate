@@ -25,6 +25,7 @@ use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Mercure\HubInterface;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Security\Core\User\UserInterface;
 
 #[CoversClass(Notifier::class)]
 #[UsesClass(HubPublisher::class)]
@@ -48,6 +49,61 @@ final class NotifierTest extends TestCase
         self::assertInstanceOf(Notification::class, $notification);
         self::assertSame(3, $notification->recipient);
         self::assertSame('library', $notification->topic);
+    }
+
+    public function testSeveralUsersAreWrittenInOneFlushBeforeAnyPageIsTold(): void
+    {
+        $em = $this->createMock(EntityManagerInterface::class);
+        $persisted = [];
+        $em
+            ->expects($this->exactly(3))
+            ->method('persist')
+            ->willReturnCallback(static function (object $row) use (&$persisted): void {
+                \assert($row instanceof Notification);
+                $persisted[] = $row;
+            });
+        $em->expects($this->once())->method('flush');
+        $this->notifier($em)->notifyAll([3, 4, 3], 'shared', ['%name%' => 'Bob'], '/x');
+        self::assertSame([3, 4, 3], array_map(static fn(Notification $row): int => $row->recipient, $persisted));
+        self::assertSame('/x', $persisted[0]->url);
+        self::assertSame($persisted[0]->createdAt, $persisted[2]->createdAt);
+    }
+
+    public function testAUserWithoutACollaboratorIdIsToldNothing(): void
+    {
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->never())->method('persist');
+        $em->expects($this->never())->method('flush');
+        $this->notifier($em)->notify($this->createStub(UserInterface::class), 'shared');
+    }
+
+    public function testNobodyToTellFlushesNothing(): void
+    {
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->never())->method('persist');
+        $em->expects($this->never())->method('flush');
+        $this->notifier($em)->notifyAll([], 'shared');
+    }
+
+    public function testSeveralUsersAreEachSentTheirOwnMessageThroughABus(): void
+    {
+        $messages = [];
+        $bus = $this->createMock(MessageBusInterface::class);
+        $bus
+            ->expects($this->exactly(2))
+            ->method('dispatch')
+            ->willReturnCallback(static function (object $message) use (&$messages): Envelope {
+                $messages[] = $message;
+
+                return new Envelope($message);
+            });
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->never())->method('flush');
+        $this->notifier($em, $bus)->notifyAll([3, 4], 'shared', ['%name%' => 'Bob'], '/x');
+        self::assertContainsOnlyInstancesOf(SendNotification::class, $messages);
+        self::assertSame([3, 4], [$messages[0]->recipient, $messages[1]->recipient]);
+        self::assertSame('/x', $messages[1]->url);
+        self::assertNotSame($messages[0]->key, $messages[1]->key);
     }
 
     public function testAnUnknownTypeIsRefusedBeforeItReachesTheBus(): void

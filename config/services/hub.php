@@ -42,6 +42,7 @@ return static function (ContainerConfigurator $container): void {
         service('janalis_collaborate.limiter.cursors')->nullOnInvalid(),
         service('janalis_collaborate.places')->nullOnInvalid(),
         service('janalis_collaborate.notifications.access')->nullOnInvalid(),
+        service('clock'),
     ]);
 
     $services->set(HubSessions::class)->args([
@@ -53,6 +54,7 @@ return static function (ContainerConfigurator $container): void {
         service(CollaboratorProviderInterface::class),
         param('collaborate.cursors.enabled'),
         param('collaborate.colors'),
+        service('clock'),
     ]);
 
     // HubTransportInterface and PresenceProbeInterface are aliased by hub_mercure.php or hub_websocket.php.
@@ -108,6 +110,7 @@ return static function (ContainerConfigurator $container): void {
             service('janalis_collaborate.notifications.access')->nullOnInvalid(),
             param('collaborate.bridge'),
             service('security.csrf.token_manager'),
+            service('clock'),
         ])
         ->tag('twig.extension');
 };

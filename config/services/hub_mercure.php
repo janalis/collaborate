@@ -17,6 +17,7 @@ return static function (ContainerConfigurator $container): void {
         service('logger'),
         service('http_client')->nullOnInvalid(),
         param('collaborate.hub.subscription_ttl'),
+        service('clock'),
     ])->tag('monolog.logger', ['channel' => 'collaborate']);
     $services->alias(HubTransportInterface::class, MercureTransport::class);
     $services->alias(PresenceProbeInterface::class, MercureTransport::class);

@@ -233,7 +233,7 @@ final class HubControllerTest extends HubTestCase
         self::assertSame(200, $this->handle()->getStatusCode());
         $limited = $this->handle();
         self::assertSame(429, $limited->getStatusCode());
-        self::assertSame(['error' => 'Cursor rate limit exceeded.'], $this->decode($limited));
+        self::assertSame(['error' => 'Hub rate limit exceeded.'], $this->decode($limited));
     }
 
     public function testASessionBodyMayCarryFullDraftGrantsUpToTheDraftRequestLimit(): void
@@ -242,7 +242,7 @@ final class HubControllerTest extends HubTestCase
         self::assertSame(200, $this->handle(['extra' => str_repeat('x', 8192)])->getStatusCode());
         $this->drafts = $this->draftAccess(true, 1024);
         $this->expectException(BadRequestHttpException::class);
-        $this->expectExceptionMessage('Cursor event is too large.');
+        $this->expectExceptionMessage('Hub request is too large.');
         $this->handle(['extra' => str_repeat('x', 1024)]);
     }
 

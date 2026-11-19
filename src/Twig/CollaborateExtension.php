@@ -11,6 +11,8 @@ use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Notification\NotificationAccess;
 use Janalis\Collaborate\Security\CurrentUserInterface;
+use Psr\Clock\ClockInterface;
+use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -103,6 +105,7 @@ final class CollaborateExtension extends AbstractExtension
         private readonly ?NotificationAccess $notifications = null,
         string $bridge = 'none',
         private readonly ?CsrfTokenManagerInterface $csrf = null,
+        private readonly ClockInterface $clock = new NativeClock(),
     ) {
         $this->bridge = Bridge::from($bridge);
         $this->layer = $layer + self::DEFAULT_LAYER;
@@ -190,7 +193,12 @@ final class CollaborateExtension extends AbstractExtension
         $collaborator = $this->collaborator();
         if (null !== $collaborator) {
             [$request, $user, $id] = $collaborator;
-            $grant = $this->pages->issue($request, $id, time(), $this->collaborators->authorization($user));
+            $grant = $this->pages->issue(
+                $request,
+                $id,
+                $this->clock->now()->getTimestamp(),
+                $this->collaborators->authorization($user),
+            );
             if (null !== $grant) {
                 return $grant;
             }
@@ -201,7 +209,11 @@ final class CollaborateExtension extends AbstractExtension
             return null;
         }
 
-        return $this->pages->issueBare($recipient, time(), $this->collaborators->authorization($user));
+        return $this->pages->issueBare(
+            $recipient,
+            $this->clock->now()->getTimestamp(),
+            $this->collaborators->authorization($user),
+        );
     }
 
     public function layer(Environment $twig): string

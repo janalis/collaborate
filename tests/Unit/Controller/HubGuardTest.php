@@ -118,13 +118,13 @@ final class HubGuardTest extends HubTestCase
             $this->guard()->admit($this->request('/cursors/events', ['extra' => str_repeat('x', 100)]), 100);
             self::fail('Accepted an oversized body.');
         } catch (BadRequestHttpException $error) {
-            self::assertSame('Cursor event is too large.', $error->getMessage());
+            self::assertSame('Hub request is too large.', $error->getMessage());
         }
         try {
             $this->guard()->admit($this->request('/cursors/events'), $limit - 1);
             self::fail('Accepted a body one byte over the limit.');
         } catch (BadRequestHttpException $error) {
-            self::assertSame('Cursor event is too large.', $error->getMessage());
+            self::assertSame('Hub request is too large.', $error->getMessage());
         }
         $request = $this->request('/cursors/events');
         $request->initialize(content: 'not json');
@@ -148,7 +148,7 @@ final class HubGuardTest extends HubTestCase
         self::assertSame(429, $limited->getStatusCode());
         self::assertSame('1', $limited->headers->get('Retry-After'));
         self::assertTrue($limited->headers->hasCacheControlDirective('no-store'));
-        self::assertSame(['error' => 'Cursor rate limit exceeded.'], $this->decode($limited));
+        self::assertSame(['error' => 'Hub rate limit exceeded.'], $this->decode($limited));
         self::assertTrue($limiter->create('16')->consume()->isAccepted());
     }
 

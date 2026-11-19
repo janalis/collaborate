@@ -55,6 +55,22 @@ final class ServicesTest extends KernelTestBase
         self::assertInstanceOf(MercureTransport::class, $this->container->get(HubTransportInterface::class));
     }
 
+    /** A service the bundle adds, and the wiring pass does not map, fails here rather than on a page. */
+    public function testEveryServiceOfTheBundleIsBuilt(): void
+    {
+        $ids = array_values(array_filter(
+            $this->container->getServiceIds(),
+            static fn(string $id): bool => (
+                str_starts_with($id, 'Janalis\\Collaborate\\') || str_starts_with($id, 'janalis_collaborate.')
+            ),
+        ));
+
+        self::assertGreaterThan(20, \count($ids));
+        foreach ($ids as $id) {
+            self::assertIsObject($this->container->get($id), $id);
+        }
+    }
+
     public function testTheJournalWritesItsTablesUnderTheTestsPrefix(): void
     {
         $journal = $this->container->get(DraftJournal::class);

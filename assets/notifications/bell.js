@@ -1,3 +1,4 @@
+// @ts-check
 // The bell of the notifications (templates/notifications/bell.html.twig), on every page that renders it.
 //
 // The server renders the latest notifications in the bell's menu, and tells the hub when the user's list
@@ -10,6 +11,9 @@
 // 'page'`) gives the bell the count it was answered; the bell's (`origin: 'bell'`) tells the host the
 // counts after any change, and the page whether the list changed elsewhere (`heard`).
 import { backgroundFetch, hubFor } from '../hub.js';
+import { settingsOf } from '../settings.js';
+
+export { settingsOf };
 
 // Notices of the hub arriving together ask for the list once.
 export const REFRESH_DELAY = 250;
@@ -23,16 +27,6 @@ const HEADER = '.collaborate-notifications__header';
 
 // The notifications the host was told of, once each whatever told the page (hub, service worker, bells).
 const told = new Set();
-
-/** The JSON settings an element carries in an attribute; a malformed one reads as none. */
-export function settingsOf(element, attribute) {
-  try {
-    const settings = JSON.parse(element?.getAttribute(attribute) || '{}');
-    return settings && typeof settings === 'object' && !Array.isArray(settings) ? settings : {};
-  } catch {
-    return {};
-  }
-}
 
 /** Writes every date of a notification in the language of the page, as the reader reads dates. */
 export function formatDates(scope, lang = document.documentElement.lang || undefined) {
@@ -73,18 +67,16 @@ export async function fetchFragment(url, fetcher = backgroundFetch) {
 
 /**
  * Tells the server what was read, unread or cleared: one notification by its id, all of them without one.
- * Answers the counts `{unread, total}`, or null when the server could not be told.
+ * Clearing takes the settings' `clearToken`. Answers the counts `{unread, total}`, or null when the server
+ * could not be told.
  */
-export async function postChange(url, id = null, fetcher = backgroundFetch) {
+export async function postChange(url, id = null, fetcher = backgroundFetch, token = null) {
   const body = new URLSearchParams();
   if (id) body.set('id', id);
+  const headers = { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
+  if (token) headers['X-CSRF-Token'] = token;
   try {
-    const response = await fetcher(url, {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-      body,
-    });
+    const response = await fetcher(url, { method: 'POST', credentials: 'same-origin', headers, body });
     if (!response.ok || response.redirected) return null;
     const answer = await response.json();
     return Number.isInteger(answer?.unread) ? answer : null;

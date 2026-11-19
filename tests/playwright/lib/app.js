@@ -194,7 +194,9 @@ export class Editor {
   async save() {
     const posted = this.page.waitForRequest((request) => request.method() === 'POST' && request.isNavigationRequest());
     await this.saveButton.click();
-    await posted;
+    // The save checkpoints the draft before it answers: a page opened before the answer would read the draft
+    // as it was, and leaving earlier aborts the request while the server still saves.
+    await (await posted).response();
     await this.page.waitForLoadState();
   }
 
@@ -217,7 +219,7 @@ export class Editor {
       .getByRole('button', { name: this.easyAdmin ? 'Save and continue editing' : 'Save', exact: true })
       .and(this.page.locator(':not([data-collaborate-save])'))
       .click();
-    await posted;
+    await (await posted).response();
     await this.page.waitForLoadState();
     await this.joined();
   }

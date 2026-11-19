@@ -137,7 +137,11 @@ final class ItemKeys
         }
         $added = max($keyless);
         $requested = $state->getUserInput()[self::ADD] ?? null;
-        if (\is_string($requested) && self::KEYS === preg_match(self::PATTERN, $requested) && self::triggeredBy($state, $context)) {
+        if (
+            \is_string($requested)
+            && self::KEYS === preg_match(self::PATTERN, $requested)
+            && self::triggeredBy($state, $context)
+        ) {
             $widget[$added][self::KEY]['#default_value'] = $requested;
 
             return;
@@ -145,7 +149,8 @@ final class ItemKeys
         // A paragraph this page added is an item at once: an empty one is one of its own.
         $entity = null === $paragraphs ? null : self::paragraph($state, $context, $added);
         if (null !== $entity && $entity->isNew()) {
-            $widget[$added][self::KEY]['#default_value'] = 'n' . $entity->bundle() . '-' . \Drupal::service('uuid')->generate();
+            $widget[$added][self::KEY]['#default_value'] =
+                'n' . $entity->bundle() . '-' . \Drupal::service('uuid')->generate();
         }
     }
 
@@ -158,10 +163,17 @@ final class ItemKeys
     {
         $trigger = $state->getTriggeringElement();
         $items = $context['items'] ?? null;
-        if (!\is_array($trigger) || !\is_array($trigger['#parents'] ?? null) || !$items instanceof FieldItemListInterface) {
+        if (
+            !\is_array($trigger)
+            || !\is_array($trigger['#parents'] ?? null)
+            || !$items instanceof FieldItemListInterface
+        ) {
             return false;
         }
-        $parents = [...(\is_array($context['form']['#parents'] ?? null) ? $context['form']['#parents'] : []), $items->getName()];
+        $parents = [
+            ...(\is_array($context['form']['#parents'] ?? null) ? $context['form']['#parents'] : []),
+            $items->getName(),
+        ];
 
         return \array_slice($trigger['#parents'], 0, \count($parents)) === $parents;
     }
@@ -199,7 +211,8 @@ final class ItemKeys
             return null;
         }
         $parents = \is_array($context['form']['#parents'] ?? null) ? $context['form']['#parents'] : [];
-        $entity = WidgetBase::getWidgetState($parents, $items->getName(), $state)['paragraphs'][$delta]['entity'] ?? null;
+        $entity =
+            WidgetBase::getWidgetState($parents, $items->getName(), $state)['paragraphs'][$delta]['entity'] ?? null;
 
         return $entity instanceof ContentEntityInterface ? $entity : null;
     }
@@ -216,7 +229,13 @@ final class ItemKeys
                 continue;
             }
             $name = $element[$child]['#name'] ?? null;
-            if (\is_string($name) && preg_match('/_(collapse|collapse_all|edit|edit-all|edit_all|duplicate|convert|dragdrop_mode)$/D', $name)) {
+            if (
+                \is_string($name)
+                && preg_match(
+                    '/_(collapse|collapse_all|edit|edit-all|edit_all|duplicate|convert|dragdrop_mode)$/D',
+                    $name,
+                )
+            ) {
                 $element[$child]['#access'] = false;
             }
             self::openParagraphs($element[$child]);
@@ -232,10 +251,14 @@ final class ItemKeys
             return;
         }
         foreach ($display->getComponents() as $name => $component) {
-            if ('paragraphs' === ($component['type'] ?? null)) {
-                $component['settings'] = ['edit_mode' => 'open', 'autocollapse' => 'none', 'closed_mode_threshold' => 0] + ($component['settings'] ?? []);
-                $display->setComponent($name, $component);
+            if ('paragraphs' !== ($component['type'] ?? null)) {
+                continue;
             }
+
+            $component['settings'] =
+                ['edit_mode' => 'open', 'autocollapse' => 'none', 'closed_mode_threshold' => 0]
+                + ($component['settings'] ?? []);
+            $display->setComponent($name, $component);
         }
     }
 
@@ -349,9 +372,11 @@ final class ItemKeys
             $keys[self::path(array_map(strval(...), $element['#parents']))] = $deltas;
         }
         foreach (Element::children($element) as $child) {
-            if (\is_array($element[$child])) {
-                self::collect($element[$child], $keys);
+            if (!\is_array($element[$child])) {
+                continue;
             }
+
+            self::collect($element[$child], $keys);
         }
     }
 
@@ -365,7 +390,10 @@ final class ItemKeys
         if (null !== $parents && [] !== $parents) {
             $name = self::name($parents);
             if (true === ($element[self::WIDGET] ?? false)) {
-                $element['#attributes']['data-collaborate-collection'] = self::name(self::keyedParents($parents, $keys));
+                $element['#attributes']['data-collaborate-collection'] = self::name(self::keyedParents(
+                    $parents,
+                    $keys,
+                ));
             }
             $current = $element['#name'] ?? null;
             if ($current === $name || $current === $name . '[]') {
@@ -373,9 +401,11 @@ final class ItemKeys
             }
         }
         foreach (Element::children($element) as $child) {
-            if (\is_array($element[$child])) {
-                self::apply($element[$child], $keys);
+            if (!\is_array($element[$child])) {
+                continue;
             }
+
+            self::apply($element[$child], $keys);
         }
     }
 
@@ -393,7 +423,9 @@ final class ItemKeys
         $keyed = [];
         foreach ($parents as $segment) {
             $path = self::path($prefix);
-            $keyed[] = ctype_digit($segment) && isset($keys[$path][(int) $segment]) ? $keys[$path][(int) $segment] : $segment;
+            $keyed[] = ctype_digit($segment) && isset($keys[$path][(int) $segment])
+                ? $keys[$path][(int) $segment]
+                : $segment;
             $prefix[] = $segment;
         }
 
@@ -426,7 +458,8 @@ final class ItemKeys
         $widget = $context['widget'] ?? null;
         $items = $context['items'] ?? null;
 
-        return $this->access->enabled
+        return (
+            $this->access->enabled
             && !$state->isProgrammed()
             && true !== ($context['default'] ?? false)
             && $state->getFormObject() instanceof ContentEntityFormInterface
@@ -434,7 +467,11 @@ final class ItemKeys
             && !$widget instanceof FileWidget
             && true !== ($widget->getPluginDefinition()['multiple_values'] ?? false)
             && $items instanceof FieldItemListInterface
-            && FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED === $items->getFieldDefinition()->getFieldStorageDefinition()->getCardinality();
+            && FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED === $items
+                ->getFieldDefinition()
+                ->getFieldStorageDefinition()
+                ->getCardinality()
+        );
     }
 
     /**

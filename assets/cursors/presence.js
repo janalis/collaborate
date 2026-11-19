@@ -1,3 +1,4 @@
+// @ts-check
 // Other editors on the page, drawn beside the header's own avatar. Fed by `cursors.js`.
 export const MAX_SHOWN = 5;
 // On a narrow window the menu's button shows one peer, the others counted (the stylesheet tells which is which).
@@ -57,13 +58,19 @@ let menus = 0;
 // `maxShown` comes from the layer's `data-config.maxAvatars`; past it, a `+n` chip names the rest. `options`
 // carries the rest of the layer's configuration: `presence: 'menu'` makes the peers the button of a menu that
 // finds them, `distinctColors` keeps neighbours' colours apart, `idle` (milliseconds) says a still peer idle.
+/**
+ * @param {() => Iterable<HTMLElement>} [containers]
+ * @param {number} [maxShown]
+ * @param {{ presence?: string, distinctColors?: boolean, colors?: string[], idle?: number, messages?: Record<string, string> }} [options]
+ */
 export function createPresence(
-  containers = () => document.querySelectorAll('[data-collaborate-presence]'),
+  containers = () => /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('[data-collaborate-presence]')),
   maxShown = MAX_SHOWN,
   { presence = 'avatars', distinctColors = false, colors = [], idle = 0, messages = {} } = {}
 ) {
   const users = new Map();
   // What the cursors tell of a peer, and do for them (`cursors.js` binds them).
+  /** @type {{ describe: (user: any) => string, choose: (userId: number) => void, toggle: () => void, shown: () => boolean, change: () => void }} */
   const hooks = {
     describe: () => '',
     choose: () => {},
@@ -317,12 +324,9 @@ export function createPresence(
   ) {
     const known = users.get(userId);
     const user = known || { clients: new Map(), moved: now, idle: false, file: null, popup: null };
-    const changed =
-      !known ||
-      user.label !== label ||
-      user.color !== color ||
-      user.avatar !== avatarUrl(avatar) ||
-      placed(user, file, popup);
+    const changed = !known || user.label !== label || user.color !== color || user.avatar !== avatarUrl(avatar);
+    // Where a peer is shows in the menu alone; the avatars stay as they are, and only the marks move.
+    const moved = placed(user, file, popup);
     user.clients.set(clientId, now);
     if (!known || user.color !== color) {
       // Picked among the others.
@@ -334,10 +338,8 @@ export function createPresence(
     users.set(userId, user);
     const wasIdle = user.idle;
     user.idle = isIdle(user, now);
-    if (changed || wasIdle !== user.idle) {
-      render(now);
-      hooks.change();
-    }
+    if (changed || wasIdle !== user.idle || (moved && presence === 'menu')) render(now);
+    if (changed || wasIdle !== user.idle || moved) hooks.change();
   }
 
   function leave(userId, clientId) {

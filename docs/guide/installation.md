@@ -272,6 +272,16 @@ even with drafts off: the entry point loads the draft modules, which import
 `ckeditor5`. `@microsoft/fetch-event-source` is needed with Mercure alone:
 the hub's client loads it only when the session names that transport.
 
+A page without shared drafts can skip both: instead of the entry point, it
+imports the modules it uses, the bridge's profile first. None of them
+imports `ckeditor5` or the modal:
+
+```js
+import '@janalis/collaborate/bridges/easyadmin.js'; // EasyAdmin's profile, if you use its bridge
+import '@janalis/collaborate/cursors/cursors.js'; // pointers, carets and presence
+import '@janalis/collaborate/updates.js'; // saved-view refresh
+```
+
 The pinned `ckeditor5` version is part of every text field's schema (see
 [Schema compatibility](./shared-drafts#schema-compatibility)). If your
 CKEditor does not come from the import map, set

@@ -14,6 +14,7 @@ use Janalis\Collaborate\Draft\DraftText;
 use Janalis\Collaborate\Draft\DraftValues;
 use Janalis\Collaborate\Draft\EventValidator;
 use Janalis\Collaborate\Draft\FieldDefinitions;
+use Janalis\Collaborate\Draft\RecordAlreadyCreatedException;
 use Janalis\Collaborate\Tests\Fixtures\Draft\InterleavingConnection;
 use Janalis\Collaborate\Tests\Fixtures\Draft\JsonAssertions;
 use Janalis\Collaborate\Tests\Fixtures\Draft\StatementRecordingConnection;
@@ -30,6 +31,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  * and its temporary tables.
  */
 #[CoversClass(DraftJournal::class)]
+#[CoversClass(RecordAlreadyCreatedException::class)]
 #[CoversClass(DraftValues::class)]
 #[CoversClass(EventValidator::class)]
 #[CoversClass(FieldDefinitions::class)]
@@ -330,6 +332,48 @@ final class DraftJournalBoundariesTest extends TestCase
         )));
     }
 
+    public function testAPageOpenedDuringASaveWaitsForTheKeysItCheckpoints(): void
+    {
+        $journal = new DraftJournal($this->db, limits: ['locks' => ['save' => 3]], firstGeneration: 1);
+        $waits = function (): array {
+            $waits = [];
+            foreach ($this->db->queries as $index => $sql) {
+                if (str_contains($sql, 'GET_LOCK')) {
+                    $waits[] = $this->db->queryParameters[$index];
+                }
+            }
+
+            return $waits;
+        };
+        $this->db->queries = [];
+        $this->db->queryParameters = [];
+
+        // The aliases wait for the draft's lock, as long as a save may hold it, then let it go. A plain list's keys
+        // are its positions in the record the page loaded: they read the draft as it is.
+        $journal->aliases('record');
+        $journal->listKeys('record');
+        self::assertSame([[$this->lockName('record'), 3]], $waits());
+        self::assertCount(1, $this->releases());
+
+        // A save of this process, its form shown again, waits for nothing.
+        $journal->lock('record');
+        $this->db->queries = [];
+        $this->db->queryParameters = [];
+        $journal->aliases('record');
+        $journal->unlock('record');
+        self::assertSame([], $waits());
+        self::assertCount(1, $this->releases());
+
+        // A save that outlasts the wait leaves the page to read the draft as it is, without an error.
+        $other = DriverManager::getConnection(DraftJournalTest::connection()->getParams());
+        $this->connections[] = $other;
+        $other->fetchOne('SELECT GET_LOCK(?, 0)', [$this->lockName('record')]);
+        $brief = new DraftJournal($this->db, limits: ['locks' => ['save' => 0]], firstGeneration: 1);
+        $this->db->queries = [];
+        self::assertSame([], $brief->aliases('record'));
+        self::assertCount(0, $this->releases());
+    }
+
     public function testASaveTakesTheDraftsLockUnlessItsCallerHoldsIt(): void
     {
         $locks = fn(): int => \count(array_filter($this->db->queries, static fn(string $sql): bool => str_contains(
@@ -481,10 +525,19 @@ final class DraftJournalBoundariesTest extends TestCase
         $this->connections[] = $other;
         $other->fetchOne('SELECT GET_LOCK(?, 0)', [$this->lockName('a-held')]);
 
+        $this->db->queries = [];
+        $this->db->queryParameters = [];
         $started = microtime(true);
         self::assertSame(2, $this->journal->purge(new \DateTimeImmutable()));
-        // It does not wait for a draft in use.
-        self::assertLessThan(0.5, microtime(true) - $started);
+        // It does not wait for a draft in use: it asks for its lock without a timeout, well before the save's 10 s.
+        $waits = [];
+        foreach ($this->db->queries as $index => $sql) {
+            if (str_contains($sql, 'GET_LOCK')) {
+                $waits[] = $this->db->queryParameters[$index][1] ?? null;
+            }
+        }
+        self::assertSame([0, 0, 0], $waits);
+        self::assertLessThan(5, microtime(true) - $started);
 
         self::assertSame(
             ['a-held', 'record'],

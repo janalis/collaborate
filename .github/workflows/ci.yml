@@ -50,7 +50,7 @@ jobs:
           --health-cmd="pg_isready -U postgres" --health-interval=5s --health-timeout=5s --health-retries=20
     env:
       # The functional tests own this database; the integration tests create collaborate_<app>_test next to it.
-      COLLABORATE_DATABASE_URL: mysql://root@127.0.0.1:3306/collaborate_test?serverVersion=${{ startsWith(matrix.database, 'mysql') && '8.4.0' || '10.11.0-MariaDB' }}
+      COLLABORATE_DATABASE_URL: mysql://root@127.0.0.1:3306/collaborate_test?serverVersion=${{ startsWith(matrix.database, 'mysql') && '8.4.0' || (matrix.database == 'mariadb:10.11' && '10.11.0-MariaDB' || '11.4.0-MariaDB') }}
       COLLABORATE_POSTGRES_URL: postgresql://postgres:postgres@127.0.0.1:5432/collaborate_test?serverVersion=16
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,6 +60,10 @@ jobs:
           extensions: pdo_mysql, pdo_pgsql, pdo_sqlite, mbstring, intl, pcntl
           coverage: none
           tools: composer:v2, flex
+      - uses: ./.github/actions/composer-cache
+        with:
+          key: php-${{ matrix.php }}-${{ matrix.symfony }}
+          files: composer.json
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
@@ -99,7 +103,7 @@ jobs:
         options: >-
           --health-cmd="pg_isready -U postgres" --health-interval=5s --health-timeout=5s --health-retries=20
     env:
-      COLLABORATE_DATABASE_URL: mysql://root@127.0.0.1:3306/collaborate_test?serverVersion=10.11.0-MariaDB
+      COLLABORATE_DATABASE_URL: mysql://root@127.0.0.1:3306/collaborate_test?serverVersion=11.4.0-MariaDB
       COLLABORATE_POSTGRES_URL: postgresql://postgres:postgres@127.0.0.1:5432/collaborate_test?serverVersion=16
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -109,6 +113,9 @@ jobs:
           extensions: pdo_mysql, pdo_pgsql, pdo_sqlite, mbstring, intl, pcntl
           coverage: pcov
           tools: composer:v2
+      - uses: ./.github/actions/composer-cache
+        with:
+          key: lock
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
@@ -128,6 +135,10 @@ jobs:
           extensions: mbstring, intl
           coverage: none
           tools: composer:v2
+      - uses: ./.github/actions/composer-cache
+        with:
+          key: lowest
+          files: composer.json
       - run: composer update --prefer-lowest --no-interaction --prefer-dist
       - run: vendor/bin/phpunit --testsuite unit
 
@@ -147,6 +158,9 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             docs/package-lock.json
+      - uses: ./.github/actions/composer-cache
+        with:
+          key: lock
       - run: composer install --no-interaction --prefer-dist
       - run: composer validate --strict
       - run: composer format:check
@@ -196,7 +210,7 @@ jobs:
         options: >-
           --health-cmd="pg_isready -U postgres" --health-interval=5s --health-timeout=5s --health-retries=20
     env:
-      COLLABORATE_DATABASE_URL: mysql://root@127.0.0.1:3306/collaborate_test?serverVersion=10.11.0-MariaDB
+      COLLABORATE_DATABASE_URL: mysql://root@127.0.0.1:3306/collaborate_test?serverVersion=11.4.0-MariaDB
       COLLABORATE_POSTGRES_URL: postgresql://postgres:postgres@127.0.0.1:5432/collaborate_test?serverVersion=16
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -206,6 +220,9 @@ jobs:
           extensions: pdo_mysql, pdo_pgsql, pdo_sqlite, mbstring, intl, pcntl
           coverage: pcov
           tools: composer:v2
+      - uses: ./.github/actions/composer-cache
+        with:
+          key: lock
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
@@ -230,8 +247,7 @@ jobs:
           --health-cmd="healthcheck.sh --connect --innodb_initialized"
           --health-interval=5s --health-timeout=5s --health-retries=20
     env:
-      COLLABORATE_DATABASE_URL: mysql://root@127.0.0.1:3306/collaborate_test?serverVersion=10.11.0-MariaDB
-      FRANKENPHP_VERSION: v1.13.4
+      COLLABORATE_DATABASE_URL: mysql://root@127.0.0.1:3306/collaborate_test?serverVersion=11.4.0-MariaDB
       FRANKENPHP: /usr/local/bin/frankenphp
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -265,9 +281,8 @@ jobs:
         options: >-
           --health-cmd="pg_isready -U postgres" --health-interval=5s --health-timeout=5s --health-retries=20
     env:
-      COLLABORATE_DATABASE_URL: mysql://root@127.0.0.1:3306/collaborate_test?serverVersion=10.11.0-MariaDB
+      COLLABORATE_DATABASE_URL: mysql://root@127.0.0.1:3306/collaborate_test?serverVersion=11.4.0-MariaDB
       DRUPAL_DATABASE_URL: mysql://root@127.0.0.1:3306/collaborate_drupal
-      FRANKENPHP_VERSION: v1.13.4
       FRANKENPHP: /usr/local/bin/frankenphp
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -275,6 +290,8 @@ jobs:
       - name: Pin Drupal
         run: composer require --no-update --working-dir=tests/Application/Drupal "drupal/core-recommended:${{ matrix.drupal }}" "drupal/core-composer-scaffold:${{ matrix.drupal }}"
       - run: make drupal-install
+      # Mago on the module, against the site's Drupal: the issues of mago.drupal-baseline.toml are known.
+      - run: make drupal-quality
       # The module's assets are committed: a partial changed without `make drupal-assets` fails here.
       - name: The module's built assets are current
         run: make drupal-assets && git diff --exit-code drupal/css assets/vendor

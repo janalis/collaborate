@@ -88,10 +88,12 @@ final class DrupalWiringPass implements CompilerPassInterface
         $definition->setMethodCalls($calls);
         $tags = $definition->getTags();
         foreach (self::TAGS as $symfony => $drupal) {
-            if (isset($tags[$symfony])) {
-                $tags[$drupal] = $tags[$symfony];
-                unset($tags[$symfony]);
+            if (!isset($tags[$symfony])) {
+                continue;
             }
+
+            $tags[$drupal] = $tags[$symfony];
+            unset($tags[$symfony]);
         }
         // Monolog's channels and the kernel's resets mean nothing to Drupal's container.
         unset($tags['monolog.logger'], $tags['kernel.reset'], $tags['controller.service_arguments']);

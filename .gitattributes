@@ -11,6 +11,8 @@
 /docs/ export-ignore
 /infection.json5.dist export-ignore
 /mago.toml export-ignore
+/mago.drupal.toml export-ignore
+/mago.drupal-baseline.toml export-ignore
 /Makefile export-ignore
 /package-lock.json export-ignore
 /package.json export-ignore

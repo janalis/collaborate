@@ -9,7 +9,9 @@ use Janalis\Collaborate\Hub\Transport\HubTransportInterface;
 use Janalis\Collaborate\Hub\Transport\PresenceProbeInterface;
 use Janalis\Collaborate\Hub\Transport\PublishFailedException;
 use Janalis\Collaborate\Hub\Transport\Subscription;
+use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Mercure\HubInterface;
 use Symfony\Component\Mercure\Jwt\Grant;
@@ -30,6 +32,7 @@ final readonly class MercureTransport implements HubTransportInterface, Presence
         private ?LoggerInterface $logger = null,
         private ?HttpClientInterface $client = null,
         private int $subscriptionTtl = 300,
+        private ClockInterface $clock = new NativeClock(),
     ) {}
 
     public function publish(array $notices): void
@@ -52,7 +55,7 @@ final readonly class MercureTransport implements HubTransportInterface, Presence
             Subscription::MERCURE,
             $this->hub->getPublicUrl(),
             $factory->create([new Grant([Grant::ACTION_SUBSCRIBE], $session->topics)], [
-                'exp' => new \DateTimeImmutable()->add(new \DateInterval('PT' . $this->subscriptionTtl . 'S')),
+                'exp' => $this->clock->now()->add(new \DateInterval('PT' . $this->subscriptionTtl . 'S')),
             ]),
             // Mercure carries no message from the page: it posts its cursor events.
             false,

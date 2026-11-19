@@ -10,8 +10,10 @@ use Janalis\Collaborate\Hub\HubPublisher;
 use Janalis\Collaborate\Hub\Notice;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Security\CurrentUserInterface;
+use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -40,6 +42,7 @@ final readonly class DraftController
         private string $role = 'ROLE_ADMIN',
         private ?RateLimiterFactoryInterface $limiter = null,
         private LoggerInterface $logger = new NullLogger(),
+        private ClockInterface $clock = new NativeClock(),
     ) {}
 
     public function handle(string $action, Request $request): Response
@@ -64,7 +67,11 @@ final readonly class DraftController
                 'Cache-Control' => 'no-store',
             ]);
         }
-        $scope = $this->access->verify(\is_string($data['grant'] ?? null) ? $data['grant'] : '', $user, time());
+        $scope = $this->access->verify(
+            \is_string($data['grant'] ?? null) ? $data['grant'] : '',
+            $user,
+            $this->clock->now()->getTimestamp(),
+        );
         // The session stays open until Symfony writes the security token on
         // kernel.response. Hub publishes wait for kernel.terminate.
         $id = $scope['id'];
@@ -114,14 +121,13 @@ final readonly class DraftController
         };
         if (\in_array($action, ['append', 'discard', 'reconcile'], true)) {
             // No draft values in notifications: every read rechecks current authorization.
-            $notice = ['channel' => 'draft', 'draft' => $id, 'kind' => $action];
-            // An append names its place in the journal: a page that has read it already, its author's
-            // included, replays nothing for it.
-            if ('append' === $action && \is_int($event['generation'] ?? null) && \is_int($result['revision'] ?? null)) {
-                $notice += ['generation' => $event['generation'], 'revision' => $result['revision']];
-            }
+            $place = 'append' === $action
+            && \is_int($event['generation'] ?? null)
+            && \is_int($result['revision'] ?? null)
+                ? ['generation' => $event['generation'], 'revision' => $result['revision']]
+                : [];
             $this->publisher->defer(
-                new Notice($this->access->topic($id), json_encode($notice, \JSON_THROW_ON_ERROR)),
+                Notice::draft($this->access->topic($id), $id, $action, $place),
                 'Collaborate draft hub publication failed.',
             );
         }

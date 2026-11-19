@@ -1,3 +1,4 @@
+// @ts-check
 // The topics a user is notified of (templates/notifications/_topics.html.twig): a switch each, which posts its
 // change at once with the topics' CSRF token. The switch moves before the server answers, and moves back when
 // it refused (a mandatory topic, a session gone).

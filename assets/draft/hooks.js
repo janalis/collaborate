@@ -1,3 +1,4 @@
+// @ts-check
 // What the host runs on a collection row this bundle draws: a row a peer added arrives as the bare
 // prototype, without the widgets the host builds on page load (a rich-text editor, say).
 const rowInitializers = new Set();

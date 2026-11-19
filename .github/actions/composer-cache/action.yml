@@ -1,0 +1,29 @@
+name: Composer cache
+description: >-
+  Composer's download cache, kept between runs: before `composer install` or `composer update`, once PHP is set
+  up. Each job keeps its own, keyed on what it resolves from.
+inputs:
+  key:
+    description: What tells this job's downloads apart (its name, its matrix cell), before the hash of the files.
+    required: true
+  files:
+    description: The files whose hash completes the key.
+    default: composer.json composer.lock
+runs:
+  using: composite
+  steps:
+    - id: dir
+      shell: bash
+      run: echo "path=$(composer config --global cache-files-dir)" >> "$GITHUB_OUTPUT"
+    - id: hash
+      shell: bash
+      env:
+        FILES: ${{ inputs.files }}
+      run: |
+        read -ra paths <<< "$FILES"
+        echo "hash=$(cat "${paths[@]}" | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.dir.outputs.path }}
+        key: composer-${{ runner.os }}-${{ inputs.key }}-${{ steps.hash.outputs.hash }}
+        restore-keys: composer-${{ runner.os }}-${{ inputs.key }}-

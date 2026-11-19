@@ -74,6 +74,7 @@ final class NotificationRuntime implements RuntimeExtensionInterface
             'unread' => $this->urls->generate('collaborate_notifications_change', ['action' => 'unread']),
             'clear' => $this->urls->generate('collaborate_notifications_change', ['action' => 'clear']),
             'topicsToken' => $this->csrf->getToken(NotificationController::TOPICS_CSRF_TOKEN_ID)->getValue(),
+            'clearToken' => $this->csrf->getToken(NotificationController::CLEAR_CSRF_TOKEN_ID)->getValue(),
             'maxCount' => $this->maxCount,
             'push' => $this->push && null !== $this->publicKey
                 ? [

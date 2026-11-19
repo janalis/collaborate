@@ -60,6 +60,8 @@ use Janalis\Collaborate\Twig\NotificationRuntime;
 use Janalis\Collaborate\Updates\UpdatesSubscriber;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * Notifications in the library: the bell of every page, the page of them all, the topics a user keeps, the
@@ -362,6 +364,32 @@ final class NotificationsApplicationTest extends NotificationsTestCase
         }
     }
 
+    /** A router that matches paths whatever their case (Drupal's) hands the controllers another spelling. */
+    public function testAnActionSpelledOtherwiseIsRefusedBeforeItChangesAnything(): void
+    {
+        $this->signIn('alice');
+        $this->share(self::ALICE, 'One');
+        $notifications = static::getContainer()->get(NotificationController::class);
+        self::assertInstanceOf(NotificationController::class, $notifications);
+        $pushes = static::getContainer()->get(PushController::class);
+        self::assertInstanceOf(PushController::class, $pushes);
+        $refused = [
+            static fn() => $notifications->change(new Request(), 'CLEAR'),
+            static fn() => $notifications->change(new Request(), 'Clear'),
+            static fn() => $notifications->change(new Request(), 'delete'),
+            static fn() => $notifications->choose(new Request(), 'shares', 'UNSUBSCRIBE'),
+            static fn() => $pushes->subscription(new Request(), 'UNSUBSCRIBE'),
+        ];
+        foreach ($refused as $index => $call) {
+            try {
+                $call();
+                self::fail(\sprintf('Action %d was carried out.', $index));
+            } catch (NotFoundHttpException) {
+            }
+        }
+        self::assertCount(1, $this->rows(self::ALICE));
+    }
+
     public function testAUserReadsUnreadsAndClearsTheirOwnNotificationsAlone(): void
     {
         $this->signIn('alice');
@@ -395,8 +423,20 @@ final class NotificationsApplicationTest extends NotificationsTestCase
         self::assertEquals($readAt, $this->rows(self::ALICE)[0]->readAt);
         self::assertSame(['unread' => 1, 'total' => 2], $this->change('unread', (string) $two->id));
         self::assertSame(['unread' => 2, 'total' => 2], $this->change('unread', ''));
-        self::assertSame(['unread' => 1, 'total' => 1], $this->change('clear', (string) $one->id));
-        self::assertSame(['unread' => 0, 'total' => 0], $this->change('clear'));
+        // Clear deletes past bringing back: it takes the page's token, as a header or a field.
+        $token = (string) self::bell($this->open('/admin/notifications/all'))['clearToken'];
+        $this->client->request('POST', '/admin/notifications/clear');
+        self::assertResponseStatusCodeSame(403);
+        $this->client->request('POST', '/admin/notifications/clear', server: ['HTTP_X_CSRF_TOKEN' => 'forged']);
+        self::assertResponseStatusCodeSame(403);
+        self::assertCount(2, $this->rows(self::ALICE));
+        self::assertSame(['unread' => 1, 'total' => 1], $this->change('clear', (string) $one->id, $token));
+        $this->client->request('POST', '/admin/notifications/clear', ['_token' => $token]);
+        self::assertResponseIsSuccessful();
+        self::assertSame(
+            ['unread' => 0, 'total' => 0],
+            json_decode((string) $this->client->getResponse()->getContent(), true, flags: \JSON_THROW_ON_ERROR),
+        );
         self::assertCount(1, $this->rows());
         $this->client->request('POST', '/admin/notifications/read', ['id' => ['1']]);
         self::assertResponseStatusCodeSame(400);
@@ -720,9 +760,14 @@ final class NotificationsApplicationTest extends NotificationsTestCase
     }
 
     /** @return array<string, mixed> */
-    private function change(string $action, ?string $id = null): array
+    private function change(string $action, ?string $id = null, #[\SensitiveParameter] ?string $token = null): array
     {
-        $this->client->request('POST', '/admin/notifications/' . $action, null === $id ? [] : ['id' => $id]);
+        $this->client->request(
+            'POST',
+            '/admin/notifications/' . $action,
+            null === $id ? [] : ['id' => $id],
+            server: null === $token ? [] : ['HTTP_X_CSRF_TOKEN' => $token],
+        );
         self::assertResponseIsSuccessful();
 
         /** @var array<string, mixed> */

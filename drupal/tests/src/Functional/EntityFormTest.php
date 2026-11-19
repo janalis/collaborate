@@ -53,6 +53,44 @@ final class EntityFormTest extends BrowserTestBase
         $this->assertSession()->elementExists('css', 'script[type="importmap"]');
     }
 
+    public function testAnEntityAutocompleteStartsFromTheTextItShows(): void
+    {
+        $author = $this->drupalCreateUser([], 'writer');
+        $node = $this->drupalCreateNode(['type' => 'article', 'title' => 'Authored', 'uid' => $author->id()]);
+        // Who may administer nodes sees "Authored by", an entity autocomplete.
+        $this->drupalLogin($this->drupalCreateUser([
+            'use collaborate',
+            'edit any article content',
+            'access content',
+            'administer nodes',
+        ]));
+        $this->drupalGet('node/' . $node->id() . '/edit');
+
+        $field = $this->sharedFields()['uid[0][target_id]'];
+        self::assertSame(\sprintf('writer (%s)', $author->id()), $field['initial']);
+        self::assertSame('value', $field['type']);
+    }
+
+    /** @return array<string, array{initial: mixed, type: string}> the fields the grant of the page's shared form names */
+    private function sharedFields(): array
+    {
+        $form = $this->assertSession()->elementExists('css', 'form[data-collaborate]');
+        /** @var array{grant: string} $configuration */
+        $configuration = json_decode(
+            (string) $form->getAttribute('data-collaborate'),
+            true,
+            flags: \JSON_THROW_ON_ERROR,
+        );
+        /** @var array{fields: array<string, array{initial: mixed, type: string}>} $scope */
+        $scope = json_decode(
+            (string) base64_decode(explode('.', $configuration['grant'])[0], true),
+            true,
+            flags: \JSON_THROW_ON_ERROR,
+        );
+
+        return $scope['fields'];
+    }
+
     public function testAPagesRefreshIsAnsweredWithItsConfigurationAlone(): void
     {
         $node = $this->drupalCreateNode(['type' => 'article', 'title' => 'Refreshed']);
@@ -78,10 +116,16 @@ final class EntityFormTest extends BrowserTestBase
             'cardinality' => FieldStorageConfig::CARDINALITY_UNLIMITED,
         ])->save();
         FieldConfig::create(['field_name' => 'field_notes', 'entity_type' => 'node', 'bundle' => 'article'])->save();
-        $this->container->get('entity_display.repository')->getFormDisplay('node', 'article')
+        $this->container
+            ->get('entity_display.repository')
+            ->getFormDisplay('node', 'article')
             ->setComponent('field_notes', ['type' => 'string_textfield'])
             ->save();
-        $node = $this->drupalCreateNode(['type' => 'article', 'title' => 'Notes', 'field_notes' => ['First', 'Second']]);
+        $node = $this->drupalCreateNode([
+            'type' => 'article',
+            'title' => 'Notes',
+            'field_notes' => ['First', 'Second'],
+        ]);
         $this->drupalLogin($this->drupalCreateUser(['use collaborate', 'edit any article content', 'access content']));
         $this->drupalGet('node/' . $node->id() . '/edit');
 
@@ -91,7 +135,11 @@ final class EntityFormTest extends BrowserTestBase
         $this->assertSession()->fieldValueEquals('field_notes[p1][value]', 'Second');
         $this->assertSession()->fieldExists('field_notes[t2][value]');
         $form = $this->assertSession()->elementExists('css', 'form[data-collaborate]');
-        $configuration = json_decode((string) $form->getAttribute('data-collaborate'), true, flags: \JSON_THROW_ON_ERROR);
+        $configuration = json_decode(
+            (string) $form->getAttribute('data-collaborate'),
+            true,
+            flags: \JSON_THROW_ON_ERROR,
+        );
         $fields = json_decode(
             (string) base64_decode(explode('.', $configuration['grant'])[0], true),
             true,
@@ -111,7 +159,10 @@ final class EntityFormTest extends BrowserTestBase
         ], 'Save');
 
         $saved = $this->container->get('entity_type.manager')->getStorage('node')->loadUnchanged($node->id());
-        self::assertSame(['First edited', 'Second', 'Third'], array_column($saved->get('field_notes')->getValue(), 'value'));
+        self::assertSame(
+            ['First edited', 'Second', 'Third'],
+            array_column($saved->get('field_notes')->getValue(), 'value'),
+        );
     }
 
     public function testAnEditorWhoMayNotCollaborateEditsWithoutADraft(): void

@@ -7,8 +7,8 @@ namespace Drupal\collaborate\Bridge;
 use Drupal\Core\Access\CsrfTokenGenerator;
 use Drupal\Core\Entity\ContentEntityFormInterface;
 use Drupal\Core\Entity\ContentEntityInterface;
-use Drupal\Core\Entity\Entity\EntityFormDisplay;
 use Drupal\Core\Entity\Element\EntityAutocomplete;
+use Drupal\Core\Entity\Entity\EntityFormDisplay;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormBuilderInterface;
@@ -129,9 +129,11 @@ final class EntityForms
         // First of the validators: a draft that changed meanwhile sends the editor back before the others run.
         array_unshift($form['#validate'], [self::class, 'onValidate']);
         foreach (['submit', 'publish', 'unpublish'] as $action) {
-            if (isset($form['actions'][$action]['#submit'])) {
-                $form['actions'][$action]['#submit'][] = [self::class, 'onSubmit'];
+            if (!isset($form['actions'][$action]['#submit'])) {
+                continue;
             }
+
+            $form['actions'][$action]['#submit'][] = [self::class, 'onSubmit'];
         }
         // The bar's Save stands for the form's own, not for the first button of the form (an image's Upload).
         if (isset($form['actions']['submit'])) {
@@ -272,7 +274,7 @@ final class EntityForms
         }
         $form = $this->entities->getFormObject($entity->getEntityTypeId(), $object->getOperation());
         $form->setEntity($fresh);
-        $state = (new FormState())->setFormObject($form)->set(self::RECORD, true);
+        $state = new FormState()->setFormObject($form)->set(self::RECORD, true);
         // Its base form's alterations too (`hook_form_node_form_alter`).
         $id = $this->builder->getFormId($form, $state);
         $built = $this->builder->retrieveForm($id, $state);
@@ -305,7 +307,10 @@ final class EntityForms
                 : self::typed(($submitted[$key] ?? $field)['initial'], $field['initial']);
         }
         foreach ($values as $key => $value) {
-            if ('collection' !== ($fields[$key] ?? $submitted[$key])['type'] || !str_ends_with($key, '[__collection__]')) {
+            if (
+                'collection' !== ($fields[$key] ?? $submitted[$key])['type']
+                || !str_ends_with($key, '[__collection__]')
+            ) {
                 continue;
             }
             $path = substr($key, 0, -\strlen('[__collection__]'));
@@ -319,11 +324,22 @@ final class EntityForms
             }
             $values[$key] = $saved;
             foreach ($values as $member => $state) {
-                if (str_starts_with($member, $path . '[@') && 'member' === ($fields[$member] ?? $submitted[$member])['type']) {
-                    $entry = substr($member, \strlen($path) + 2, -1);
-                    $order = array_search($entry, $saved, true);
-                    $values[$member] = ['alive' => false !== $order, 'order' => false === $order ? 0 : $order + 1, 'recordId' => null];
+                if (
+                    !(
+                        str_starts_with($member, $path . '[@')
+                        && 'member' === ($fields[$member] ?? $submitted[$member])['type']
+                    )
+                ) {
+                    continue;
                 }
+
+                $entry = substr($member, \strlen($path) + 2, -1);
+                $order = array_search($entry, $saved, true);
+                $values[$member] = [
+                    'alive' => false !== $order,
+                    'order' => false === $order ? 0 : $order + 1,
+                    'recordId' => null,
+                ];
             }
         }
 
@@ -544,8 +560,16 @@ final class EntityForms
             if (null !== $this->form) {
                 $state->setFormObject($this->form);
             }
-            $subform = ['#parents' => [...ItemKeys::segments($path), '__name__', 'subform'], '#array_parents' => [], '#tree' => true];
-            EntityFormDisplay::collectRenderDisplay($paragraph, $paragraphs['mode'])->buildForm($paragraph, $subform, $state);
+            $subform = [
+                '#parents' => [...ItemKeys::segments($path), '__name__', 'subform'],
+                '#array_parents' => [],
+                '#tree' => true,
+            ];
+            EntityFormDisplay::collectRenderDisplay($paragraph, $paragraphs['mode'])->buildForm(
+                $paragraph,
+                $subform,
+                $state,
+            );
             $built = $this->builder->doBuildForm('collaborate_paragraph_' . $type, $subform, $state);
             ItemKeys::rename($built);
             $fields += $this->fields($built);
@@ -608,19 +632,26 @@ final class EntityForms
             'type' => 'value',
             'initial' => match (true) {
                 $multiple => array_values((array) $value),
-                // An entity autocomplete shows its entities as "label (id), label (id)", none as empty text.
-                'entity_autocomplete' === $type => \is_array($value) || $value instanceof EntityInterface
-                    ? EntityAutocomplete::getEntityLabels(array_filter(
-                        \is_array($value) ? $value : [$value],
-                        static fn(mixed $entity): bool => $entity instanceof EntityInterface,
-                    ))
-                    : (\is_scalar($value) ? (string) $value : ''),
+                'entity_autocomplete' === $type => self::autocompleteText($value),
                 // A weight is a number: the form submits its text.
                 'weight' === $type => is_numeric($value) ? (int) $value : 0,
                 default => self::value($value),
             },
             'formName' => $key,
         ]];
+    }
+
+    /** What an entity autocomplete shows: its entities as "label (id), label (id)", none as empty text. */
+    private static function autocompleteText(mixed $value): string
+    {
+        if (\is_array($value) || $value instanceof EntityInterface) {
+            return EntityAutocomplete::getEntityLabels(array_filter(
+                \is_array($value) ? $value : [$value],
+                static fn(mixed $entity): bool => $entity instanceof EntityInterface,
+            ));
+        }
+
+        return \is_scalar($value) ? (string) $value : '';
     }
 
     private static function value(mixed $value): mixed

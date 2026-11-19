@@ -11,15 +11,12 @@ use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Doctrine\RecordIdentifier;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
-use Janalis\Collaborate\Draft\DraftSave;
 use Janalis\Collaborate\Draft\FieldKeyResolver;
 use Janalis\Collaborate\Draft\FieldKeyResolverInterface;
 use Janalis\Collaborate\Draft\FormDraft;
 use Janalis\Collaborate\Draft\RecordIdentifierInterface;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Security\CurrentUserInterface;
-use Psr\Log\LoggerInterface;
-use Psr\Log\NullLogger;
 use Symfony\Component\AssetMapper\ImportMap\ImportMapConfigReader;
 use Symfony\Component\Form\AbstractTypeExtension;
 use Symfony\Component\Form\DataTransformerInterface;
@@ -33,10 +30,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\PropertyAccess\PropertyAccess;
 use Symfony\Component\PropertyAccess\PropertyPathInterface;
-use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
-use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
-use Symfony\Contracts\Translation\TranslatorInterface;
 
 /**
  * Shares the root form of an edit or new page as a draft: it describes the form's editable fields (the
@@ -78,10 +72,8 @@ final class CollaborateFormExtension extends AbstractTypeExtension
     /** @var list<string> */
     private array $sensitive;
 
-    /** The draft of the root form, whatever builds it: its scope, its configuration, its locked save. */
-    private FormDraft $drafts;
-
     /**
+     * @param FormDraft $drafts the draft of the root form, whatever builds it: its scope, its configuration, its locked save
      * @param Options $options the `collaborate.drafts` configuration
      * @param list<class-string> $ownerMappers the data mappers of compound fields that map their parent's property
      *   to an inner control themselves (EasyAdmin's autocomplete): their children read the parent's value
@@ -89,21 +81,17 @@ final class CollaborateFormExtension extends AbstractTypeExtension
     public function __construct(
         private readonly DraftAccess $access,
         private readonly DraftJournal $journal,
-        DraftSave $save,
+        private readonly FormDraft $drafts,
         private readonly ?FormContextInterface $context,
         private readonly RequestStack $requests,
         private readonly CurrentUserInterface $security,
         private readonly CollaboratorProviderInterface $collaborators,
         private readonly DraftAccessCheckerInterface $checker,
-        UrlGeneratorInterface $urls,
-        CsrfTokenManagerInterface $csrf,
-        TranslatorInterface $translator,
         private readonly RecordIdentifierInterface $identifier = new RecordIdentifier(),
         private readonly FieldKeyResolverInterface $keys = new FieldKeyResolver(),
         private readonly ?ImportMapConfigReader $importMap = null,
         private readonly string $role = 'ROLE_ADMIN',
         array $options = [],
-        LoggerInterface $logger = new NullLogger(),
         private readonly array $ownerMappers = [],
     ) {
         $this->lists = new \WeakMap();
@@ -116,7 +104,6 @@ final class CollaborateFormExtension extends AbstractTypeExtension
             '',
             $name,
         )), $options['sensitive_fields'] ?? CollaborateBundle::SENSITIVE_FIELDS);
-        $this->drafts = new FormDraft($access, $save, $collaborators, $urls, $csrf, $translator, $logger, $options);
     }
 
     public static function getExtendedTypes(): iterable

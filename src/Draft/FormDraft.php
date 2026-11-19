@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Janalis\Collaborate\Draft;
 
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
+use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
@@ -96,6 +98,7 @@ final readonly class FormDraft
         private TranslatorInterface $translator,
         private LoggerInterface $logger = new NullLogger(),
         array $options = [],
+        private ClockInterface $clock = new NativeClock(),
     ) {
         $this->maxUpdateBytes = $options['max_update_bytes'] ?? 262_144;
         $this->client = [
@@ -159,7 +162,7 @@ final readonly class FormDraft
         $grant = $this->access->issue(
             $scope,
             (int) $this->collaborators->id($user),
-            time(),
+            $this->clock->now()->getTimestamp(),
             $this->collaborators->authorization($user),
         );
         // A page sends its full grant at least once, with an update when the server has forgotten it.
@@ -223,7 +226,11 @@ final readonly class FormDraft
             return;
         }
         $grant = $request->request->get('_collaborate_grant', '');
-        $authorized = $this->access->verify(\is_string($grant) ? $grant : '', $user, time());
+        $authorized = $this->access->verify(
+            \is_string($grant) ? $grant : '',
+            $user,
+            $this->clock->now()->getTimestamp(),
+        );
         if ($scope['id'] !== $authorized['id']) {
             throw new AccessDeniedHttpException('Collaborate grant belongs to another form.');
         }

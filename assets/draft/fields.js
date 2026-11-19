@@ -1,3 +1,4 @@
+// @ts-check
 import { Model, ModelLivePosition } from 'ckeditor5';
 import { bridge } from '../bridge.js';
 import { OperationBuffer } from '../ckeditor5/operation-buffer.js';
@@ -15,7 +16,7 @@ export function initializeText(session, control, name, state) {
     writer.append(paragraph, model.document.getRoot());
     if (state.initial) writer.insertText(state.initial, paragraph, 0);
   });
-  const paragraph = model.document.getRoot().getChild(0);
+  const paragraph = /** @type {any} */ (model.document.getRoot().getChild(0));
   const value = () => Array.from(paragraph.getChildren(), (node) => node.data).join('');
   const buffer = new OperationBuffer(model, () => session.schedule());
   const receive = buffer.receive.bind(buffer);
@@ -57,7 +58,7 @@ export function initializeText(session, control, name, state) {
       if (inserted) writer.insertText(inserted, paragraph, prefix);
     });
   };
-  buffer.adopt = (text) => {
+  /** @type {any} */ (buffer).adopt = (text) => {
     control.value = text;
     input();
   };
@@ -87,6 +88,10 @@ export function initializeText(session, control, name, state) {
 /**
  * A value field's model: one version, at most one unsent value, which replaces whatever a peer sent.
  * `show(event, pending)` renders a received value; `drops(event)` names a received value that cancels the unsent one.
+ *
+ * @param {any} session
+ * @param {(event: any, pending: any) => void} show
+ * @param {(event: any) => boolean} [drops]
  */
 export function valueAdapter(session, show, drops = () => false) {
   let version = 0;

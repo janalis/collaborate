@@ -207,6 +207,9 @@ describe('helpers', () => {
     expect(fetcher.mock.calls[0][1].body.toString()).toBe('id=7');
     await postChange('/read', null, fetcher);
     expect(fetcher.mock.calls[1][1].body.toString()).toBe('');
+    expect(fetcher.mock.calls[1][1].headers).not.toHaveProperty('X-CSRF-Token');
+    await postChange('/clear', null, fetcher, 'clear-token');
+    expect(fetcher.mock.calls[2][1].headers['X-CSRF-Token']).toBe('clear-token');
     expect(await postChange('/read', null, async () => new Response('', { status: 403 }))).toBeNull();
     expect(await postChange('/read', null, async () => redirected(counts(1)))).toBeNull();
     expect(await postChange('/read', null, async () => Response.json({ unread: 'x' }))).toBeNull();

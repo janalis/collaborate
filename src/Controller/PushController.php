@@ -83,6 +83,9 @@ final readonly class PushController
         if (!$this->enabled || !$this->access->enabled) {
             throw new NotFoundHttpException('Web push is off.');
         }
+        if (!\in_array($action, ['subscribe', 'unsubscribe'], true)) {
+            throw new NotFoundHttpException(\sprintf('No web push action "%s".', $action));
+        }
         $recipient = $this->access->recipient() ?? throw new AccessDeniedException(
             'Web push requires a signed-in user.',
         );

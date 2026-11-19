@@ -1,3 +1,4 @@
+// @ts-check
 import { MergeOperation, MoveOperation, NoOperation, transformOperationSets } from 'ckeditor5';
 
 /** Optimistic client of an append-only, compare-and-swap operation journal. */
@@ -85,11 +86,13 @@ export class OperationBuffer {
           // CKEditor collapses matching merges to no-ops. Their empty element
           // can still occupy different graveyard positions; later undo uses
           // those positions. Align it with the accepted journal before replay.
-          result.operationsA[0] = new MoveOperation(
-            local.graveyardPosition,
-            1,
-            accepted.graveyardPosition.getTransformedByOperation(local),
-            result.operationsA[0].baseVersion
+          result.operationsA[0] = /** @type {any} */ (
+            new MoveOperation(
+              local.graveyardPosition,
+              1,
+              accepted.graveyardPosition.getTransformedByOperation(local),
+              result.operationsA[0].baseVersion
+            )
           );
         }
         remote = result.operationsA;

@@ -1,3 +1,4 @@
+// @ts-check
 import { bridge } from '../bridge.js';
 import { entriesOf, entrySelector, parseEntry, placeholderOf, prototypeOf } from '../markup.js';
 import { valueAdapter } from './fields.js';
@@ -246,7 +247,7 @@ export function initializeCollections(session) {
         value: initial || state.value || state.initial,
         change(value) {
           this.value = value;
-          this.send(value);
+          /** @type {any} */ (this).send(value);
         },
         adopt(value) {
           this.change(value);

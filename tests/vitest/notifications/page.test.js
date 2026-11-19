@@ -1,6 +1,6 @@
 import { confirmed, initPage, MARGIN, parseRows } from '../../../assets/notifications/page.js';
 
-const SETTINGS = { read: '/n/read', unread: '/n/unread', clear: '/n/clear', maxCount: 99 };
+const SETTINGS = { read: '/n/read', unread: '/n/unread', clear: '/n/clear', clearToken: 'clear-token', maxCount: 99 };
 
 /** A row, as `_rows.html.twig` renders it. */
 function row({ id, unread = true, url = null }) {
@@ -215,6 +215,10 @@ describe('one row', () => {
     button(1, 'clear').click();
     await vi.waitFor(() => expect(rowOf(1)).toBeNull());
     expect(document.activeElement).toBe(button(3, 'clear'));
+    // Clearing alone carries the token.
+    const headers = (path) => fetcher.mock.calls.find(([url]) => url === path)[1].headers;
+    expect(headers('/n/clear')['X-CSRF-Token']).toBe('clear-token');
+    expect(headers('/n/read')).not.toHaveProperty('X-CSRF-Token');
     expect(changed.at(-1)).toEqual({ unread: 0, total: null, origin: 'page', heard: false });
     // Cleared without the focus on it.
     heading().focus();

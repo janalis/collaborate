@@ -165,8 +165,11 @@ final class Server
         );
     }
 
-    /** @throws \RuntimeException */
-    /** @param \Closure(ConnectionInterface): void $accept */
+    /**
+     * @param \Closure(ConnectionInterface): void $accept
+     *
+     * @throws \RuntimeException
+     */
     private function listen(string $address, \Closure $accept): ServerInterface
     {
         $path = ServerConfig::unixPath($address);

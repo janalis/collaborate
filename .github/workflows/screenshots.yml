@@ -22,6 +22,7 @@ on:
       - "playwright.config.js"
       - "playwright.screenshots.config.js"
       - ".github/actions/browser-setup/**"
+      - ".github/actions/composer-cache/**"
       - ".github/workflows/screenshots.yml"
   workflow_dispatch:
 permissions:
@@ -48,9 +49,8 @@ jobs:
           --health-cmd="healthcheck.sh --connect --innodb_initialized"
           --health-interval=5s --health-timeout=5s --health-retries=20
     env:
-      COLLABORATE_DATABASE_URL: mysql://root@127.0.0.1:3306/collaborate_test?serverVersion=10.11.0-MariaDB
+      COLLABORATE_DATABASE_URL: mysql://root@127.0.0.1:3306/collaborate_test?serverVersion=11.4.0-MariaDB
       DRUPAL_DATABASE_URL: mysql://root@127.0.0.1:3306/collaborate_drupal
-      FRANKENPHP_VERSION: v1.13.4
       FRANKENPHP: /usr/local/bin/frankenphp
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

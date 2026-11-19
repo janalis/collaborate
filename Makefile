@@ -25,7 +25,7 @@ EDITORCONFIG ?= go run github.com/editorconfig-checker/editorconfig-checker/v3/c
 ACTIONLINT ?= go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 BUMP ?= patch
 
-.PHONY: help install fmt fmt-check lint analyze validate test test-unit test-functional test-integration test-js lint-js coverage infection app-setup e2e screenshots verify clean
+.PHONY: help install fmt fmt-check lint analyze validate test test-unit test-functional test-integration test-js lint-js coverage coverage-php infection app-setup e2e screenshots verify clean
 .PHONY: docs docs-dev lint-md fmt-md lint-editorconfig lint-actions test-tools release-notes
 .PHONY: drupal-assets drupal-install drupal-quality drupal-test drupal-e2e
 
@@ -71,10 +71,12 @@ test-js: ## Run the Vitest suite
 lint-js: ## Lint the JavaScript (Biome) and type-check the modules that opt in (TypeScript)
 	$(NPM) run lint
 
-coverage: ## Require 100% coverage: PHPUnit (pcov, src/ and tools/, every suite) and Vitest (thresholds)
+coverage: coverage-php ## Require 100% coverage: PHPUnit (pcov, src/ and tools/, every suite) and Vitest (thresholds)
+	$(NPM) run test:coverage
+
+coverage-php: ## Require 100% PHP coverage: PHPUnit with pcov, src/ and tools/, every suite
 	$(PHP) -d pcov.enabled=1 -d pcov.directory=. vendor/bin/phpunit --coverage-text --coverage-html var/coverage --coverage-clover var/coverage/clover.xml $(PHPUNIT_ARGS)
 	$(PHP) tests/bin/check-coverage.php var/coverage/clover.xml
-	$(NPM) run test:coverage
 
 infection: ## Mutation-test src/ against every PHPUnit suite (reports in var/infection/)
 	$(PHP) -d pcov.enabled=1 vendor/bin/infection --show-mutations=max $(ARGS)

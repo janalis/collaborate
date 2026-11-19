@@ -137,6 +137,7 @@ rebuilds the container, which the services read their options from.
 | Navigation top bar item, blocks | Who else is here, and the bell. Without Navigation, place the *Collaborate: who else is here* and *Collaborate: notifications* blocks in the administration theme's header. |
 | Queue worker `collaborate` | Writes the notifications and sends the web pushes, on cron or `drush queue:run collaborate`. |
 | Cron | Purges the drafts saved or abandoned long enough ago. |
+| Translations | The bundle's sentences go through `t()` in the `collaborate` context; one the site has not translated is read in the bundle's catalogue of the language (English and French ship), so a French site needs no import. A translation entered in Drupal wins. |
 | Drush | `collaborate:hub:serve`, `collaborate:purge`, `collaborate:push:setup`. |
 
 ## Multi-value fields

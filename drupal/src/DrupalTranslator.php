@@ -6,25 +6,39 @@ namespace Drupal\collaborate;
 
 use Drupal\Core\Language\LanguageManagerInterface;
 use Drupal\Core\StringTranslation\TranslationInterface;
+use Janalis\Collaborate\CollaborateBundle;
+use Symfony\Component\Yaml\Yaml;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
 /**
  * The bundle's sentences (domain `collaborate`, keyed by their English text), translated by Drupal in the
  * `collaborate` context. Drupal reads no `%name%` without an argument of that name: the scripts' placeholders pass
  * through, and the parameters a caller gives are filled here.
+ *
+ * A sentence Drupal has no translation of (it answers the sentence itself) is read in the bundle's own catalogue of
+ * the language (`translations/collaborate.<language>.yaml`), the language alone if the region has none: a site
+ * translates them without importing anything, and a translation entered in Drupal still wins.
  */
-final readonly class DrupalTranslator implements TranslatorInterface
+final class DrupalTranslator implements TranslatorInterface
 {
+    /** @var array<string, array<string, string>> the bundle's catalogues read, by language */
+    private array $catalogues = [];
+
     public function __construct(
-        private TranslationInterface $translation,
-        private LanguageManagerInterface $languages,
+        private readonly TranslationInterface $translation,
+        private readonly LanguageManagerInterface $languages,
+        private readonly ?string $directory = null,
     ) {}
 
     /** @param array<array-key, mixed> $parameters */
     public function trans(string $id, array $parameters = [], ?string $domain = null, ?string $locale = null): string
     {
-        $options = ['context' => $domain ?? 'collaborate'] + (null === $locale ? [] : ['langcode' => $locale]);
+        $context = $domain ?? 'collaborate';
+        $options = ['context' => $context] + (null === $locale ? [] : ['langcode' => $locale]);
         $translated = (string) $this->translation->translate($id, [], $options);
+        if ($translated === $id && 'collaborate' === $context) {
+            $translated = $this->catalogue($locale ?? $this->getLocale())[$id] ?? $id;
+        }
         $replacements = [];
         foreach ($parameters as $name => $value) {
             $replacements[(string) $name] = \is_scalar($value) || $value instanceof \Stringable ? (string) $value : '';
@@ -36,5 +50,31 @@ final readonly class DrupalTranslator implements TranslatorInterface
     public function getLocale(): string
     {
         return $this->languages->getCurrentLanguage()->getId();
+    }
+
+    /** @return array<string, string> the bundle's sentences in a language (`fr`, `fr-ca`), none for another */
+    private function catalogue(string $langcode): array
+    {
+        if (!isset($this->catalogues[$langcode])) {
+            $catalogue = [];
+            // A language code names a file: nothing but its letters, digits and dashes.
+            if (1 === preg_match('/^[a-z]{2,3}(?:-[a-z0-9]+)*$/iD', $langcode)) {
+                $directory =
+                    $this->directory
+                    ?? \dirname((string) new \ReflectionClass(CollaborateBundle::class)->getFileName(), 2)
+                        . '/translations';
+                foreach ([strtolower($langcode), strtolower(explode('-', $langcode)[0])] as $name) {
+                    $file = $directory . '/collaborate.' . $name . '.yaml';
+                    if (is_file($file)) {
+                        /** @var array<string, string> $catalogue the bundle's catalogues map sentences to sentences */
+                        $catalogue = Yaml::parseFile($file);
+                        break;
+                    }
+                }
+            }
+            $this->catalogues[$langcode] = $catalogue;
+        }
+
+        return $this->catalogues[$langcode];
     }
 }

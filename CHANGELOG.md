@@ -47,6 +47,10 @@ versions follow [Semantic Versioning](https://semver.org/).
   three callers share. A key derived from an association (another entity)
   still names no record.
 - Web push builds its HTTP client once, not on every push.
+- Drupal: a sentence of the bundle the site has not translated is read in
+  the bundle's catalogue of the language, so a French site shows the shared
+  draft's bar in French without importing anything; a translation entered
+  in Drupal still wins.
 
 ## [0.5.2] - 2026-11-19
 

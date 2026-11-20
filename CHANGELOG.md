@@ -35,7 +35,7 @@ versions follow [Semantic Versioning](https://semver.org/).
   map below; an empty array leaves any other map as it was.
 - Drupal: a shared rich-text field whose draft scripts fail to load gets
   Drupal's own editor instead of none, and one whose editor Drupal fails to
-  create, at once or once created, is left as Drupal leaves it: either way
+  create, at once or before it is ready, is left as Drupal leaves it: either way
   the form stops following its draft with its controls released, where it
   stayed inert, and the console says why. The draft loads apart from the
   editor plugin: a form whose draft follows no rich-text field keeps
@@ -92,6 +92,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A shared draft that stops while an editor is still awaited (access
+  denied, the draft full or discarded) releases the form's controls, which
+  stayed inert until the page was reloaded.
 - A new record whose identifier is a UUID or ULID (a Stringable `Uid`, or
   any value object) is recorded as created by its draft, and saved views of
   it are announced; `Draft\RecordId::string()` is the one conversion the

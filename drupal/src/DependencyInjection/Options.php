@@ -11,8 +11,9 @@ use Janalis\Collaborate\Bridge\Bridge;
 /**
  * The bundle's `collaborate` options under Drupal, read when the container is built, each layer over the one before:
  * the module's defaults, the `advanced` tree of its configuration (`collaborate.settings`), what the administration
- * form edits, settings.php's `$settings['collaborate']` (the hub, its secrets), then what the module itself decides
- * (the permissions as the roles, its own services). The bundle's configuration tree validates the result.
+ * form edits with the module's services, settings.php's `$settings['collaborate']` (the hub, its secrets, a service
+ * of the site's own), then what the module itself decides (its bridge and identity, the permissions as the roles).
+ * The bundle's configuration tree validates the result.
  */
 final class Options
 {

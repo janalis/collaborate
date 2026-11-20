@@ -174,6 +174,19 @@ test.each([
   expect(form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }))).toBe(false);
 });
 
+test('releases startup controls when the draft halts while an editor is still awaited', async () => {
+  const { session, form } = fixture('<input name="Record[name]"><textarea name="Record[body]"></textarea>', {
+    'Record[name]': { type: 'text', initial: '' },
+    'Record[body]': { type: 'rich', initial: 'Body' },
+  });
+  await session.ready;
+  expect(form.querySelector('input').hasAttribute('inert')).toBe(true);
+  session.halt('denied');
+  expect(form.querySelector('input').hasAttribute('inert')).toBe(false);
+  expect(form.querySelector('textarea').hasAttribute('inert')).toBe(false);
+  expect(form.dataset.collaborateState).toBe('denied');
+});
+
 test.each([429, 503])('retries a temporary Join failure (%s) while keeping startup locked', async (joinStatus) => {
   vi.useFakeTimers();
   let attempts = 0;

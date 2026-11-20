@@ -568,7 +568,6 @@ export class DraftSession {
   incompatible(cause, field, detail) {
     this.halt('incompatible');
     this.report(cause, field, detail);
-    this.releaseControls();
   }
 
   /**
@@ -601,11 +600,13 @@ export class DraftSession {
   }
 
   /**
-   * Stops following the draft: no more requests, stream or timers. The form keeps its collaborative Save guard.
+   * Stops following the draft: no more requests, stream or timers. The form keeps its collaborative Save guard, and
+   * its controls are released: an editor still awaited no longer holds them inert.
    *
    * @param {string} [status]
    */
   halt(status) {
+    this.releaseControls();
     this.stopped = true;
     if (status) this.setStatus(status);
     this.disconnect();
@@ -1237,7 +1238,6 @@ export class DraftSession {
 
   /** @param {string | number} id */
   recordCreated(id) {
-    this.releaseControls();
     this.halt('created');
     const name = this.peerName(this.state.savedBy);
     if (name) this.setStatus('created', name);

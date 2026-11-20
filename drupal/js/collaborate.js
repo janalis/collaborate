@@ -72,7 +72,7 @@ if (editors?.ckeditor5 && shared()) {
     // The field is attached once, whatever fails before: with the draft's editor, or Drupal's own.
     let attached = false;
     /** @param {any} settings */
-    const create = (settings) => {
+    const attachOnce = (settings) => {
       attached = true;
       attach.call(this, element, settings);
     };
@@ -80,7 +80,7 @@ if (editors?.ckeditor5 && shared()) {
       .then(
         async ({ sessionFor }) => {
           const session = sessionFor(element);
-          if (!session || session.stopped) return create(format);
+          if (!session || session.stopped) return attachOnce(format);
           let configuration;
           try {
             configuration = await session.editorConfiguration(element);
@@ -89,24 +89,28 @@ if (editors?.ckeditor5 && shared()) {
           } catch {
             // The form stops following its draft, its controls released, and the field takes Drupal's own editor.
             session.editorFailed();
-            return create(format);
+            return attachOnce(format);
           }
           // Another field's editor may have failed meanwhile.
-          if (!configuration.collaborate || session.stopped) return create(format);
+          if (!configuration.collaborate || session.stopped) return attachOnce(format);
           if (typeof configuration.initialData === 'string') element.value = configuration.initialData;
           const settings = format.editorSettings;
           // Drupal creates the editor without handing its promise back, and only logs a failure: the draft waits
-          // for the editor, its form inert, unless it is told. Drupal calls `create` before its attach returns.
+          // for the editor, its form inert, unless it is told. Drupal core calls `create` before its attach returns;
+          // a failure after the editor said it was ready leaves the draft as it is.
           const classic = page.CKEditor5?.editorClassic?.ClassicEditor;
-          const creator = classic?.create;
-          if (classic && creator)
+          const create = classic?.create;
+          const field = configuration.collaborate.field;
+          if (classic && create)
             classic.create = (...args) => {
-              const created = creator.apply(classic, args);
-              created.catch(() => session.editorFailed());
+              const created = create.apply(classic, args);
+              created.catch(() => {
+                if (!session.editorWaiters.get(field)?.ready) session.editorFailed();
+              });
               return created;
             };
           try {
-            create({
+            attachOnce({
               ...format,
               editorSettings: {
                 ...settings,
@@ -119,16 +123,16 @@ if (editors?.ckeditor5 && shared()) {
             session.editorFailed();
             throw error;
           } finally {
-            if (classic && creator) classic.create = creator;
+            if (classic && create) classic.create = create;
           }
         },
         // The drafts never loaded, which is said once: nothing follows the form.
-        () => create(format)
+        () => attachOnce(format)
       )
       // Drupal's own failure, said as Drupal would; a field that failed before its attach takes Drupal's editor.
       .catch((error) => {
         console.error(error);
-        if (!attached) create(format);
+        if (!attached) attachOnce(format);
       })
       .catch((error) => console.error(error));
     return true;

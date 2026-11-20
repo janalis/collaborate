@@ -14,6 +14,8 @@ function fakeSession(overrides = {}) {
     }),
     initializeControls: vi.fn(),
     scanCollections: vi.fn(),
+    // The editors the draft waits for, by field.
+    editorWaiters: new Map([['body', { ready: false }]]),
     ...overrides,
   };
   return session;
@@ -21,7 +23,7 @@ function fakeSession(overrides = {}) {
 
 /** A session whose draft follows the field in an editor. */
 const followed = (configuration = {}) =>
-  fakeSession({ editorConfiguration: vi.fn(async () => ({ collaborate: {}, ...configuration })) });
+  fakeSession({ editorConfiguration: vi.fn(async () => ({ collaborate: { field: 'body' }, ...configuration })) });
 
 let errors;
 let attach;
@@ -174,35 +176,52 @@ test('a field the draft does not follow takes Drupal’s editor at once, or once
   expect(session.editorFailed).toHaveBeenCalledOnce();
 });
 
-test("an editor Drupal fails to create once attached releases the form; one it creates leaves Drupal's class as it was", async () => {
+test("an editor Drupal fails to create once attached releases the form, and Drupal's class is left as it was", async () => {
   build();
-  let fails = true;
+  /** @type {Promise<unknown>[]} */
+  const creations = [];
+  let failure = new Error('A plugin failed.');
   const create = vi.fn(async () => {
-    if (fails) throw new Error('A plugin failed.');
+    if (failure) throw failure;
   });
   globalThis.CKEditor5.editorClassic = { ClassicEditor: { create } };
+  // Drupal's attach calls `create` before it returns, and logs a failure.
+  const drupal = () => {
+    const created = globalThis.CKEditor5.editorClassic.ClassicEditor.create('element', {});
+    creations.push(created);
+    created.catch(() => {});
+  };
+  /** Its creation settled: the module's handler, chained first, has run. */
+  const settled = () => creations.at(-1).catch(() => {});
+
   const session = await load({ session: followed() });
-  // Drupal's attach calls `create` and logs its failure.
-  attach.mockImplementation(() => {
-    globalThis.CKEditor5.editorClassic.ClassicEditor.create('element', {}).catch(() => {});
-  });
-
+  attach.mockImplementation(drupal);
   globalThis.Drupal.editors.ckeditor5.attach(body(), format);
-
-  await vi.waitFor(() => expect(session.editorFailed).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(creations).toHaveLength(1));
+  await settled();
+  expect(session.editorFailed).toHaveBeenCalledOnce();
   expect(create).toHaveBeenCalledWith('element', {});
   expect(globalThis.CKEditor5.editorClassic.ClassicEditor.create).toBe(create);
 
-  fails = false;
-  const other = await (async () => {
-    vi.resetModules();
-    return load({ session: followed() });
-  })();
-  attach.mockImplementation(() => globalThis.CKEditor5.editorClassic.ClassicEditor.create('element', {}));
+  // A failure once its editor said it was ready leaves the draft as it is.
+  vi.resetModules();
+  const ready = await load({ session: followed() });
+  ready.editorWaiters.get('body').ready = true;
+  attach.mockImplementation(drupal);
   globalThis.Drupal.editors.ckeditor5.attach(body(), format);
-  await vi.waitFor(() => expect(attach).toHaveBeenCalledOnce());
-  await Promise.resolve();
-  expect(other.editorFailed).not.toHaveBeenCalled();
+  await vi.waitFor(() => expect(creations).toHaveLength(2));
+  await settled();
+  expect(ready.editorFailed).not.toHaveBeenCalled();
+
+  // And so does a creation that succeeds.
+  failure = null;
+  vi.resetModules();
+  const created = await load({ session: followed() });
+  attach.mockImplementation(drupal);
+  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(creations).toHaveLength(3));
+  await settled();
+  expect(created.editorFailed).not.toHaveBeenCalled();
   expect(globalThis.CKEditor5.editorClassic.ClassicEditor.create).toBe(create);
 });
 
@@ -344,17 +363,19 @@ test("Drupal's AJAX rebuild binds the form's controls again, unless its draft st
   await vi.waitFor(() => expect(rows).toHaveBeenCalledOnce());
   expect(session.initializeControls).toHaveBeenCalledOnce();
 
-  session.stopped = true;
+  // A draft that stopped, then one not joined yet: answered in order, so once the live rebuild after them is
+  // announced, theirs were not.
+  const { sessionFor } = await import('@janalis/collaborate/draft/session.js');
+  const stopped = fakeSession({ stopped: true });
+  const unjoined = fakeSession({ initialized: false });
+  sessionFor.mockReturnValueOnce(stopped).mockReturnValueOnce(unjoined);
   behavior(document.body);
-  session.stopped = false;
-  session.initialized = false;
   behavior(document.body);
-  // Answered in order: once the next live rebuild is announced, the two before it were not.
-  await Promise.resolve();
-  session.initialized = true;
   behavior(document.body);
   await vi.waitFor(() => expect(rows).toHaveBeenCalledTimes(2));
   expect(session.initializeControls).toHaveBeenCalledTimes(2);
+  expect(stopped.initializeControls).not.toHaveBeenCalled();
+  expect(unjoined.initializeControls).not.toHaveBeenCalled();
   document.removeEventListener('collaborate:rows-changed', rows);
 });
 

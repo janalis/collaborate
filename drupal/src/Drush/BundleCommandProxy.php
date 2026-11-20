@@ -30,6 +30,8 @@ abstract class BundleCommandProxy extends Command
         return '';
     }
 
+    // Final, so that create() may build any proxy alike.
+    // @mago-expect lint:no-redundant-method-override
     final public function __construct()
     {
         parent::__construct();

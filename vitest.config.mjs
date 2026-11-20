@@ -22,7 +22,8 @@ export default defineConfig({
     include: ['tests/vitest/**/*.test.js'],
     coverage: {
       provider: 'v8',
-      include: ['assets/**/*.js'],
+      // drupal/js/collaborate.js wires Drupal's editors and behaviors: the Drupal scenarios (make drupal-e2e) run it.
+      include: ['assets/**/*.js', 'drupal/js/modal.js', 'drupal/js/ckeditor5.js'],
       exclude: ['assets/vendor/**'],
       reportsDirectory: 'var/coverage-vitest',
       reporter: ['html', 'text'],

@@ -40,6 +40,7 @@ use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
 use Janalis\Collaborate\Hub\Transport\PublishFailedException;
 use Janalis\Collaborate\Hub\Transport\Subscription;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Security\Collaborator;
 use Janalis\Collaborate\Security\SymfonyCurrentUser;
 use Janalis\Collaborate\Tests\Fixtures\Arrays;
 use Janalis\Collaborate\Tests\Fixtures\TestKernel;
@@ -93,6 +94,7 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 #[UsesClass(DraftView::class)]
 #[UsesClass(JournalStore::class)]
 #[UsesClass(FieldNames::class)]
+#[UsesClass(Collaborator::class)]
 final class MercureTokenTest extends CollaborateWebTestCase
 {
     public function testTheSessionTokenIsAnAccessTokenForTheHubCarryingItsConfiguredClaims(): void

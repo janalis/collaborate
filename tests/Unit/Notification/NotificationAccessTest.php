@@ -7,12 +7,14 @@ namespace Janalis\Collaborate\Tests\Unit\Notification;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Notification\NotificationAccess;
 use Janalis\Collaborate\Notification\StreamGuardInterface;
+use Janalis\Collaborate\Security\Collaborator;
 use Janalis\Collaborate\Security\CurrentUserInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Security\Core\User\InMemoryUser;
 
 #[CoversClass(NotificationAccess::class)]
+#[CoversClass(Collaborator::class)]
 final class NotificationAccessTest extends TestCase
 {
     public function testNotificationsAreOffUnlessTurnedOn(): void

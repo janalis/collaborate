@@ -24,6 +24,7 @@ use Janalis\Collaborate\Gedmo\TranslatableFieldKeyResolver;
 use Janalis\Collaborate\Grant;
 use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Security\Collaborator;
 use Janalis\Collaborate\Security\CurrentUserInterface;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Account;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Article;
@@ -94,6 +95,7 @@ use Twig\RuntimeLoader\FactoryRuntimeLoader;
 #[UsesClass(DraftView::class)]
 #[UsesClass(JournalStore::class)]
 #[UsesClass(FieldNames::class)]
+#[CoversClass(Collaborator::class)]
 final class CollaborateFormExtensionTest extends TypeTestCase
 {
     private CollaborateFormExtension $extension;

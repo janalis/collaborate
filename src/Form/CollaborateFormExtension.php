@@ -18,6 +18,7 @@ use Janalis\Collaborate\Draft\FormDraft;
 use Janalis\Collaborate\Draft\RecordId;
 use Janalis\Collaborate\Draft\RecordIdentifierInterface;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
+use Janalis\Collaborate\Security\Collaborator;
 use Janalis\Collaborate\Security\CurrentUserInterface;
 use Symfony\Component\AssetMapper\ImportMap\ImportMapConfigReader;
 use Symfony\Component\Form\AbstractTypeExtension;
@@ -304,12 +305,7 @@ final class CollaborateFormExtension extends AbstractTypeExtension
     /** The signed-in user when they hold the collaboration role and can collaborate. */
     private function user(): ?UserInterface
     {
-        $user = $this->security->getUser();
-        if (null === $user || null === $this->collaborators->id($user) || !$this->security->isGranted($this->role)) {
-            return null;
-        }
-
-        return $user;
+        return Collaborator::current($this->security, $this->collaborators, $this->role)?->user;
     }
 
     /**

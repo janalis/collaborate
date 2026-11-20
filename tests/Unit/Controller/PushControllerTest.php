@@ -9,6 +9,7 @@ use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Notification\NotificationAccess;
 use Janalis\Collaborate\Notification\Push\PushEndpoints;
 use Janalis\Collaborate\Notification\Push\PushSubscriptions;
+use Janalis\Collaborate\Security\Collaborator;
 use Janalis\Collaborate\Security\CurrentUserInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -27,6 +28,7 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 #[CoversClass(PushController::class)]
 #[UsesClass(NotificationAccess::class)]
 #[\PHPUnit\Framework\Attributes\UsesClass(PushEndpoints::class)]
+#[UsesClass(Collaborator::class)]
 final class PushControllerTest extends TestCase
 {
     private const string P256DH = 'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM';

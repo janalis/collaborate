@@ -12,6 +12,7 @@ use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Grant;
 use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Security\Collaborator;
 use Janalis\Collaborate\Security\CurrentUserInterface;
 use Janalis\Collaborate\Tests\Fixtures\TestUser;
 use Janalis\Collaborate\Twig\CollaborateExtension;
@@ -30,6 +31,7 @@ use Twig\Node\Node;
 #[UsesClass(Grant::class)]
 #[UsesClass(SecurityCollaboratorProvider::class)]
 #[UsesClass(Bridge::class)]
+#[CoversClass(Collaborator::class)]
 final class CollaborateExtensionTest extends ExtensionTestCase
 {
     public function testRegistersTheLayoutFunctions(): void

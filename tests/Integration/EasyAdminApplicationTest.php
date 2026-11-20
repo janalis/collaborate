@@ -61,6 +61,7 @@ use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
 use Janalis\Collaborate\Hub\Transport\PublishFailedException;
 use Janalis\Collaborate\Hub\Transport\Subscription;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Security\Collaborator;
 use Janalis\Collaborate\Security\SymfonyCurrentUser;
 use Janalis\Collaborate\Tests\Application\EasyAdmin\EasyAdminKernel;
 use Janalis\Collaborate\Tests\Application\Shared\Entity\Article;
@@ -131,6 +132,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(DraftBusyException::class)]
 #[CoversClass(DraftTooLargeException::class)]
 #[UsesClass(FieldNames::class)]
+#[UsesClass(Collaborator::class)]
 final class EasyAdminApplicationTest extends CollaborationTestCase
 {
     protected static function kernel(): string

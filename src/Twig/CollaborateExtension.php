@@ -10,6 +10,7 @@ use Janalis\Collaborate\Cursor\PageGrant;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Notification\NotificationAccess;
+use Janalis\Collaborate\Security\Collaborator;
 use Janalis\Collaborate\Security\CurrentUserInterface;
 use Psr\Clock\ClockInterface;
 use Symfony\Component\Clock\NativeClock;
@@ -312,15 +313,11 @@ final class CollaborateExtension extends AbstractExtension
     private function collaborator(): ?array
     {
         $request = $this->requests->getMainRequest();
-        $user = $this->security->getUser();
-        if (null === $request || null === $user) {
-            return null;
-        }
-        $id = $this->collaborators->id($user);
-        if (null === $id || !$this->security->isGranted($this->role)) {
+        $collaborator = Collaborator::current($this->security, $this->collaborators, $this->role);
+        if (null === $request || null === $collaborator) {
             return null;
         }
 
-        return [$request, $user, $id];
+        return [$request, $collaborator->user, $collaborator->id];
     }
 }

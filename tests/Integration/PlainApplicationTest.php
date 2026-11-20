@@ -61,6 +61,7 @@ use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
 use Janalis\Collaborate\Hub\Transport\PublishFailedException;
 use Janalis\Collaborate\Hub\Transport\Subscription;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Security\Collaborator;
 use Janalis\Collaborate\Security\SymfonyCurrentUser;
 use Janalis\Collaborate\Tests\Application\Plain\PlainFormContext;
 use Janalis\Collaborate\Tests\Application\Plain\PlainKernel;
@@ -141,6 +142,7 @@ use Twig\Environment;
 #[CoversClass(DraftBusyException::class)]
 #[CoversClass(DraftTooLargeException::class)]
 #[UsesClass(FieldNames::class)]
+#[UsesClass(Collaborator::class)]
 final class PlainApplicationTest extends CollaborationTestCase
 {
     protected static function kernel(): string

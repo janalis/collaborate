@@ -15,6 +15,7 @@ use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
 use Janalis\Collaborate\Hub\Transport\PublishFailedException;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Security\Collaborator;
 use Janalis\Collaborate\Security\CurrentUserInterface;
 use Janalis\Collaborate\Tests\Fixtures\TestUser;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
@@ -48,6 +49,7 @@ use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 #[UsesClass(Topics::class)]
 #[UsesClass(SecurityCollaboratorProvider::class)]
 #[AllowMockObjectsWithoutExpectations]
+#[CoversClass(Collaborator::class)]
 final class DraftControllerTest extends TestCase
 {
     private DraftAccess $access;

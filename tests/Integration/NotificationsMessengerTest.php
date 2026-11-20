@@ -51,6 +51,7 @@ use Janalis\Collaborate\Notification\Push\OnlineRecipients;
 use Janalis\Collaborate\Notification\Push\PushDispatcher;
 use Janalis\Collaborate\Notification\Push\PushPayload;
 use Janalis\Collaborate\Notification\Push\PushSubscriptions;
+use Janalis\Collaborate\Security\Collaborator;
 use Janalis\Collaborate\Security\SymfonyCurrentUser;
 use Janalis\Collaborate\Tests\Application\Host\HostBusKernel;
 use Janalis\Collaborate\Twig\CollaborateExtension;
@@ -121,6 +122,7 @@ use Symfony\Component\Messenger\Worker;
 #[UsesClass(DraftView::class)]
 #[UsesClass(JournalStore::class)]
 #[UsesClass(FieldNames::class)]
+#[UsesClass(Collaborator::class)]
 final class NotificationsMessengerTest extends NotificationsTestCase
 {
     protected static function kernel(): string

@@ -8,6 +8,7 @@ use Janalis\Collaborate\Cursor\PageGrant;
 use Janalis\Collaborate\Cursor\PlaceProviderInterface;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Notification\NotificationAccess;
+use Janalis\Collaborate\Security\Collaborator;
 use Janalis\Collaborate\Security\CurrentUserInterface;
 use Psr\Clock\ClockInterface;
 use Symfony\Component\Clock\NativeClock;
@@ -17,7 +18,6 @@ use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
-use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Security\Csrf\CsrfToken;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 
@@ -46,17 +46,14 @@ final readonly class HubGuard
     /** @return Admission|JsonResponse the admitted request, or the 429 answer of a user over the rate limit */
     public function admit(Request $request, int $maxBytes): Admission|JsonResponse
     {
-        $user = $this->security->getUser();
-        $userId = $user instanceof UserInterface ? $this->collaborators->id($user) : null;
         // A user who may not collaborate may still hold a bare grant, for their notifications.
+        $signedIn = Collaborator::current($this->security, $this->collaborators, null);
         $collaborator = $this->security->isGranted($this->role);
-        if (
-            !$user instanceof UserInterface
-            || null === $userId
-            || !$collaborator && null === $this->notifications?->recipient()
-        ) {
+        if (null === $signedIn || !$collaborator && null === $this->notifications?->recipient()) {
             throw new AccessDeniedException('Collaboration requires a signed-in collaborator.');
         }
+        $user = $signedIn->user;
+        $userId = $signedIn->id;
         if (\strlen($request->getContent()) > $maxBytes) {
             throw new BadRequestHttpException('Hub request is too large.');
         }

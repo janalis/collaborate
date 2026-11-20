@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Janalis\Collaborate\Notification;
 
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
+use Janalis\Collaborate\Security\Collaborator;
 use Janalis\Collaborate\Security\CurrentUserInterface;
 
 /** Whether notifications are on, and who the signed-in user is to them: the recipient id of their rows. */
@@ -27,14 +28,6 @@ final readonly class NotificationAccess
     /** The signed-in user's id, when notifications are on and the user holds their role; null otherwise. */
     public function recipient(): ?int
     {
-        if (!$this->enabled) {
-            return null;
-        }
-        $user = $this->security->getUser();
-        if (null === $user || !$this->security->isGranted($this->role)) {
-            return null;
-        }
-
-        return $this->collaborators->id($user);
+        return $this->enabled ? Collaborator::current($this->security, $this->collaborators, $this->role)?->id : null;
     }
 }

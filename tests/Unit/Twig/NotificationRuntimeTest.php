@@ -11,6 +11,7 @@ use Janalis\Collaborate\Notification\Entity\Notification;
 use Janalis\Collaborate\Notification\NotificationAccess;
 use Janalis\Collaborate\Notification\NotificationCatalog;
 use Janalis\Collaborate\Notification\NotificationRepository;
+use Janalis\Collaborate\Security\Collaborator;
 use Janalis\Collaborate\Security\CurrentUserInterface;
 use Janalis\Collaborate\Twig\NotificationRuntime;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -29,6 +30,7 @@ use Twig\Loader\ArrayLoader;
 #[UsesClass(NotificationAccess::class)]
 #[UsesClass(NotificationCatalog::class)]
 #[UsesClass(Notification::class)]
+#[UsesClass(Collaborator::class)]
 final class NotificationRuntimeTest extends TestCase
 {
     public function testTheBellListsTheLatestTwentyTheLatestFirstWithTheCounts(): void

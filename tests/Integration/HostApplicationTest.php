@@ -53,6 +53,7 @@ use Janalis\Collaborate\Notification\Push\OnlineRecipients;
 use Janalis\Collaborate\Notification\Push\PushDispatcher;
 use Janalis\Collaborate\Notification\Push\PushPayload;
 use Janalis\Collaborate\Notification\Push\PushSubscriptions;
+use Janalis\Collaborate\Security\Collaborator;
 use Janalis\Collaborate\Security\SymfonyCurrentUser;
 use Janalis\Collaborate\Tests\Application\Host\HostKernel;
 use Janalis\Collaborate\Tests\Application\Host\HostPlaces;
@@ -124,6 +125,7 @@ use Symfony\Component\DomCrawler\Crawler;
 #[UsesClass(DraftView::class)]
 #[UsesClass(JournalStore::class)]
 #[UsesClass(FieldNames::class)]
+#[UsesClass(Collaborator::class)]
 final class HostApplicationTest extends ApplicationTestCase
 {
     private const array EVENT = [

@@ -9,6 +9,7 @@ use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Hub\HubPublisher;
 use Janalis\Collaborate\Hub\Notice;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
+use Janalis\Collaborate\Security\Collaborator;
 use Janalis\Collaborate\Security\CurrentUserInterface;
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
@@ -47,11 +48,12 @@ final readonly class DraftController
 
     public function handle(string $action, Request $request): Response
     {
-        $user = $this->security->getUser();
-        $userId = null === $user ? null : $this->collaborators->id($user);
-        if (null === $user || null === $userId || !$this->security->isGranted($this->role)) {
+        $collaborator = Collaborator::current($this->security, $this->collaborators, $this->role);
+        if (null === $collaborator) {
             throw new AccessDeniedException('Collaborate drafts require the collaboration role.');
         }
+        $user = $collaborator->user;
+        $userId = $collaborator->id;
         if (\strlen($request->getContent()) > $this->access->maxRequestBytes) {
             throw new BadRequestHttpException('Collaborate request is too large.');
         }

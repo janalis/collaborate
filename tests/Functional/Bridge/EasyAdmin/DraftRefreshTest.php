@@ -51,6 +51,7 @@ use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
 use Janalis\Collaborate\Hub\Transport\PublishFailedException;
 use Janalis\Collaborate\Hub\Transport\Subscription;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Security\Collaborator;
 use Janalis\Collaborate\Security\SymfonyCurrentUser;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Article;
 use Janalis\Collaborate\Tests\Fixtures\Draft\DraftKernel;
@@ -107,6 +108,7 @@ use Symfony\Component\Console\Command\LazyCommand;
 #[UsesClass(DraftView::class)]
 #[UsesClass(JournalStore::class)]
 #[UsesClass(FieldNames::class)]
+#[UsesClass(Collaborator::class)]
 final class DraftRefreshTest extends WebTestCase
 {
     protected static function getKernelClass(): string

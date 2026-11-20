@@ -13,6 +13,7 @@ use Janalis\Collaborate\Hub\HubSessions;
 use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
 use Janalis\Collaborate\Notification\NotificationAccess;
+use Janalis\Collaborate\Security\Collaborator;
 use Janalis\Collaborate\Security\CurrentUserInterface;
 use Janalis\Collaborate\Tests\Fixtures\TestUser;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -29,6 +30,7 @@ use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 #[UsesClass(Topics::class)]
 #[UsesClass(NotificationAccess::class)]
 #[UsesClass(SecurityCollaboratorProvider::class)]
+#[UsesClass(Collaborator::class)]
 final class HubSessionsTest extends TestCase
 {
     private TestUser $user;

@@ -12,6 +12,7 @@ use Janalis\Collaborate\Hub\Admission;
 use Janalis\Collaborate\Hub\HubGuard;
 use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Security\Collaborator;
 use Janalis\Collaborate\Tests\Fixtures\TestPlaces;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -32,6 +33,7 @@ use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 #[UsesClass(Grant::class)]
 #[UsesClass(SecurityCollaboratorProvider::class)]
 #[UsesClass(RoleDraftAccessChecker::class)]
+#[CoversClass(Collaborator::class)]
 final class HubGuardTest extends HubTestCase
 {
     public function testAdmitsTheUserItsPageRoomAndTheBody(): void

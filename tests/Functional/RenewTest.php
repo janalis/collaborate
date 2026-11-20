@@ -34,6 +34,7 @@ use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
 use Janalis\Collaborate\Hub\Transport\PublishFailedException;
 use Janalis\Collaborate\Hub\Transport\Subscription;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Security\Collaborator;
 use Janalis\Collaborate\Security\SymfonyCurrentUser;
 use Janalis\Collaborate\Twig\CollaborateExtension;
 use Janalis\Collaborate\Updates\UpdatesSubscriber;
@@ -77,6 +78,7 @@ use Symfony\Component\HttpFoundation\Session\SessionFactoryInterface;
 #[UsesClass(DraftView::class)]
 #[UsesClass(JournalStore::class)]
 #[UsesClass(FieldNames::class)]
+#[UsesClass(Collaborator::class)]
 final class RenewTest extends CollaborateWebTestCase
 {
     public function testARenewalRenderKeepsTheFlashesAnotherTabQueued(): void

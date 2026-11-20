@@ -56,6 +56,7 @@ use Janalis\Collaborate\Notification\Push\PushDispatcher;
 use Janalis\Collaborate\Notification\Push\PushPayload;
 use Janalis\Collaborate\Notification\Push\PushResult;
 use Janalis\Collaborate\Notification\Push\PushSubscriptions;
+use Janalis\Collaborate\Security\Collaborator;
 use Janalis\Collaborate\Security\SymfonyCurrentUser;
 use Janalis\Collaborate\Tests\Application\Host\HostStreamGuard;
 use Janalis\Collaborate\Tests\Application\Host\Push\HubSubscriptions;
@@ -129,6 +130,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[UsesClass(DraftView::class)]
 #[UsesClass(JournalStore::class)]
 #[UsesClass(FieldNames::class)]
+#[UsesClass(Collaborator::class)]
 final class NotificationsApplicationTest extends NotificationsTestCase
 {
     public function testTheBellListsTheLatestNotificationsAndCountsTheUnreadOnes(): void

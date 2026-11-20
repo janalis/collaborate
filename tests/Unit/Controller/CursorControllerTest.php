@@ -21,6 +21,7 @@ use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
 use Janalis\Collaborate\Hub\Transport\PublishFailedException;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Security\Collaborator;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LoggerInterface;
@@ -49,6 +50,7 @@ use Symfony\Component\Security\Core\User\UserInterface;
 #[UsesClass(Topics::class)]
 #[UsesClass(Grant::class)]
 #[UsesClass(SecurityCollaboratorProvider::class)]
+#[UsesClass(Collaborator::class)]
 final class CursorControllerTest extends CursorTestCase
 {
     public function testPublishesServerIdentityAndStripsUntrustedFields(): void

@@ -64,7 +64,7 @@ built: it must be a boolean, not an environment variable.
 | `Doctrine\` | `ChangeCollector` (the `onFlush` half of saved-view updates), `RecordIdentifier`, `TranslationMapperInterface`. |
 | `Bridge\` | `Bridge`: the bridges, their default regions, how `collaborate.bridge` resolves. `Bridge\EasyAdmin\`: EasyAdmin's services. `EasyAdmin\` holds the deprecated names of before 0.5. |
 | `Updates\` | `UpdatesSubscriber`: the response half of saved-view updates. |
-| `Security\` | `CurrentUserInterface` (the user and their access decisions) and Symfony's, `SymfonyCurrentUser`. |
+| `Security\` | `CurrentUserInterface` (the user and their access decisions) and Symfony's, `SymfonyCurrentUser`; `Collaborator::current()`, the one check of who may take part (signed in, an id from the identity provider, the role), which the drafts, the hub, the layer and the notifications make. |
 | `Gedmo\` | Per-locale field keys and the translation-to-record mapping. |
 | `Entity\` | `Draft`, `DraftField`, `DraftEvent`: the mapping of the three draft tables. |
 | `Notification\` | `Notifier` (stores and announces a notification), `Preferences` (a user's topics), `NotificationRepository`, `NotificationAccess`, `NotificationCatalog`; `Entity\` (`Notification`, `NotificationPreference`, `PushSubscription`), `Messenger\` (the messages and their handlers), `Push\` (VAPID keys, the web push sender and dispatcher, subscriptions). |

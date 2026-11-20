@@ -17,6 +17,7 @@ use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
 use Janalis\Collaborate\Hub\Transport\Subscription;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Security\Collaborator;
 use Janalis\Collaborate\Tests\Fixtures\Arrays;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -42,6 +43,7 @@ use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
 #[UsesClass(AuthorizationGrant::class)]
 #[UsesClass(SecurityCollaboratorProvider::class)]
 #[UsesClass(RoleDraftAccessChecker::class)]
+#[UsesClass(Collaborator::class)]
 final class HubControllerTest extends HubTestCase
 {
     private bool $updates = true;

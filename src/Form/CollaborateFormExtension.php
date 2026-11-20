@@ -127,7 +127,7 @@ final class CollaborateFormExtension extends AbstractTypeExtension
             FormEvents::PRE_SET_DATA,
             function (FormEvent $event) use ($context): void {
                 $form = $event->getForm();
-                if (!$this->isCollection($form) || !$this->security->isGranted($this->role)) {
+                if (!$this->isCollection($form) || null === $this->user()) {
                     return;
                 }
                 $record = $context->current();

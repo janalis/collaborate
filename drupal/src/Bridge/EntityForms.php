@@ -24,6 +24,7 @@ use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\Draft\FieldNames;
 use Janalis\Collaborate\Draft\FormDraft;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
+use Janalis\Collaborate\Security\Collaborator;
 use Janalis\Collaborate\Security\CurrentUserInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -361,14 +362,12 @@ final class EntityForms
     {
         $object = $state->getFormObject();
         $request = $this->requests->getMainRequest();
-        $user = $this->users->getUser();
+        $user = Collaborator::current($this->users, $this->collaborators, $this->role)?->user;
         if (
             !$this->access->enabled
             || !$object instanceof ContentEntityFormInterface
             || null === $request
             || null === $user
-            || null === $this->collaborators->id($user)
-            || !$this->users->isGranted($this->role)
         ) {
             return null;
         }

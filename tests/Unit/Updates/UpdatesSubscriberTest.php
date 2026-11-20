@@ -368,7 +368,9 @@ final class UpdatesSubscriberTest extends TestCase
         $request = Request::create('/admin/article/1/edit', 'POST');
         $request->attributes->set('_collaborate_data_changed', [
             'Tag',
-            'Article',
+            // Written by a host as before SavedChanges: class names, one of them the same entity as a short name.
+            'App\\Entity\\Article',
+            'App\\Entity\\Tag',
             'Tag',
         ]);
         $records = array_map(static fn(int $id): string => 'record-' . $id, range(1, 101));

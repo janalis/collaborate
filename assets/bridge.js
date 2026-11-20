@@ -4,7 +4,7 @@
 // forms, the page a list or record is shown on, its embedded lists, its selection, its overlays, its collections'
 // events, its slug widget and its save buttons.
 //
-// An entry point registers the profile of its admin (`easyadmin.js`, `drupal.js`) before any module starts; the
+// An entry point registers the profile of its admin (`easyadmin.js`, or the Drupal module's `drupal/js/collaborate.js`) before any module starts; the
 // layer's `data-config` names the bridge the server resolved, which wins when its profile is registered.
 
 import { parseSettings } from './settings.js';

@@ -25,6 +25,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Drupal: a list set in a higher layer of the options (the form, then
+  settings.php) replaces the one below whole: an `advanced` list no longer
+  shows through a shorter one.
 - Drupal: the `advanced` settings override the module's defaults (the grant
   cache, the notifications layout), and the status report warns of the
   options the module reads nothing of. It no longer sets

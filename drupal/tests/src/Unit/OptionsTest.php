@@ -80,6 +80,17 @@ final class OptionsTest extends UnitTestCase
         self::assertFalse(self::at($options, 'drafts', 'enabled'));
     }
 
+    public function testAListOfAHigherLayerReplacesTheOneBelowWhole(): void
+    {
+        $options = Options::bundle([
+            'colors' => ['red', 'green'],
+            'advanced' => ['colors' => ['blue', 'indigo', 'purple', 'pink']],
+        ], ['hub' => ['transport' => 'websocket']]);
+
+        self::assertSame(['red', 'green'], self::at($options, 'colors'));
+        self::assertSame('websocket', self::at($options, 'hub', 'transport'));
+    }
+
     public function testTheOptionsTheModuleReadsNothingOfAreNamed(): void
     {
         self::assertSame([], Options::ignored(['drafts' => ['position_field' => 'rank']], ['hub' => []]));

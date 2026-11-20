@@ -66,7 +66,7 @@ final class Options
             ? $cursors['regions']
             : Bridge::Drupal->regions();
 
-        $options = array_replace_recursive(
+        $options = self::merge(
             self::DEFAULTS,
             $advanced,
             array_filter(
@@ -99,16 +99,45 @@ final class Options
             ),
         );
         // settings.php: the hub and its secrets, and anything a site keeps out of its exported configuration.
-        $options = array_replace_recursive($options, $settings);
+        $options = self::merge($options, $settings);
 
         // The module's own decisions, whatever the configuration says.
-        return self::escape(array_replace_recursive($options, [
+        return self::escape(self::merge($options, [
             'bridge' => Bridge::None->value,
             'identity' => self::IDENTITY,
             'access' => self::ACCESS,
             'role' => 'use collaborate',
             'cursors' => ['regions' => $regions],
         ]));
+    }
+
+    /**
+     * Each layer over the ones before: a map is merged key by key, anything else, a list included, replaced whole.
+     * array_replace_recursive() would merge lists index by index, and a lower layer's longer list would show
+     * through a shorter one.
+     *
+     * @param array<array-key, mixed> ...$layers
+     *
+     * @return array<array-key, mixed>
+     */
+    private static function merge(array ...$layers): array
+    {
+        $merged = [];
+        foreach ($layers as $layer) {
+            // @mago-expect analysis:mixed-assignment an option's value: the next lines narrow it
+            foreach ($layer as $key => $value) {
+                // @mago-expect analysis:mixed-assignment the layer below's value: the next line narrows it
+                $below = $merged[$key] ?? null;
+                $merged[$key] = \is_array($value)
+                && \is_array($below)
+                && !array_is_list($value)
+                && !array_is_list($below)
+                    ? self::merge($below, $value)
+                    : $value;
+            }
+        }
+
+        return $merged;
     }
 
     /**

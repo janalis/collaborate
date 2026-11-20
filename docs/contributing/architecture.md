@@ -77,7 +77,7 @@ built: it must be a boolean, not an environment variable.
 | Module | Role |
 |---|---|
 | `collaborate.js` | Entry point: starts cursors, updates and drafts; re-exports `sessionFor`, `addRowInitializer` and `registerBridge`. |
-| `easyadmin.js`, `drupal.js` | Entry points of the bridges: their profile, then `collaborate.js`. |
+| `easyadmin.js` | EasyAdmin's entry point: its profile, then `collaborate.js`. The Drupal module has its own, `drupal/js/collaborate.js`. |
 | `settings.js` | `settingsOf()`: the JSON settings the server renders into an attribute, an absent or malformed one read as none. |
 | `bridge.js`, `bridges/*.js` | The bridges' script profiles (regions, rows and entries, the page shown, embedded lists, selection, overlays, collection and slug widgets, save buttons), and the active one: the layer's `bridge` when registered. |
 | `hub.js` | One hub stream per page, whatever the transport; members join by `channel` (`cursors`, `updates`, `draft`, `notifications`); renewal (in place on a WebSocket), backoff with jitter, resend of unknown grant signatures, background renewal of the page grant. |

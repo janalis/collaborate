@@ -45,7 +45,13 @@ final readonly class UpdatesSubscriber implements EventSubscriberInterface
         $request = $event->getRequest();
         $updates = [];
         if ($this->enabled && SavedChanges::hasData($request)) {
-            $entities = SavedChanges::dataNames($request);
+            // A host that records its changes in the request attribute itself, as before SavedChanges, names
+            // classes: their short name is EasyAdmin's entity name, which the pages carry.
+            $entities = array_unique(array_map(static fn(string $name): string => basename(str_replace(
+                '\\',
+                '/',
+                $name,
+            )), SavedChanges::dataNames($request)));
             sort($entities);
             $updates[] = Notice::updates($this->topics->updates(), $entities);
         }

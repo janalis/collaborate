@@ -103,7 +103,7 @@ Storage keys: `collaborate-notice:<draft id>`, `collaborate-update:<path><search
 | `updates.js` | Saved-list and saved-detail refresh. |
 | `draft/session.js` (`sessionFor`), `bar.js`, `collections.js`, `conflicts.js`, `fields.js`, `hooks.js` (`addRowInitializer`) | Shared drafts. |
 | `ckeditor5/collaborate.js` (`Collaborate` plugin), `operation-buffer.js`, `source.js`, `text-change.js` | CKEditor integration. |
-| `collaborate.js` | Entry point: starts cursors, updates and drafts; re-exports `sessionFor`, `addRowInitializer` and `registerBridge`. `easyadmin.js` and `drupal.js` register their bridge's profile first. |
+| `collaborate.js` | Entry point: starts cursors, updates and drafts; re-exports `sessionFor`, `addRowInitializer` and `registerBridge`. `easyadmin.js`, and the Drupal module's `drupal/js/collaborate.js`, register their bridge's profile first. |
 | `scss/_layer.scss`, `scss/_cursors.scss`, `scss/_draft.scss` | Styles; `_layer.scss` is a module (`$colors`, `$contrasts`) needing no framework, which `_cursors.scss` loads with Bootstrap's colours (it expects Bootstrap's `scss/functions` and `scss/variables` on the Sass load path). |
 
 Bare imports the host's importmap provides: `ckeditor5`, `bootstrap/js/src/modal.js`, and `@microsoft/fetch-event-source` with the Mercure transport (imported on demand by `hub/mercure.js`).

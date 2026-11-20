@@ -41,9 +41,19 @@ export default defineConfig({
   projects: [
     // `easyadmin-*.spec.js` reads EasyAdmin's markup; `limits.spec.js` needs the small limits.
     { name: 'plain', testIgnore: plainIgnore, use: { baseURL: `http://127.0.0.1:${ports.plain}` } },
+    // The same pages under other form themes: the scenarios that read a form's rows, fields and collections. The
+    // others (presence, grants, the page cache, the state bar's saves and discards) run the same code on any markup.
     ...['plain-div', 'plain-table', 'plain-tailwind'].map((name) => ({
       name,
-      testIgnore: plainIgnore,
+      testMatch: [
+        /\/collaboration\.spec\.js$/,
+        /\/collections\.spec\.js$/,
+        /\/conflicts\.spec\.js$/,
+        /\/cursors\.spec\.js$/,
+        /\/fields\.spec\.js$/,
+        /\/new-record\.spec\.js$/,
+        /\/rich-text\.spec\.js$/,
+      ],
       use: { baseURL: `http://127.0.0.1:${ports[name]}` },
     })),
     {

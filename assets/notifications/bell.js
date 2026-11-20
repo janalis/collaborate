@@ -467,12 +467,18 @@ export function initBell(
     });
   }
 
+  /** Leaves the hub: the bell's stream is no longer open. */
+  function part() {
+    leave?.();
+    leave = null;
+    root.dataset.connected = 'false';
+  }
+
   // Joined while the page is hidden: a notification still comes to a tab nobody looks at. A page kept in the
   // back/forward cache leaves, and asks again on its return.
   /** @param {PageTransitionEvent} event */
   function hide(event) {
-    leave?.();
-    leave = null;
+    part();
     if (!event.persisted) stop();
   }
 
@@ -486,8 +492,7 @@ export function initBell(
   function stop() {
     stopped = true;
     clearTimeout(/** @type {number} */ (timer));
-    leave?.();
-    leave = null;
+    part();
     menu.removeEventListener('click', click);
     unbindMenu();
     document.removeEventListener('collaborate:notifications-changed', pageChanged);

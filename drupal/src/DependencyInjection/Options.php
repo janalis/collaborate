@@ -25,8 +25,9 @@ final class Options
     public const string GRANT_CACHE = 'collaborate.grant_cache';
 
     /**
-     * Options of the bundle's form extension and Doctrine change collector, which the module replaces with its own
-     * entity forms and hooks: accepted by the configuration tree, read by nothing.
+     * Options a site sets for nothing: those of the bundle's form extension and Doctrine change collector, which the
+     * module replaces with its own entity forms and hooks, and those the module decides over every layer. Accepted
+     * by the configuration tree, read by nothing.
      */
     public const array IGNORED = [
         'updates.path_pattern',
@@ -36,6 +37,13 @@ final class Options
         'drafts.position_field',
         'drafts.rich_text.schema_option',
         'drafts.rich_text.ckeditor_version',
+        // What the module decides itself, over any layer: its services, its permissions as the roles, the regions
+        // of Drupal's pages or the form's.
+        'bridge',
+        'identity',
+        'access',
+        'role',
+        'cursors.regions',
     ];
 
     /**

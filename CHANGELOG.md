@@ -34,7 +34,11 @@ versions follow [Semantic Versioning](https://semver.org/).
   `notifications.topics`, `notifications.types`), an empty one clearing the
   map below; an empty array leaves any other map as it was.
 - Drupal: a shared rich-text field whose draft scripts fail to load gets
-  Drupal's own editor instead of none.
+  Drupal's own editor instead of none, the form stops following its draft,
+  and the console says why.
+- Drupal: the status report also names the options the module decides
+  over every layer (`bridge`, `identity`, `access`, `role`,
+  `cursors.regions`) when a site sets them.
 - Drupal: the `advanced` settings override the module's defaults (the grant
   cache, the notifications layout), and the status report warns of the
   options the module reads nothing of. It no longer sets

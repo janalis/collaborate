@@ -54,5 +54,7 @@ final class SavedChangesTest extends TestCase
         self::assertSame(['Tag'], SavedChanges::dataNames($request));
         self::assertSame(['a'], SavedChanges::recordDrafts($request));
         self::assertNull(SavedChanges::committedDraft($request));
+        SavedChanges::committed($request, '');
+        self::assertNull(SavedChanges::committedDraft($request));
     }
 }

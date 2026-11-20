@@ -646,8 +646,10 @@ describe('the hub and the service worker', () => {
     expect(hub.leaves).toBe(0);
     window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
     expect(hub.join).toHaveBeenCalledOnce();
+    hub.members[0].opened();
     window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
     expect(hub.leaves).toBe(1);
+    expect(root.dataset.connected).toBe('false');
     window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: false }));
     expect(hub.join).toHaveBeenCalledOnce();
     window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));

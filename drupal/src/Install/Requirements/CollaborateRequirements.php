@@ -46,7 +46,7 @@ final class CollaborateRequirements implements InstallRequirementsInterface
                 'title' => new TranslatableMarkup('Collaborate options'),
                 'value' => implode(', ', $ignored),
                 'description' => new TranslatableMarkup(
-                    'These options configure Symfony forms and Doctrine flushes, which the module replaces with Drupal\'s entity forms and hooks: they change nothing here.',
+                    'These options configure Symfony forms and Doctrine flushes, which the module replaces with Drupal\'s entity forms and hooks, or the module decides them itself: they change nothing here.',
                 ),
                 'severity' => RequirementSeverity::Warning,
             ];

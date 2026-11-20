@@ -73,6 +73,7 @@ final class SavedChanges
     public static function committedDraft(Request $request): ?string
     {
         return \is_string($request->attributes->get(self::COMMITTED))
+        && '' !== $request->attributes->getString(self::COMMITTED)
             ? $request->attributes->getString(self::COMMITTED)
             : null;
     }

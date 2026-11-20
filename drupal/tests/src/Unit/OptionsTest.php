@@ -124,10 +124,17 @@ final class OptionsTest extends UnitTestCase
     {
         self::assertSame([], Options::ignored(['drafts' => ['position_field' => 'rank']], ['hub' => []]));
         self::assertSame(
-            ['updates.path_pattern', 'drafts.rich_text.ckeditor_version'],
+            ['updates.path_pattern', 'drafts.rich_text.ckeditor_version', 'role', 'cursors.regions'],
             Options::ignored([
-                'advanced' => ['updates' => ['path_pattern' => '#^/#'], 'drafts' => ['rich_text' => 'none']],
-            ], ['drafts' => ['rich_text' => ['ckeditor_version' => '47.0.0']]]),
+                'advanced' => [
+                    'updates' => ['path_pattern' => '#^/#'],
+                    'drafts' => ['rich_text' => 'none'],
+                    'role' => 'ROLE_EDITOR',
+                ],
+            ], [
+                'drafts' => ['rich_text' => ['ckeditor_version' => '47.0.0']],
+                'cursors' => ['regions' => ['legacy' => '.old']],
+            ]),
         );
     }
 

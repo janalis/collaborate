@@ -7,19 +7,7 @@ import '@janalis/collaborate/bridges/drupal.js';
 import '@janalis/collaborate/cursors/cursors.js';
 import '@janalis/collaborate/updates.js';
 
-/**
- * Drupal's globals, which its own scripts define before the module's: its behaviors, its editors, and the
- * CKEditor 5 build it ships as a DLL.
- *
- * @typedef {{
- *   Drupal?: {
- *     behaviors: Record<string, { attach(context: Document | Element): void }>,
- *     editors?: { ckeditor5?: { attach(this: unknown, element: HTMLTextAreaElement, format: any): unknown } },
- *   },
- *   CKEditor5: { dll(path: string): any, collaborate?: object },
- * }} DrupalPage
- */
-const page = /** @type {DrupalPage} */ (/** @type {unknown} */ (globalThis));
+const page = /** @type {import('../../typings/drupal.js').DrupalGlobals} */ (globalThis);
 
 const shared = () => document.querySelector('form[data-collaborate]');
 
@@ -37,7 +25,9 @@ const loadDrafts = () => {
     import('@janalis/collaborate/draft/session.js'),
     import('@janalis/collaborate/ckeditor5/collaborate.js'),
   ]).then(([session, plugin]) => {
-    const { Plugin } = page.CKEditor5.dll('./src/core.js');
+    const dll = page.CKEditor5?.dll;
+    if (!dll) throw new Error("Collaborate: Drupal's CKEditor 5 build is not on the page.");
+    const { Plugin } = dll('./src/core.js');
     // Tells the session its editor is following the draft: the host's part of the contract.
     class CollaborateReady extends Plugin {
       static get pluginName() {
@@ -51,9 +41,14 @@ const loadDrafts = () => {
       }
     }
     // Drupal finds an editor's plugins as `CKEditor5.<package>.<plugin>`.
-    page.CKEditor5.collaborate = { Collaborate: plugin.default, CollaborateReady };
+    /** @type {NonNullable<typeof page.CKEditor5>} */ (page.CKEditor5).collaborate = {
+      Collaborate: plugin.default,
+      CollaborateReady,
+    };
     return session;
   });
+  // Said once: every caller then goes on without the drafts.
+  drafts.catch((error) => console.error('Collaborate: the shared draft could not load.', error));
   return drafts;
 };
 
@@ -85,10 +80,15 @@ if (editors?.ckeditor5 && shared()) {
         });
       })
       .catch(async () => {
-        // The draft's modules that never loaded leave the field to Drupal's own editor.
-        const loaded = await drafts?.catch(() => null);
-        if (loaded) loaded.sessionFor(element)?.editorFailed();
-        else attach.call(this, element, format);
+        // The form stops following its draft, its controls released, and the field takes Drupal's own editor. The
+        // session's module may have loaded and started a session without the plugin's.
+        const module = await import('@janalis/collaborate/draft/session.js').catch(() => null);
+        try {
+          module?.sessionFor(element)?.editorFailed();
+        } catch {
+          // A form whose draft never started: nothing follows it.
+        }
+        attach.call(this, element, format);
       });
     return true;
   };
@@ -109,33 +109,34 @@ const touch = (event) => {
   const form = /** @type {HTMLFormElement | null | undefined} */ (row?.closest('form[data-collaborate]'));
   const session = form && sessions ? sessions.sessionFor({ form }) : null;
   if (!row || !session?.initialized || !session.scanCollections) return;
-  const controls = Array.from(
-    /** @type {NodeListOf<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>} */ (
-      row.querySelectorAll('input, select, textarea')
-    )
-  );
   // Each control read by what its type has: a box its check, a multiple select its options, any other its value.
-  /** @param {HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement} control */
-  const checks = (control) =>
-    control instanceof HTMLInputElement && (control.type === 'checkbox' || control.type === 'radio') ? control : null;
-  /** @param {HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement} control */
-  const choices = (control) => (control instanceof HTMLSelectElement && control.multiple ? control : null);
-  const typed = controls.map((control) => {
-    const box = checks(control);
-    const select = choices(control);
-    return box ? box.checked : select ? Array.from(select.selectedOptions, (option) => option.value) : control.value;
-  });
+  // A file input keeps its file: a script may only empty it.
+  const restores = Array.from(
+    /** @type {NodeListOf<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>} */ (
+      row.querySelectorAll('input:not([type="file"]), select, textarea')
+    ),
+    (control) => {
+      if (control instanceof HTMLInputElement && (control.type === 'checkbox' || control.type === 'radio')) {
+        const checked = control.checked;
+        return () => {
+          control.checked = checked;
+        };
+      }
+      if (control instanceof HTMLSelectElement && control.multiple) {
+        const chosen = Array.from(control.selectedOptions, (option) => option.value);
+        return () => {
+          for (const option of control.options) option.selected = chosen.includes(option.value);
+        };
+      }
+      const value = control.value;
+      return () => {
+        control.value = value;
+      };
+    }
+  );
   row.dataset.collaborateTouched = '';
   session.scanCollections();
-  controls.forEach((control, index) => {
-    const value = typed[index];
-    const box = checks(control);
-    const select = choices(control);
-    if (box) box.checked = value === true;
-    else if (select && Array.isArray(value))
-      for (const option of select.options) option.selected = value.includes(option.value);
-    else if (typeof value === 'string') control.value = value;
-  });
+  for (const restore of restores) restore();
 };
 if (shared()) {
   loadDrafts().then(
@@ -161,9 +162,7 @@ if (page.Drupal) {
       if (!form) return;
       loadDrafts().then(
         ({ sessionFor }) => {
-          const controls = /** @type {HTMLInputElement[]} */ (Array.from(form.elements));
-          const field = controls.find((control) => control.name && control.type !== 'hidden');
-          const session = field ? sessionFor(field) : null;
+          const session = sessionFor({ form });
           if (session?.initialized) session.initializeControls();
           document.dispatchEvent(new Event('collaborate:rows-changed'));
         },

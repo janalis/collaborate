@@ -16,12 +16,8 @@ const EMPTY = /^t\d+$/;
 /** How long a field's rebuild may take before the page stops waiting for it. */
 const TIMEOUT = 15000;
 
-/**
- * Drupal's AJAX, as the page it runs in has it: its instances, one per bound element, and jQuery to trigger them.
- *
- * @typedef {{ element: Element, event: string, ajaxing: boolean }} DrupalAjax
- * @typedef {{ Drupal?: { ajax: { instances: (DrupalAjax | null)[] } }, jQuery?: (element: Element) => { trigger(event: string): unknown } }} DrupalGlobals
- */
+/** Drupal's AJAX, as the page it runs in has it: its instances, one per bound element, and jQuery to trigger them. */
+/** @typedef {import('../../typings/drupal.js').DrupalGlobals} DrupalGlobals */
 
 /**
  * The rows of a collection, its own and not a nested one's.

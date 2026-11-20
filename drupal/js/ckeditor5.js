@@ -1,7 +1,7 @@
 // `ckeditor5` for the bundle's modules under Drupal: the names they import, from the CKEditor 5 build Drupal ships
 // (its DLL, `CKEditor5.dll`), so that the shared editors and the module's plugin speak to the editors Drupal creates.
 // The DLL is loaded with every shared form (the module attaches `core/ckeditor5`).
-const dll = /** @type {{ CKEditor5?: { dll?: (path: string) => any } }} */ (globalThis).CKEditor5?.dll;
+const dll = /** @type {import('../../typings/drupal.js').DrupalGlobals} */ (globalThis).CKEditor5?.dll;
 /** @param {string} name */
 const load = (name) => (typeof dll === 'function' ? dll(`./src/${name}.js`) : {});
 const core = load('core');

@@ -136,11 +136,16 @@ test('a plugin that does not load leaves a form whose draft follows no editor fo
     vi.resetModules();
     return load({ plugin: false, session: followed() });
   })();
+  // Its rows follow the draft until the editor fails.
+  await vi.waitFor(() => {
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(editor.scanCollections).toHaveBeenCalledOnce();
+  });
   globalThis.Drupal.editors.ckeditor5.attach(body(), format);
   await vi.waitFor(() => expect(attach).toHaveBeenCalledWith(body(), format));
   expect(editor.editorFailed).toHaveBeenCalledOnce();
   input.dispatchEvent(new Event('input', { bubbles: true }));
-  expect(editor.scanCollections).not.toHaveBeenCalled();
+  expect(editor.scanCollections).toHaveBeenCalledOnce();
 });
 
 test('without the drafts, every field takes Drupal’s own editor, and the failure is said once', async () => {
@@ -167,6 +172,88 @@ test('a field the draft does not follow takes Drupal’s editor at once, or once
   globalThis.Drupal.editors.ckeditor5.attach(body(), format);
   await vi.waitFor(() => expect(attach).toHaveBeenCalledWith(body(), format));
   expect(session.editorFailed).toHaveBeenCalledOnce();
+});
+
+test("an editor Drupal fails to create once attached releases the form; one it creates leaves Drupal's class as it was", async () => {
+  build();
+  let fails = true;
+  const create = vi.fn(async () => {
+    if (fails) throw new Error('A plugin failed.');
+  });
+  globalThis.CKEditor5.editorClassic = { ClassicEditor: { create } };
+  const session = await load({ session: followed() });
+  // Drupal's attach calls `create` and logs its failure.
+  attach.mockImplementation(() => {
+    globalThis.CKEditor5.editorClassic.ClassicEditor.create('element', {}).catch(() => {});
+  });
+
+  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
+
+  await vi.waitFor(() => expect(session.editorFailed).toHaveBeenCalledOnce());
+  expect(create).toHaveBeenCalledWith('element', {});
+  expect(globalThis.CKEditor5.editorClassic.ClassicEditor.create).toBe(create);
+
+  fails = false;
+  const other = await (async () => {
+    vi.resetModules();
+    return load({ session: followed() });
+  })();
+  attach.mockImplementation(() => globalThis.CKEditor5.editorClassic.ClassicEditor.create('element', {}));
+  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledOnce());
+  await Promise.resolve();
+  expect(other.editorFailed).not.toHaveBeenCalled();
+  expect(globalThis.CKEditor5.editorClassic.ClassicEditor.create).toBe(create);
+});
+
+test('a draft that stopped, before or while its configuration was read, gives the field Drupal’s editor', async () => {
+  build();
+  const stopped = await load({ session: followed() });
+  stopped.stopped = true;
+  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledWith(body(), format));
+  expect(stopped.editorConfiguration).not.toHaveBeenCalled();
+
+  vi.resetModules();
+  const meanwhile = await load({
+    session: fakeSession({
+      editorConfiguration: vi.fn(async () => {
+        meanwhile.stopped = true;
+        return { collaborate: {}, initialData: '<p>Shared</p>' };
+      }),
+    }),
+  });
+  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledWith(body(), format));
+  expect(body().value).toBe('');
+});
+
+test('a field whose session fails to start takes Drupal’s editor, the failure said', async () => {
+  build();
+  const session = await load();
+  const { sessionFor } = await import('@janalis/collaborate/draft/session.js');
+  sessionFor.mockImplementationOnce(() => {
+    throw new SyntaxError('Malformed configuration.');
+  });
+  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledWith(body(), format));
+  expect(errors).toHaveBeenCalledWith(new SyntaxError('Malformed configuration.'));
+
+  // A plain attach that throws is said too.
+  attach.mockImplementation(() => {
+    throw new Error('No editor.');
+  });
+  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(errors).toHaveBeenCalledWith(new Error('No editor.')));
+  expect(session.editorFailed).not.toHaveBeenCalled();
+  // And after a session that failed to start.
+  sessionFor.mockImplementationOnce(() => {
+    throw new SyntaxError('Malformed again.');
+  });
+  errors.mockClear();
+  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(errors).toHaveBeenCalledTimes(2));
+  expect(errors.mock.calls).toEqual([[new SyntaxError('Malformed again.')], [new Error('No editor.')]]);
 });
 
 test('a form without a session gives its field Drupal’s editor', async () => {
@@ -262,9 +349,12 @@ test("Drupal's AJAX rebuild binds the form's controls again, unless its draft st
   session.stopped = false;
   session.initialized = false;
   behavior(document.body);
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  expect(rows).toHaveBeenCalledOnce();
-  expect(session.initializeControls).toHaveBeenCalledOnce();
+  // Answered in order: once the next live rebuild is announced, the two before it were not.
+  await Promise.resolve();
+  session.initialized = true;
+  behavior(document.body);
+  await vi.waitFor(() => expect(rows).toHaveBeenCalledTimes(2));
+  expect(session.initializeControls).toHaveBeenCalledTimes(2);
   document.removeEventListener('collaborate:rows-changed', rows);
 });
 

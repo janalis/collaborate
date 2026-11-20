@@ -33,19 +33,19 @@ versions follow [Semantic Versioning](https://semver.org/).
   one file to the next (`cursors.regions`, `cursors.popups`,
   `notifications.topics`, `notifications.types`), an empty one clearing the
   map below; an empty array leaves any other map as it was.
-- Drupal: a shared rich-text field whose draft scripts fail to load, or
-  whose editor Drupal fails to create, gets Drupal's own editor instead of
-  none, the form stops following its draft with its controls released, and
-  the console says why. The draft loads apart from the editor plugin: a form
-  whose draft follows no rich-text field keeps following it without Drupal's
-  CKEditor build, and a rebuild no longer binds controls to a draft that
-  stopped.
+- Drupal: a shared rich-text field whose draft scripts fail to load gets
+  Drupal's own editor instead of none, and one whose editor Drupal fails to
+  create, at once or once created, is left as Drupal leaves it: either way
+  the form stops following its draft with its controls released, where it
+  stayed inert, and the console says why. The draft loads apart from the
+  editor plugin: a form whose draft follows no rich-text field keeps
+  following it without Drupal's CKEditor build, and a rebuild no longer
+  binds controls to a draft that stopped.
 - Drupal: the status report also names the options the module decides over
-  every layer (`bridge`, `identity`, `access`, `role`, `cursors.regions`),
-  and its services and notifications permission (`cursors.places`,
-  `notifications.bus`, `notifications.locales`, `notifications.role`) when
-  set in the `advanced` tree, which they win over; settings.php may still
-  name others.
+  every layer (`bridge`, `identity`, `access`, `role`, `notifications.role`,
+  `cursors.regions`), and its services (`cursors.places`,
+  `notifications.bus`, `notifications.locales`) when set in the `advanced`
+  tree, which they win over; settings.php may still name others.
 - Drupal: the `advanced` settings override the module's defaults (the grant
   cache, the notifications layout), and the status report warns of the
   options the module reads nothing of. It no longer sets

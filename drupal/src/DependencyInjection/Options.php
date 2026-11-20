@@ -40,24 +40,24 @@ final class Options
     ];
 
     /**
-     * What the module decides itself, over every layer: its bridge, the users as Drupal's, its permission as the
-     * role. The regions of Drupal's pages, or the form's, are decided with them.
+     * What the module decides itself, over every layer: its bridge, the users as Drupal's, its permissions as the
+     * roles, which its pages check too. The regions of Drupal's pages, or the form's, are decided with them.
      */
     private const array DECIDED = [
         'bridge' => Bridge::None->value,
         'identity' => self::IDENTITY,
         'access' => self::ACCESS,
         'role' => 'use collaborate',
+        'notifications' => ['role' => 'receive collaborate notifications'],
     ];
 
     /**
-     * The module's services and its notifications permission: over the `advanced` tree, under settings.php, where a
-     * site may name its own (a bus of its own, say).
+     * The module's services: over the `advanced` tree, under settings.php, where a site may name its own (a bus of
+     * its own, say).
      */
     private const array SERVICES = [
         'cursors' => ['places' => self::PLACES],
         'notifications' => [
-            'role' => 'receive collaborate notifications',
             'bus' => self::BUS,
             'locales' => self::LOCALES,
         ],
@@ -218,29 +218,33 @@ final class Options
         $advanced = \is_array($config['advanced'] ?? null) ? $config['advanced'] : [];
         $settings ??= self::settings();
         $decided = [...self::IGNORED, ...self::paths(self::DECIDED), 'cursors.regions'];
-        $services = self::paths(self::SERVICES);
 
-        return array_values(array_filter([...$decided, ...$services], static function (string $path) use (
-            $advanced,
-            $settings,
-            $services,
-        ): bool {
-            $sources = \in_array($path, $services, true) ? [$advanced] : [$advanced, $settings];
-            foreach ($sources as $source) {
-                $value = $source;
-                foreach (explode('.', $path) as $key) {
-                    if (!\is_array($value) || !\array_key_exists($key, $value)) {
-                        continue 2;
-                    }
-                    // @mago-expect analysis:mixed-assignment an option's value: the next key narrows it
-                    $value = $value[$key];
-                }
+        return [
+            ...array_filter(
+                $decided,
+                static fn(string $path): bool => self::sets($advanced, $path) || self::sets($settings, $path),
+            ),
+            ...array_filter(self::paths(self::SERVICES), static fn(string $path): bool => self::sets($advanced, $path)),
+        ];
+    }
 
-                return true;
+    /**
+     * Whether a layer sets the option at a dotted path.
+     *
+     * @param array<array-key, mixed> $layer
+     */
+    private static function sets(array $layer, string $path): bool
+    {
+        $value = $layer;
+        foreach (explode('.', $path) as $key) {
+            if (!\is_array($value) || !\array_key_exists($key, $value)) {
+                return false;
             }
+            // @mago-expect analysis:mixed-assignment an option's value: the next key narrows it
+            $value = $value[$key];
+        }
 
-            return false;
-        }));
+        return true;
     }
 
     /**

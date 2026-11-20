@@ -65,13 +65,14 @@ final class OptionsTest extends UnitTestCase
         self::assertSame(Options::BUS, self::at($options, 'notifications', 'bus'));
         self::assertSame(Options::LOCALES, self::at($options, 'notifications', 'locales'));
         self::assertSame('my.places', self::at($options, 'cursors', 'places'));
-        self::assertSame('other permission', self::at($options, 'notifications', 'role'));
-        // settings.php names a service of its own: nothing to warn of.
+        // A permission is the module's, as its pages check it.
+        self::assertSame('receive collaborate notifications', self::at($options, 'notifications', 'role'));
+        // settings.php names a service of its own: nothing to warn of, unlike a permission.
         self::assertSame(
-            ['notifications.bus'],
+            ['notifications.role', 'notifications.bus'],
             Options::ignored([
                 'advanced' => ['notifications' => ['bus' => 'my.bus']],
-            ], ['notifications' => ['locales' => 'my.locales']]),
+            ], ['notifications' => ['locales' => 'my.locales', 'role' => 'other permission']]),
         );
     }
 

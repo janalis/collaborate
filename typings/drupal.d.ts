@@ -21,5 +21,10 @@ export interface DrupalGlobals {
   jQuery?: (element: Element) => { trigger(event: string): unknown };
   /** The DLL's modules are typed by the bundle's own `ckeditor5` imports, not here. */
   // biome-ignore lint/suspicious/noExplicitAny: a module of the DLL, whichever its path names
-  CKEditor5?: { dll?: (path: string) => any; collaborate?: object };
+  CKEditor5?: {
+    dll?: (path: string) => any;
+    collaborate?: object;
+    /** The editor class Drupal creates its editors with. */
+    editorClassic?: { ClassicEditor: { create(...args: unknown[]): Promise<unknown> } };
+  };
 }

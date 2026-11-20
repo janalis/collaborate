@@ -64,6 +64,11 @@ versions follow [Semantic Versioning](https://semver.org/).
   `HttpError` with its `status`, and the push worker reads its scope
   through a declared type.
 
+### Removed
+
+- `assets/drupal.js`: the Drupal module loads its own entry,
+  `drupal/js/collaborate.js`, which registers the Drupal bridge.
+
 ### Fixed
 
 - A new record whose identifier is a UUID or ULID (a Stringable `Uid`, or

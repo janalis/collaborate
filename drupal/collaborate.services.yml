@@ -32,7 +32,7 @@ services:
 
   collaborate.access:
     class: Drupal\collaborate\Security\DrupalAccessChecker
-    arguments: ['@entity_type.manager']
+    arguments: ['@entity_type.manager', '%collaborate.role%']
 
   collaborate.places:
     class: Drupal\collaborate\Bridge\DrupalPlaces

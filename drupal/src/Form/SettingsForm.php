@@ -209,6 +209,7 @@ final class SettingsForm extends ConfigFormBase
             if ('' === trim($line)) {
                 continue;
             }
+            $match = [];
             if (1 !== preg_match('/^\s*([a-z][a-z0-9-]*)\s*:\s*(.+?)\s*$/', $line, $match)) {
                 return null;
             }

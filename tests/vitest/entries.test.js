@@ -11,7 +11,6 @@ afterEach(() => {
 test.each([
   ['collaborate.js', 'none'],
   ['easyadmin.js', 'easyadmin'],
-  ['drupal.js', 'drupal'],
 ])(
   '%s registers its bridge before the modules start, and re-exports their API',
   async (file, name) => {

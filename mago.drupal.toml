@@ -4,7 +4,15 @@ php-version = "8.4.0"
 
 [source]
 paths = ["drupal/src", "drupal/tests", "drupal/collaborate.install"]
-includes = ["src", "tests/Application/Drupal/web/core", "tests/Application/Drupal/vendor"]
+includes = [
+    "src",
+    "tests/Application/Drupal/web/core",
+    "tests/Application/Drupal/vendor",
+    # The contributed modules the bridge supports (Paragraphs, Inline Entity Form), as the test site installs them.
+    "tests/Application/Drupal/web/modules/contrib/paragraphs",
+    "tests/Application/Drupal/web/modules/contrib/entity_reference_revisions",
+    "tests/Application/Drupal/web/modules/contrib/inline_entity_form",
+]
 # The test site's copy of the bundle is this repository, already included as src/.
 excludes = ["tests/Application/Drupal/vendor/janalis"]
 

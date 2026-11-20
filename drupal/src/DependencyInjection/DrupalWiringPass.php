@@ -140,6 +140,7 @@ final class DrupalWiringPass implements CompilerPassInterface
     private function map(array $arguments): array
     {
         foreach ($arguments as $key => $argument) {
+            $match = [];
             if (\is_string($argument) && 1 === preg_match('/^%([^%]+)%$/', $argument, $match)) {
                 $arguments[$key] = $this->inline($match[1], $argument);
             } elseif ($argument instanceof Reference && isset(self::SERVICES[(string) $argument])) {

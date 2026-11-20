@@ -4,33 +4,24 @@ declare(strict_types=1);
 
 namespace Drupal\collaborate\Drush\Commands;
 
+use Drupal\collaborate\Drush\BundleCommandProxy;
 use Janalis\Collaborate\Command\PushSetupCommand as BundleCommand;
-use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\DependencyInjection\ContainerInterface;
 
-/**
- * `drush collaborate:push:setup`: the bundle's command, as the module registers it; a reminder of what it needs when that is off.
- */
-final class PushSetupCommand extends Command
+/** `drush collaborate:push:setup`: the bundle's command, as the module registers it; a reminder of what it needs when that is off. */
+final class PushSetupCommand extends BundleCommandProxy
 {
-    public static function create(ContainerInterface $container): Command
+    protected static function bundleCommand(): string
     {
-        $command = $container->has(BundleCommand::class) ? $container->get(BundleCommand::class) : null;
-
-        return $command instanceof Command ? $command : new self();
+        return BundleCommand::class;
     }
 
-    protected function configure(): void
+    protected static function commandName(): string
     {
-        $this->setName('collaborate:push:setup')->setDescription('Needs notifications.')->setHidden(true);
+        return 'collaborate:push:setup';
     }
 
-    protected function execute(InputInterface $input, OutputInterface $output): int
+    protected static function needs(): string
     {
-        $output->writeln('<error>collaborate:push:setup needs notifications.</error>');
-
-        return self::FAILURE;
+        return 'notifications';
     }
 }

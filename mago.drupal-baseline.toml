@@ -171,12 +171,6 @@ count = 1
 [[issues]]
 file = "drupal/src/Bridge/ItemKeys.php"
 code = "mixed-argument"
-message = "Invalid argument type for argument #1 of `array_keys`: expected `array<('K.array_keys() extends array-key), ('V.array_keys() extends mixed)>`, but found `mixed`."
-count = 1
-
-[[issues]]
-file = "drupal/src/Bridge/ItemKeys.php"
-code = "mixed-argument"
 message = 'Invalid argument type for argument #2 of `Drupal\Core\Entity\Display\EntityDisplayInterface::setComponent`: expected `array<array-key, mixed>`, but found `mixed`.'
 count = 1
 
@@ -221,24 +215,6 @@ file = "drupal/src/Bridge/ItemKeys.php"
 code = "non-documented-property"
 message = 'Ambiguous property access: $_collaborate_key on class `Drupal\Core\Field\FieldItemInterface`.'
 count = 2
-
-[[issues]]
-file = "drupal/src/Bridge/ItemKeys.php"
-code = "non-existent-class-like"
-message = 'Class, Interface, or Trait `Drupal\paragraphs\Plugin\Field\FieldWidget\ParagraphsWidget` does not exist.'
-count = 4
-
-[[issues]]
-file = "drupal/src/Bridge/ItemKeys.php"
-code = "non-existent-method"
-message = 'Method `getAllowedTypes` does not exist on type `Drupal\paragraphs\Plugin\Field\FieldWidget\ParagraphsWidget`.'
-count = 1
-
-[[issues]]
-file = "drupal/src/Bridge/ItemKeys.php"
-code = "non-existent-method"
-message = 'Method `getSetting` does not exist on type `Drupal\paragraphs\Plugin\Field\FieldWidget\ParagraphsWidget`.'
-count = 1
 
 [[issues]]
 file = "drupal/src/Bridge/ItemKeys.php"
@@ -337,12 +313,6 @@ message = "Assigning `mixed` type to a variable may lead to unexpected behavior.
 count = 4
 
 [[issues]]
-file = "drupal/src/DependencyInjection/DrupalWiringPass.php"
-code = "possibly-undefined-variable"
-message = "Variable `$match` might not have been defined on all execution paths leading to this point."
-count = 1
-
-[[issues]]
 file = "drupal/src/DependencyInjection/Options.php"
 code = "less-specific-return-statement"
 message = 'Returned type `array<array-key, mixed>` is less specific than the declared return type `array<string, mixed>` for function `Drupal\collaborate\DependencyInjection\Options::bundle`.'
@@ -424,12 +394,6 @@ count = 7
 file = "drupal/src/Form/SettingsForm.php"
 code = "non-existent-method"
 message = 'Method `getConfiguration` does not exist on type `Symfony\Component\DependencyInjection\Extension\ExtensionInterface`.'
-count = 1
-
-[[issues]]
-file = "drupal/src/Form/SettingsForm.php"
-code = "possibly-undefined-variable"
-message = "Variable `$match` might not have been defined on all execution paths leading to this point."
 count = 1
 
 [[issues]]
@@ -673,12 +637,6 @@ message = "Attempting to call method `setComponent()` on a non-object type (`mix
 count = 1
 
 [[issues]]
-file = "drupal/tests/src/Functional/EntityFormTest.php"
-code = "possibly-null-operand"
-message = "Possibly null middle operand used in string concatenation (type `int|null|string`)."
-count = 4
-
-[[issues]]
 file = "drupal/tests/src/Kernel/ServicesTest.php"
 code = "ambiguous-object-method-access"
 message = "Cannot statically verify method call on a generic `object` type."
@@ -718,4 +676,4 @@ count = 1
 file = "drupal/tests/src/Unit/OptionsTest.php"
 code = "mixed-array-access"
 message = "Unsafe array access on type `mixed`."
-count = 20
+count = 17

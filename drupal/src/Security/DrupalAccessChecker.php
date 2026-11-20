@@ -16,13 +16,15 @@ use Symfony\Component\Security\Core\User\UserInterface;
  */
 final readonly class DrupalAccessChecker implements DraftAccessCheckerInterface
 {
+    /** @param string $role the collaboration permission (`collaborate.role`), as every other gate of the module reads it */
     public function __construct(
         private EntityTypeManagerInterface $entities,
+        private string $role = 'use collaborate',
     ) {}
 
     public function canEdit(UserInterface $user, string $permission, string $entityClass): bool
     {
-        if (!$user instanceof DrupalUser || !$user->account->hasPermission('use collaborate')) {
+        if (!$user instanceof DrupalUser || !$user->account->hasPermission($this->role)) {
             return false;
         }
         [$type, $bundle] = explode(':', $entityClass, 2) + [1 => null];

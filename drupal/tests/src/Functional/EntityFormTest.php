@@ -30,7 +30,7 @@ final class EntityFormTest extends BrowserTestBase
     {
         $node = $this->drupalCreateNode(['type' => 'article', 'title' => 'Shared']);
         $this->drupalLogin($this->drupalCreateUser(['use collaborate', 'edit any article content', 'access content']));
-        $this->drupalGet('node/' . $node->id() . '/edit');
+        $this->drupalGet($node->toUrl('edit-form'));
 
         $form = $this->assertSession()->elementExists('css', 'form[data-collaborate]');
         $configuration = json_decode(
@@ -64,7 +64,7 @@ final class EntityFormTest extends BrowserTestBase
             'access content',
             'administer nodes',
         ]));
-        $this->drupalGet('node/' . $node->id() . '/edit');
+        $this->drupalGet($node->toUrl('edit-form'));
 
         $field = $this->sharedFields()['uid[0][target_id]'];
         self::assertSame(\sprintf('writer (%s)', $author->id()), $field['initial']);
@@ -97,7 +97,7 @@ final class EntityFormTest extends BrowserTestBase
         $this->drupalLogin($this->drupalCreateUser(['use collaborate', 'edit any article content', 'access content']));
 
         $json = $this->drupalGet(
-            'node/' . $node->id() . '/edit',
+            $node->toUrl('edit-form'),
             [],
             ['X-Collaborate-Refresh' => '1', 'Accept' => 'application/json'],
         );
@@ -127,7 +127,7 @@ final class EntityFormTest extends BrowserTestBase
             'field_notes' => ['First', 'Second'],
         ]);
         $this->drupalLogin($this->drupalCreateUser(['use collaborate', 'edit any article content', 'access content']));
-        $this->drupalGet('node/' . $node->id() . '/edit');
+        $this->drupalGet($node->toUrl('edit-form'));
 
         // The items are named by their keys, Drupal's empty row by its delta.
         $this->assertSession()->elementExists('css', '[data-collaborate-collection="field_notes"]');

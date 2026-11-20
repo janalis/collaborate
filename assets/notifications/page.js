@@ -17,16 +17,27 @@ const MORE = '.collaborate-notification-more';
 export const MARGIN = '0px 0px 200px 0px';
 
 // What a button of the toolbar tells the server, without an id.
+/** @type {Record<string, string>} */
 const ALL = { readAll: 'read', unreadAll: 'unread', clearAll: 'clear' };
 const ONE = ['read', 'unread', 'clear'];
 
+/**
+ * @param {string[]} names
+ * @param {string} [within]
+ */
 const buttons = (names, within = '') => names.map((name) => `${within}[data-action="${name}"]`).join(', ');
 
-/** The rows a fragment holds, with the row naming the next ones -- or null for anything else (a sign-in page). */
+/**
+ * The rows a fragment holds, with the row naming the next ones -- or null for anything else (a sign-in page).
+ *
+ * @param {string | null} html
+ */
 export function parseRows(html) {
   if (typeof html !== 'string') return null;
   const nodes = parseFragment(html);
-  const isRow = (node) => (node instanceof Element ? node.matches(`${ROW}, ${MORE}`) : node.textContent.trim() === '');
+  /** @param {ChildNode} node */
+  const isRow = (node) =>
+    node instanceof Element ? node.matches(`${ROW}, ${MORE}`) : /** @type {string} */ (node.textContent).trim() === '';
   return nodes.every(isRow) ? nodes.filter((node) => node instanceof Element) : null;
 }
 
@@ -34,27 +45,41 @@ export function parseRows(html) {
  * Whether the reader confirms clearing them all, as the button asks (`data-confirm`): the host answers it
  * when it listens to `collaborate:notifications-confirm` and sets `detail.answer` (a boolean or a promise of
  * one), the browser's own dialog does otherwise. A button that asks nothing is not confirmed.
+ *
+ * @param {HTMLElement} button
  */
 export async function confirmed(button) {
   const message = button.dataset.confirm;
   if (!message) return true;
+  /** @type {{ message: string, answer: boolean | Promise<boolean> | undefined }} */
   const detail = { message, answer: undefined };
   document.dispatchEvent(new CustomEvent('collaborate:notifications-confirm', { detail }));
   if (detail.answer !== undefined) return Boolean(await detail.answer);
   return window.confirm(message);
 }
 
-/** Loads the older notifications as the reader scrolls, and marks them read, unread or cleared. */
+/**
+ * Loads the older notifications as the reader scrolls, and marks them read, unread or cleared.
+ *
+ * @param {HTMLElement} root
+ * @param {{
+ *   fetcher?: typeof fetch,
+ *   navigate?: (url: string) => void,
+ *   Observer?: typeof IntersectionObserver | undefined,
+ * }} [options]
+ */
 export function initPage(
   root,
   { fetcher = backgroundFetch, navigate = (url) => location.assign(url), Observer = window.IntersectionObserver } = {}
 ) {
   const settings = settingsOf(root, 'data-collaborate-notifications-page');
-  const list = root.querySelector('.collaborate-notification-list');
+  // Typed as found: a page without it does not start, which the line below checks.
+  const list = /** @type {HTMLElement} */ (root.querySelector('.collaborate-notification-list'));
   if (!list) return null;
-  const empty = root.querySelector('.collaborate-notifications__empty');
+  const empty = /** @type {HTMLElement | null} */ (root.querySelector('.collaborate-notifications__empty'));
   // Where the keys go on from when what they were on is gone (tabindex="-1" in the template).
-  const heading = root.querySelector('.collaborate-notifications-page__title');
+  const heading = /** @type {HTMLElement | null} */ (root.querySelector('.collaborate-notifications-page__title'));
+  /** @type {Record<string, string>} */
   const hrefs = { read: settings.read, unread: settings.unread, clear: settings.clear };
   let stopped = false;
 
@@ -65,7 +90,8 @@ export function initPage(
   let turn = 0;
 
   /** Whether the listing holds the unread notifications only: one that is read leaves it. */
-  const isUnreadOnly = () => new URL(list.dataset.src, location.href).searchParams.get('unread') === '1';
+  const isUnreadOnly = () =>
+    new URL(/** @type {string} */ (list.dataset.src), location.href).searchParams.get('unread') === '1';
 
   // Nothing is said to be missing while older notifications are still to be asked for.
   function showEmpty() {
@@ -81,7 +107,7 @@ export function initPage(
     const control =
       (action ? row?.querySelector(`[data-action="${action}"]:not([hidden])`) : null) ??
       row?.querySelector('a, button:not([hidden])');
-    (control ?? heading)?.focus();
+    /** @type {HTMLElement | null | undefined} */ (control ?? heading)?.focus();
   }
 
   /** Remembers what holds the focus in the list, and answers what gives it back once the rows were written again. */
@@ -97,6 +123,7 @@ export function initPage(
     };
   }
 
+  /** @param {string} url */
   async function fetchRows(url) {
     loads += 1;
     try {
@@ -106,6 +133,10 @@ export function initPage(
     }
   }
 
+  /**
+   * @param {string} url
+   * @param {string | null} [id]
+   */
   async function post(url, id = null) {
     posts += 1;
     try {
@@ -115,7 +146,11 @@ export function initPage(
     }
   }
 
-  /** Tells the bell and the host what is left. */
+  /**
+   * Tells the bell and the host what is left.
+   *
+   * @param {{ unread: number, total?: number | null }} answer
+   */
   function tell(answer) {
     document.dispatchEvent(
       new CustomEvent('collaborate:notifications-changed', {
@@ -126,10 +161,10 @@ export function initPage(
 
   // A function declaration: watch and loadMore name each other.
   async function loadMore() {
-    const sentinel = list.querySelector(MORE);
+    const sentinel = /** @type {HTMLElement | null} */ (list.querySelector(MORE));
     // One listing at a time.
     if (!sentinel || loads > 0) return;
-    const rows = await fetchRows(sentinel.dataset.next);
+    const rows = await fetchRows(/** @type {string} */ (sentinel.dataset.next));
     // A failure leaves the row where it is: scrolling to it again asks again.
     if (!rows || stopped || !sentinel.isConnected) return;
     // The keys were on the button that leaves: they go on from the first of the rows it brought.
@@ -161,7 +196,7 @@ export function initPage(
   async function reload() {
     turn += 1;
     const mine = turn;
-    const rows = await fetchRows(list.dataset.src);
+    const rows = await fetchRows(/** @type {string} */ (list.dataset.src));
     if (!rows || stopped || mine !== turn) return;
     const restore = keepFocus();
     list.replaceChildren(...rows);
@@ -171,15 +206,20 @@ export function initPage(
     watch();
   }
 
+  /**
+   * @param {HTMLElement} row
+   * @param {boolean} unread
+   */
   function mark(row, unread) {
-    const shown = row.querySelector(buttons([unread ? 'read' : 'unread']));
+    const shown = /** @type {HTMLElement} */ (row.querySelector(buttons([unread ? 'read' : 'unread'])));
     row.dataset.unread = String(unread);
-    row.querySelector(buttons([unread ? 'unread' : 'read'])).hidden = true;
+    /** @type {HTMLElement} */ (row.querySelector(buttons([unread ? 'unread' : 'read']))).hidden = true;
     shown.hidden = false;
     // The button that was pressed is gone.
     shown.focus();
   }
 
+  /** @param {HTMLElement} row */
   function drop(row) {
     // The button that was pressed leaves with its row: the keys go on from the same button of the row that
     // follows, of the one before when it was the last.
@@ -193,7 +233,12 @@ export function initPage(
     if (!list.querySelector(ROW)) loadMore();
   }
 
-  /** Marks a notification read or unread, or clears it, once the server knows. */
+  /**
+   * Marks a notification read or unread, or clears it, once the server knows.
+   *
+   * @param {string} action
+   * @param {HTMLElement} row
+   */
   async function actOnRow(action, row) {
     const answer = await post(hrefs[action], row.dataset.id);
     if (!answer || stopped) return;
@@ -202,7 +247,12 @@ export function initPage(
     tell(answer);
   }
 
-  /** Marks every notification of the reader read or unread, or clears them all once confirmed. */
+  /**
+   * Marks every notification of the reader read or unread, or clears them all once confirmed.
+   *
+   * @param {string} action
+   * @param {HTMLElement} button
+   */
   async function actOnAll(action, button) {
     if (action === 'clearAll' && !(await confirmed(button))) return;
     const answer = await post(hrefs[ALL[action]]);
@@ -222,6 +272,9 @@ export function initPage(
   /**
    * Keeps a button from being pressed again while the server is told. It is not disabled, which would take the
    * focus away from it: it says so (aria-disabled), and answers nothing meanwhile.
+   *
+   * @param {HTMLElement} button
+   * @param {() => Promise<void>} work
    */
   async function press(button, work) {
     if (button.getAttribute('aria-disabled') === 'true') return;
@@ -233,38 +286,56 @@ export function initPage(
     }
   }
 
-  /** Follows the link of an unread row once the server knows it read, as the bell does. */
+  /**
+   * Follows the link of an unread row once the server knows it read, as the bell does.
+   *
+   * @param {Element} link
+   * @param {HTMLElement} row
+   */
   async function follow(link, row) {
     await post(hrefs.read, row.dataset.id);
-    if (!stopped) navigate(link.getAttribute('href'));
+    if (!stopped) navigate(/** @type {string} */ (link.getAttribute('href')));
   }
 
+  /** @param {MouseEvent} event */
   function click(event) {
-    const one = event.target.closest(buttons(ONE, `${ROW} `));
+    const one = /** @type {HTMLElement | null} */ (
+      /** @type {Element} */ (event.target).closest(buttons(ONE, `${ROW} `))
+    );
     if (one && list.contains(one)) {
-      press(one, () => actOnRow(one.dataset.action, one.closest(ROW)));
+      press(one, () =>
+        actOnRow(/** @type {string} */ (one.dataset.action), /** @type {HTMLElement} */ (one.closest(ROW)))
+      );
       return;
     }
-    const all = event.target.closest(buttons(Object.keys(ALL)));
+    const all = /** @type {HTMLElement | null} */ (
+      /** @type {Element} */ (event.target).closest(buttons(Object.keys(ALL)))
+    );
     if (all) {
-      press(all, () => actOnAll(all.dataset.action, all));
+      press(all, () => actOnAll(/** @type {string} */ (all.dataset.action), all));
       return;
     }
     // Also where the row is watched: a listing that failed is asked for again.
-    if (event.target.closest(MORE)) {
+    if (/** @type {Element} */ (event.target).closest(MORE)) {
       loadMore();
       return;
     }
-    const link = event.target.closest(`${ROW}[data-unread="true"] a[href]`);
+    const link = /** @type {Element} */ (event.target).closest(`${ROW}[data-unread="true"] a[href]`);
     if (link && leaves(event)) {
       event.preventDefault();
-      follow(link, link.closest(ROW));
+      follow(link, /** @type {HTMLElement} */ (link.closest(ROW)));
     }
   }
 
   // The bell was told by the hub: the reader did something on another page, or was told something.
+  /** @param {Event} event */
   function heard(event) {
-    if (event.detail?.origin === 'bell' && event.detail.heard && loads + posts === 0) reload();
+    if (
+      /** @type {CustomEvent} */ (event).detail?.origin === 'bell' &&
+      /** @type {CustomEvent} */ (event).detail.heard &&
+      loads + posts === 0
+    )
+      reload();
   }
 
   function stop() {
@@ -290,7 +361,7 @@ export function startPages() {
   for (const root of document.querySelectorAll('[data-collaborate-notifications-page]')) {
     if (started.has(root)) continue;
     started.add(root);
-    initPage(root);
+    initPage(/** @type {HTMLElement} */ (root));
   }
 }
 

@@ -6,10 +6,17 @@
 import { capturePopup, findRecord, offscreenAnchor, samePopup, seen } from './geometry.js';
 import { initialOf } from './presence.js';
 
+/** @typedef {import('./cursors.js').Peer} Peer */
+
 // How many peers a record is marked with, the others counted.
 export const MARKED = 3;
 
-/** Fills the placeholders of a sentence: `%name%` and the like. */
+/**
+ * Fills the placeholders of a sentence: `%name%` and the like.
+ *
+ * @param {string | undefined} message
+ * @param {Record<string, string>} parameters
+ */
 export function format(message, parameters) {
   return Object.entries(parameters).reduce((text, [name, value]) => text.replaceAll(`%${name}%`, value), message ?? '');
 }
@@ -20,19 +27,34 @@ export function format(message, parameters) {
  * @param {{ markers?: boolean, edges?: string | null, popups?: Record<string, { where?: string, line?: string }>, messages?: Record<string, string> }} [options]
  */
 export function createMarks(layer, presence, { markers = false, edges = null, popups = {}, messages = {} } = {}) {
+  /** @type {Map<string, { element: HTMLDivElement, bar: HTMLSpanElement, readers: HTMLSpanElement, drawn: string }>} */
   const views = new Map();
   const kinds = Object.keys(popups);
 
-  /** Where the arrow of a pointer scrolled out of its pane goes, or null: a pointer seen needs none. */
+  /**
+   * Where the arrow of a pointer scrolled out of its pane goes, or null: a pointer seen needs none.
+   *
+   * @param {Peer} peer
+   * @param {boolean} visible
+   */
   function edgeOf(peer, visible) {
     return !visible && edges ? offscreenAnchor(peer.anchor, edges) : null;
   }
 
+  /**
+   * @param {Peer} peer
+   * @param {boolean} visible
+   */
   function drawEdge(peer, visible) {
     placeEdge(peer, edgeOf(peer, visible));
   }
 
-  /** Draws the arrow `edgeOf()` measured, or hides it. */
+  /**
+   * Draws the arrow `edgeOf()` measured, or hides it.
+   *
+   * @param {Peer} peer
+   * @param {ReturnType<typeof edgeOf>} edge
+   */
   function placeEdge(peer, edge) {
     if (!edge) {
       if (peer.edge) peer.edge.hidden = true;
@@ -41,7 +63,8 @@ export function createMarks(layer, presence, { markers = false, edges = null, po
     if (!peer.edge) {
       peer.edge = document.createElement('div');
       peer.edge.className = 'collaborate-edge';
-      peer.edge.dataset.userId = peer.userId;
+      // The dataset keeps the id as its string.
+      peer.edge.dataset.userId = /** @type {string} */ (/** @type {unknown} */ (peer.userId));
       layer.appendChild(peer.edge);
     }
     const label = presence.users.get(peer.userId)?.label ?? peer.label;
@@ -53,12 +76,17 @@ export function createMarks(layer, presence, { markers = false, edges = null, po
     peer.edge.hidden = false;
   }
 
+  /** @param {Peer} peer */
   function dropEdge(peer) {
     peer.edge?.remove();
     peer.edge = null;
   }
 
-  /** Where a record is, read before any marker is drawn: a write between two reads lays the page out again. */
+  /**
+   * Where a record is, read before any marker is drawn: a write between two reads lays the page out again.
+   *
+   * @param {string} key
+   */
   function measureMarker(key) {
     const record = findRecord(key);
     const box = record && seen(record) && record.getBoundingClientRect();
@@ -68,7 +96,13 @@ export function createMarks(layer, presence, { markers = false, edges = null, po
     return { box, row: !!cell, end: (cell ? cell.getBoundingClientRect().right : box.right) - box.left };
   }
 
-  /** A record marked with the peers on it, where the page shows it. */
+  /**
+   * A record marked with the peers on it, where the page shows it.
+   *
+   * @param {string} key
+   * @param {number[]} ids
+   * @param {ReturnType<typeof measureMarker> | undefined} place
+   */
   function drawMarker(key, ids, place) {
     let view = views.get(key);
     if (!view) {
@@ -91,8 +125,14 @@ export function createMarks(layer, presence, { markers = false, edges = null, po
     view.element.style.height = `${box.height}px`;
     view.element.dataset.shape = place.row ? 'row' : 'tile';
     view.element.style.setProperty('--marker-end', `${place.end}px`);
-    const colors = ids.map((id) => presence.colorOf(id));
-    const drawn = JSON.stringify(ids.map((id, index) => [colors[index], presence.users.get(id).label]));
+    // A marked peer is present, and has its colour.
+    const colors = ids.map((id) => /** @type {string} */ (presence.colorOf(id)));
+    const drawn = JSON.stringify(
+      ids.map((id, index) => [
+        colors[index],
+        /** @type {import('./presence.js').PresentUser} */ (presence.users.get(id)).label,
+      ])
+    );
     if (drawn === view.drawn) return;
     view.drawn = drawn;
     view.element.dataset.color = colors[0];
@@ -101,7 +141,9 @@ export function createMarks(layer, presence, { markers = false, edges = null, po
       const initial = document.createElement('span');
       initial.className = 'collaborate-marker__user';
       initial.dataset.color = colors[index];
-      initial.textContent = initialOf(presence.users.get(id).label);
+      initial.textContent = initialOf(
+        /** @type {import('./presence.js').PresentUser} */ (presence.users.get(id)).label
+      );
       return initial;
     });
     if (ids.length > MARKED) {
@@ -111,7 +153,9 @@ export function createMarks(layer, presence, { markers = false, edges = null, po
       initials.push(more);
     }
     view.readers.replaceChildren(...initials);
-    view.element.title = ids.map((id) => presence.users.get(id).label).join(', ');
+    view.element.title = ids
+      .map((id) => /** @type {import('./presence.js').PresentUser} */ (presence.users.get(id)).label)
+      .join(', ');
   }
 
   /** Marks the records peers point at or have a popup of, and unmarks the others. */
@@ -138,6 +182,8 @@ export function createMarks(layer, presence, { markers = false, edges = null, po
   /**
    * Says in a popup who else has it open, in the host's placeholder (`[data-collaborate-popup-presence]` in the
    * popup's dialog) or at the top of the popup.
+   *
+   * @param {boolean} active
    */
   function drawPopupLine(active) {
     const mine = active ? capturePopup(kinds) : null;
@@ -183,7 +229,7 @@ export function createMarks(layer, presence, { markers = false, edges = null, po
     const initials = others.map(([id, user]) => {
       const initial = document.createElement('span');
       initial.className = 'collaborate-popup-presence__swatch';
-      initial.dataset.color = presence.colorOf(id);
+      initial.dataset.color = /** @type {string} */ (presence.colorOf(id));
       initial.textContent = initialOf(user.label);
       initial.setAttribute('aria-hidden', 'true');
       return initial;
@@ -194,7 +240,12 @@ export function createMarks(layer, presence, { markers = false, edges = null, po
     return false;
   }
 
-  /** Points an element out a moment: a peer found on the page. */
+  /**
+   * Points an element out a moment: a peer found on the page.
+   *
+   * @param {Element} element
+   * @param {number} duration
+   */
   function pulse(element, duration) {
     element.classList.add('collaborate-pulse');
     setTimeout(() => element.classList.remove('collaborate-pulse'), duration);

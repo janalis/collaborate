@@ -21,7 +21,9 @@ export function initUpdates(
   const { lists, selection, overlays } = bridge();
   // The list's selection checkboxes, as the page shows them now.
   const inputs = () => /** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll(selection));
+  /** @type {(() => void) | null | undefined} */
   let leave;
+  /** @type {ReturnType<typeof setTimeout> | null | undefined} */
   let refresh;
   // The user's own navigation is pending: saves heard meanwhile wait to see whether the page stays.
   let leaving = false;
@@ -29,10 +31,14 @@ export function initUpdates(
   let suspended = false;
   // The page's grant was refused: another one entered without loading (`collaborate:enter`) follows saves again.
   let denied = false;
+  /** @type {Map<HTMLElement, (event: FocusEvent) => void>} */
   const deferredLists = new Map();
   // Lists loading, by when the load started; lists that heard of a save meanwhile, and their retries.
+  /** @type {Map<Element, number>} */
   const reloadingLists = new Map();
+  /** @type {Set<Element>} */
   const staleLists = new Set();
+  /** @type {Map<Element, ReturnType<typeof setTimeout>>} */
   const retries = new Map();
   // A list without content is on its first load.
   if (lists)
@@ -66,12 +72,14 @@ export function initUpdates(
     }
   }
 
+  /** @param {HTMLElement} list */
   function deferList(list) {
     if (deferredLists.has(list)) return;
     // Focus has not landed on the next control yet while focusout runs, nor in its microtasks: the event names it.
+    /** @param {FocusEvent} event */
     const blur = (event) => {
       // Another window taking the focus leaves it on the control, and the text typed there.
-      if (list.contains(event.relatedTarget) || !document.hasFocus()) return;
+      if (list.contains(/** @type {Node | null} */ (event.relatedTarget)) || !document.hasFocus()) return;
       list.removeEventListener('focusout', blur);
       deferredLists.delete(list);
       reloadList(list);
@@ -80,6 +88,7 @@ export function initUpdates(
     list.addEventListener('focusout', blur);
   }
 
+  /** @param {HTMLElement} list */
   function refreshList(list) {
     if (list.contains(document.activeElement)) deferList(list);
     else reloadList(list);
@@ -89,6 +98,7 @@ export function initUpdates(
   // renders would keep it from ever loading, and a page change the user asked for would be undone.
   // A list still loading refreshes once that load lands. A load that fails announces nothing, so the
   // refresh also runs once the load stops holding the list, 30 s after it started.
+  /** @param {HTMLElement} list */
   function reloadList(list) {
     const wait = (reloadingLists.get(list) ?? -Infinity) + 30_000 - Date.now();
     if (wait > 0) {
@@ -100,7 +110,7 @@ export function initUpdates(
             retries.delete(list);
             // A load started since, the user's own page change included, holds the list in turn. Until this
             // retry runs, the list stays loading and stale: a landed load or a suspension cancels the retry.
-            if (reloadingLists.get(list) + 30_000 > Date.now()) return reloadList(list);
+            if (/** @type {number} */ (reloadingLists.get(list)) + 30_000 > Date.now()) return reloadList(list);
             reloadingLists.delete(list);
             staleLists.delete(list);
             refreshList(list);
@@ -113,8 +123,9 @@ export function initUpdates(
     /** @type {NonNullable<typeof lists>} */ (lists).reload(list);
   }
 
+  /** @param {Event} event */
   function listLoaded(event) {
-    const list = event.detail?.list;
+    const list = /** @type {CustomEvent} */ (event).detail?.list;
     reloadingLists.delete(list);
     clearTimeout(retries.get(list));
     retries.delete(list);
@@ -122,14 +133,18 @@ export function initUpdates(
   }
 
   // A link or form the bridge binds inside a list loads its page in place.
+  /** @param {Event} event */
   function listNavigated(event) {
-    const control = event.type === 'submit' ? event.target : event.target.closest?.('a');
+    const control = /** @type {HTMLElement | null | undefined} */ (
+      event.type === 'submit' ? event.target : /** @type {Element} */ (event.target).closest?.('a')
+    );
     const bound = /** @type {NonNullable<typeof lists>} */ (lists);
     const list = control?.closest(bound.selector);
-    if (list && bound.bound(control)) reloadingLists.set(list, Date.now());
+    if (list && bound.bound(/** @type {HTMLElement} */ (control))) reloadingLists.set(list, Date.now());
   }
 
   // Saved events name the entities they can affect; a page that cannot tell refreshes for all of them.
+  /** @param {{ entities?: unknown }} data */
   function concerns({ entities }) {
     const entity = page()?.entity;
     return !entity || !Array.isArray(entities) || entities.includes(entity);
@@ -148,7 +163,7 @@ export function initUpdates(
 
   // A reload issued while the user's own navigation is pending would cancel it.
   function postpone() {
-    clearTimeout(refresh);
+    clearTimeout(/** @type {number | undefined} */ (refresh));
     refresh = null;
     leaving = true;
     window.removeEventListener('beforeunload', postpone);
@@ -186,7 +201,9 @@ export function initUpdates(
       }
       // The form hears of its own record on the draft's topic; here only its embedded lists refresh.
       if (activeForm) {
-        if (lists) for (const list of document.querySelectorAll(lists.selector)) refreshList(list);
+        if (lists)
+          for (const list of /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll(lists.selector)))
+            refreshList(list);
         return;
       }
       // Only a list or a record's detail reloads: a page the bridge cannot tell keeps its content.
@@ -242,8 +259,9 @@ export function initUpdates(
     suspend();
   }
 
+  /** @param {Event} event */
   function enter(event) {
-    if (!denied || stopped || typeof event.detail?.grant !== 'string') return;
+    if (!denied || stopped || typeof (/** @type {CustomEvent} */ (event).detail?.grant) !== 'string') return;
     denied = false;
     suspended = false;
     listen();
@@ -262,7 +280,7 @@ export function initUpdates(
     leaving = false;
     leave?.();
     leave = null;
-    clearTimeout(refresh);
+    clearTimeout(/** @type {number | undefined} */ (refresh));
     refresh = null;
     window.removeEventListener('beforeunload', postpone);
     window.removeEventListener('pointerdown', resume, true);
@@ -279,10 +297,12 @@ export function initUpdates(
     reloadingLists.clear();
     staleLists.clear();
   }
+  /** @param {PageTransitionEvent} event */
   function hide(event) {
     if (event.persisted) suspend();
     else stop();
   }
+  /** @param {PageTransitionEvent} event */
   function restore(event) {
     if (!event.persisted || stopped || denied || !suspended) return;
     suspended = false;

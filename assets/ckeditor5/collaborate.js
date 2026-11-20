@@ -40,6 +40,7 @@ export default class Collaborate extends Plugin {
         if (focused) field.value = rebaseText(before, data, this.editor.getData());
         if (focused && before !== field.value) {
           const change = textChange(before, field.value);
+          /** @param {number} offset */
           const map = (offset) =>
             offset <= change.prefix
               ? offset
@@ -55,11 +56,17 @@ export default class Collaborate extends Plugin {
   }
 
   attachSource() {
-    this.removeMode = this.session?.registerMode?.(this.field, this.editor, (source) => this.applySource(source));
+    this.removeMode = this.session?.registerMode?.(
+      this.field,
+      this.editor,
+      /** @param {string} source */ (source) => this.applySource(source)
+    );
   }
 
+  /** @param {string} source */
   applySource(source) {
-    if (hasPendingUpload(this.editor.model.document.getRoot())) return;
+    if (hasPendingUpload(/** @type {import('ckeditor5').ModelElement} */ (this.editor.model.document.getRoot())))
+      return;
     this.sourceEditing = true;
     try {
       applySource(this.editor, source);

@@ -7,7 +7,11 @@ export { backgroundFetch };
 
 const hubs = new WeakMap();
 
-/** The layer's `data-config` JSON: an absent or malformed one reads as no settings, each module keeping its defaults. */
+/**
+ * The layer's `data-config` JSON: an absent or malformed one reads as no settings, each module keeping its defaults.
+ *
+ * @param {Element | null} layer
+ */
 export function layerConfig(layer) {
   return settingsOf(layer, 'data-config');
 }
@@ -33,7 +37,19 @@ export function layerConfig(layer) {
  * }} SourceOptions
  * @typedef {(url: string, options: SourceOptions) => Promise<void>} Source
  * @typedef {Record<string, () => Promise<Source>>} Sources
- * @typedef {{ controller: AbortController, members: any[] }} Attempt
+ * A module of the page following the stream: `receive` is given each notice of its channel (of its draft, for
+ * a draft session), its JSON parsed; `grant` signs a draft's topic into the session.
+ *
+ * @typedef {{
+ *   channel: string,
+ *   draft?: string,
+ *   grant?: (full: boolean) => string,
+ *   receive: (message: { data: string }, data: any) => void,
+ *   opened?: (session: any) => void,
+ *   closed?: () => void,
+ *   denied?: () => void,
+ * }} Member
+ * @typedef {{ controller: AbortController, members: Member[] }} Attempt
  */
 
 /**
@@ -71,6 +87,7 @@ export class CollaborateHub {
     this.sources = transports;
     /** @type {Record<string, Promise<Source>>} */
     this.loading = {};
+    /** @type {Set<Member>} */
     this.members = new Set();
     this.failures = 0;
     this.handshakes = 0;
@@ -103,7 +120,11 @@ export class CollaborateHub {
     document.addEventListener('visibilitychange', probe);
   }
 
-  /** Adds a member and reconnects with its topic; the returned function removes it. */
+  /**
+   * Adds a member and reconnects with its topic; the returned function removes it.
+   *
+   * @param {Member} member
+   */
   join(member) {
     this.members.add(member);
     this.reconnect();
@@ -168,7 +189,8 @@ export class CollaborateHub {
         updates: members.some((member) => member.channel === 'updates'),
         // The user's own notifications topic is granted to a page that asks for it alone.
         notifications: members.some((member) => member.channel === 'notifications'),
-        drafts: drafts.map((member) => member.grant(full)),
+        // A draft session always signs its topic.
+        drafts: drafts.map((member) => /** @type {NonNullable<Member['grant']>} */ (member.grant)(full)),
       });
       if (signal.aborted) return;
       if (isDenied(response) || response.status === 404) {
@@ -228,7 +250,8 @@ export class CollaborateHub {
           if (signal.aborted) return;
         }
       }
-      const source = await this.#source(transport);
+      // Set from the session above.
+      const source = await this.#source(/** @type {string} */ (transport));
       if (signal.aborted) return;
       await source(session.url, {
         signal,
@@ -265,7 +288,12 @@ export class CollaborateHub {
     }
   }
 
-  /** The transport's source, its module loaded once (and again after a failed load). */
+  /**
+   * The transport's source, its module loaded once (and again after a failed load).
+   *
+   * @param {string} transport
+   * @returns {Promise<Source>}
+   */
   #source(transport) {
     this.loading[transport] ??= Promise.resolve()
       .then(() => {
@@ -377,6 +405,7 @@ export class CollaborateHub {
     }
   }
 
+  /** @param {{ data: string }} message */
   route(message) {
     let data;
     try {

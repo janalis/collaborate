@@ -42,7 +42,7 @@ function validAnchor(anchor) {
  * The event a hub message carries, or null when it carries none a page may draw.
  *
  * @param {string} data the message's JSON
- * @param {{ colors: string[], kinds: unknown, since: number }} page the colours and popup kinds of the page, and
+ * @param {{ colors: string[], kinds: string[], since: number }} page the colours and popup kinds of the page, and
  *   the oldest timestamp it still draws
  * @returns {any}
  */

@@ -1,21 +1,51 @@
 // @ts-check
 import { MergeOperation, MoveOperation, NoOperation, transformOperationSets } from 'ckeditor5';
 
+/**
+ * @typedef {import('ckeditor5').Model} Model
+ * @typedef {import('ckeditor5').Operation} Operation
+ * @typedef {import('ckeditor5').Batch} Batch
+ */
+
+/**
+ * Local operations journaled together, under the id their acknowledgement carries.
+ *
+ * @typedef {{ id: string, operations: Operation[], sent: boolean }} Group
+ */
+
+/**
+ * A batch of the journal: the operations, as JSON, applied from `version` on.
+ *
+ * @typedef {{ id: string, version: number, operations: unknown[] }} JournalBatch
+ */
+
 /** Optimistic client of an append-only, compare-and-swap operation journal. */
 export class OperationBuffer {
+  /**
+   * @param {Model} model
+   * @param {() => void} [changed]
+   */
   constructor(model, changed = () => {}) {
     this.model = model;
     this.changed = changed;
     /** @type {((text: string) => void) | undefined} What its owner does of a saved text the draft adopts. */
     this.adopt = undefined;
     this.version = model.document.version;
+    /** @type {Group[]} */
     this.pending = [];
     this.applying = false;
+    /** @type {WeakMap<Batch, Group>} */
     this.batches = new WeakMap();
+    /** @type {WeakSet<Operation>} */
     this.remoteOperations = new WeakSet();
+    /**
+     * @param {unknown} _event
+     * @param {[Operation]} args
+     */
     this.capture = (_event, [operation]) => {
       if (this.remoteOperations.has(operation) || !operation.isDocumentOperation) return;
-      const batch = operation.batch;
+      // Applied operations belong to a batch.
+      const batch = /** @type {Batch} */ (operation.batch);
       let group = this.batches.get(batch);
       // Reused native batches can interleave; extend only the latest journal
       // group so its operations remain contiguous in document version order.
@@ -57,6 +87,7 @@ export class OperationBuffer {
     };
   }
 
+  /** @param {JournalBatch} batch */
   receive(batch) {
     if (batch.version < this.version) return;
     if (batch.version !== this.version) throw new Error('Collaborate operation gap.');

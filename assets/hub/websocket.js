@@ -12,7 +12,12 @@ export const ACK_TIMEOUT = 10_000;
  * @typedef {Error & { code?: number }} WebSocketFailure
  */
 
-/** The hub's WebSocket URL: a relative one is the page's origin, and http(s) maps to ws(s). */
+/**
+ * The hub's WebSocket URL: a relative one is the page's origin, and http(s) maps to ws(s).
+ *
+ * @param {string} url
+ * @param {string} [base]
+ */
 export function websocketUrl(url, base = location.href) {
   const target = new URL(url, base);
   if (target.protocol === 'http:') target.protocol = 'ws:';
@@ -56,6 +61,7 @@ export function websocketSource(url, { signal, token, onopen, onmessage, WebSock
       resolve();
       return;
     }
+    /** @type {WebSocket} */
     let socket;
     try {
       socket = new Socket(websocketUrl(url));

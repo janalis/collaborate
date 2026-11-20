@@ -1,4 +1,8 @@
 // @ts-check
+/**
+ * @param {string} text
+ * @param {number} offset
+ */
 const splitsPair = (text, offset) =>
   offset > 0 &&
   offset < text.length &&
@@ -7,7 +11,12 @@ const splitsPair = (text, offset) =>
   text.charCodeAt(offset) >= 0xdc00 &&
   text.charCodeAt(offset) <= 0xdfff;
 
-/** CKEditor offsets are UTF-16, but an operation must never serialize half a surrogate pair. */
+/**
+ * CKEditor offsets are UTF-16, but an operation must never serialize half a surrogate pair.
+ *
+ * @param {string} before
+ * @param {string} after
+ */
 export function textChange(before, after) {
   let prefix = 0;
   while (prefix < before.length && prefix < after.length && before[prefix] === after[prefix]) prefix++;
@@ -26,6 +35,10 @@ export function textChange(before, after) {
 /**
  * Carries a change from `before` to `after` onto `edited`, an unsaved rewrite of `before`,
  * when the two touch different parts of the text; otherwise `after` wins.
+ *
+ * @param {string} edited
+ * @param {string} before
+ * @param {string} after
  */
 export function rebaseText(edited, before, after) {
   if (edited === before) return after;

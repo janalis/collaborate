@@ -8,7 +8,27 @@ export const NARROW_SHOWN = 1;
 // A narrow window, as the stylesheet tells it (`_layer.scss`).
 export const NARROW_QUERY = '(max-width: 575.98px)';
 
+/**
+ * A peer as the presence knows them: their tabs (when each was last heard, by client), how they are drawn, and
+ * where they are.
+ *
+ * @typedef {object} PresentUser
+ * @property {Map<string, number>} clients
+ * @property {number} moved when their pointer last moved
+ * @property {boolean} idle
+ * @property {string | null} file the record they are at
+ * @property {import('./geometry.js').Popup | null} popup
+ * @property {string} label
+ * @property {string} color the colour the server gives them
+ * @property {string | null} avatar
+ * @property {string} shown the colour they are drawn in on this page
+ */
+
 // The server attaches the URL; anything that would load from another origin is dropped all the same.
+/**
+ * @param {unknown} value
+ * @param {string} [base]
+ */
 export function avatarUrl(value, base = location.href) {
   if (typeof value !== 'string' || value === '') return null;
   try {
@@ -22,8 +42,11 @@ export function avatarUrl(value, base = location.href) {
 /**
  * The initial of a name: its first character as a reader sees one (an accent written apart, an emoji of
  * several), in capital unless that makes it two (ß).
+ *
+ * @param {string} label
  */
 export function initialOf(label) {
+  /** @param {string} text */
   const graphemes = (text) => [...new Intl.Segmenter().segment(text)].map(({ segment }) => segment);
   const [first = ''] = graphemes(label.normalize('NFC'));
   const capital = first.toUpperCase();
@@ -31,6 +54,11 @@ export function initialOf(label) {
 }
 
 // How far apart two colours of the list are, the list being a circle of hues.
+/**
+ * @param {number} a
+ * @param {number} b
+ * @param {number} count
+ */
 const apart = (a, b, count) => {
   const distance = Math.abs(a - b);
   return Math.min(distance, count - distance);
@@ -40,11 +68,16 @@ const apart = (a, b, count) => {
  * The colour a peer is drawn in on this page: the one the server gives them, unless a peer who came before has
  * it or one beside it in the list (pink and red look alike); then the one farthest from the others' colours, the
  * first of them after their own.
+ *
+ * @param {Map<unknown, { shown: string }>} users
+ * @param {string} color
+ * @param {string[]} colors
  */
 export function distinctColor(users, color, colors) {
   const own = colors.indexOf(color);
   if (own < 0) return color;
   const taken = [...users.values()].map((user) => colors.indexOf(user.shown));
+  /** @param {number} index */
   const gap = (index) => Math.min(colors.length, ...taken.map((other) => apart(index, other, colors.length)));
   if (gap(own) > 1) return color;
   let best = own;
@@ -70,6 +103,7 @@ export function createPresence(
   maxShown = MAX_SHOWN,
   { presence = 'avatars', distinctColors = false, colors = [], idle = 0, messages = {} } = {}
 ) {
+  /** @type {Map<number, PresentUser>} */
   const users = new Map();
   // What the cursors tell of a peer, and do for them (`cursors.js` binds them).
   /** @type {{ describe: (user: any) => string, choose: (userId: number) => void, toggle: () => void, shown: () => boolean, change: () => void }} */
@@ -80,17 +114,27 @@ export function createPresence(
     shown: () => true,
     change: () => {},
   };
+  /** @type {Map<HTMLElement, () => void>} */
   const bound = new Map();
   let disposed = false;
   // Which of the menu's stacks shows, the narrow or the wide one: its button is named after what it shows.
   const narrow = presence === 'menu' && typeof matchMedia === 'function' ? matchMedia(NARROW_QUERY) : null;
 
+  /**
+   * @param {PresentUser} user
+   * @param {number} now
+   */
   const isIdle = (user, now) => idle > 0 && now - user.moved > idle;
 
+  /**
+   * @param {number} userId
+   * @param {PresentUser} user
+   * @param {string} className
+   */
   function avatar(userId, user, className) {
     const item = document.createElement('span');
     item.className = className;
-    item.dataset.userId = userId;
+    item.dataset.userId = /** @type {string} */ (/** @type {unknown} */ (userId));
     item.dataset.color = user.shown;
     item.title = user.label;
     if (user.avatar) {
@@ -106,6 +150,10 @@ export function createPresence(
     return item;
   }
 
+  /**
+   * @param {[number, PresentUser][]} hidden
+   * @param {string} className
+   */
   function counted(hidden, className) {
     const more = document.createElement('span');
     more.className = className;
@@ -114,6 +162,10 @@ export function createPresence(
     return more;
   }
 
+  /**
+   * @param {HTMLElement} container
+   * @param {[number, PresentUser][]} present
+   */
   function renderAvatars(container, present) {
     container.replaceChildren();
     for (const [userId, user] of present.slice(0, maxShown))
@@ -122,8 +174,13 @@ export function createPresence(
     if (hidden.length) container.appendChild(counted(hidden, 'collaborate-presence__more'));
   }
 
-  /** The button, the menu, and what they do, made once: an open menu stays open as peers come and go. */
+  /**
+   * The button, the menu, and what they do, made once: an open menu stays open as peers come and go.
+   *
+   * @param {HTMLElement} container
+   */
   function frame(container) {
+    /** @type {HTMLButtonElement | null} */
     let toggle = container.querySelector(':scope > .collaborate-presence__toggle');
     if (!toggle) {
       menus++;
@@ -155,10 +212,14 @@ export function createPresence(
       menu.append(header, divider, pointers);
       container.replaceChildren(toggle, menu);
     }
-    const menu = toggle.nextElementSibling;
+    // The button's sibling, as made above.
+    const menu = /** @type {HTMLElement} */ (toggle.nextElementSibling);
     if (!disposed && !bound.has(container)) {
+      /** @param {MouseEvent} event */
       const click = (event) => {
-        const item = event.target.closest('.collaborate-presence__item');
+        const item = /** @type {HTMLElement | null} */ (
+          /** @type {Element} */ (event.target).closest('.collaborate-presence__item')
+        );
         if (!item || !menu.contains(item)) return;
         if (item.classList.contains('collaborate-presence__pointers')) hooks.toggle();
         else hooks.choose(Number(item.dataset.userId));
@@ -177,16 +238,23 @@ export function createPresence(
     return { toggle, menu };
   }
 
-  /** A peer's entry in the menu: their initial, their name, and where they are; kept, the focus may be on it. */
+  /**
+   * A peer's entry in the menu: their initial, their name, and where they are; kept, the focus may be on it.
+   *
+   * @param {HTMLElement} menu
+   * @param {number} userId
+   * @param {PresentUser} user
+   * @param {number} now
+   */
   function entry(menu, userId, user, now) {
-    let item = [...menu.querySelectorAll(':scope > [data-user-id]')].find(
-      (element) => element.dataset.userId === String(userId)
-    );
+    let item = [
+      .../** @type {NodeListOf<HTMLButtonElement>} */ (menu.querySelectorAll(':scope > [data-user-id]')),
+    ].find((element) => element.dataset.userId === String(userId));
     if (!item) {
       item = document.createElement('button');
       item.type = 'button';
       item.className = 'collaborate-presence__item';
-      item.dataset.userId = userId;
+      item.dataset.userId = /** @type {string} */ (/** @type {unknown} */ (userId));
       item.setAttribute('role', 'menuitem');
       const text = document.createElement('span');
       text.className = 'collaborate-presence__text';
@@ -202,9 +270,10 @@ export function createPresence(
     swatch.removeAttribute('role');
     swatch.removeAttribute('aria-label');
     swatch.removeAttribute('title');
-    item.firstElementChild.replaceWith(swatch);
-    item.querySelector('.collaborate-presence__name').textContent = user.label;
-    item.querySelector('.collaborate-presence__where').textContent = [
+    // The entry's parts, as made above.
+    /** @type {Element} */ (item.firstElementChild).replaceWith(swatch);
+    /** @type {Element} */ (item.querySelector('.collaborate-presence__name')).textContent = user.label;
+    /** @type {Element} */ (item.querySelector('.collaborate-presence__where')).textContent = [
       hooks.describe(user),
       isIdle(user, now) ? (messages.idle ?? 'idle') : '',
     ]
@@ -217,6 +286,8 @@ export function createPresence(
   /**
    * Names the menu's button: what its stack shows on this window (initials, the count of the others), then the
    * peers' names. A name holding the visible text is the one speech control finds it by (WCAG 2.5.3).
+   *
+   * @param {HTMLElement} toggle
    */
   function name(toggle) {
     const hidden = narrow?.matches ? 'collaborate-presence--wide' : 'collaborate-presence--narrow';
@@ -231,12 +302,19 @@ export function createPresence(
   // The window becoming narrow or wide shows the other stack: the buttons are named again.
   function resized() {
     for (const container of containers()) {
-      const toggle = container.querySelector(':scope > .collaborate-presence__toggle');
+      const toggle = /** @type {HTMLElement | null} */ (
+        container.querySelector(':scope > .collaborate-presence__toggle')
+      );
       if (toggle) name(toggle);
     }
   }
   narrow?.addEventListener('change', resized);
 
+  /**
+   * @param {HTMLElement} container
+   * @param {[number, PresentUser][]} present
+   * @param {number} now
+   */
   function renderMenu(container, present, now) {
     const { toggle, menu } = frame(container);
     // The last peer gone, an open menu closes: the header would hide it open.
@@ -265,13 +343,17 @@ export function createPresence(
     toggle.title = names;
     name(toggle);
     const entries = present.map(([userId, user]) => entry(menu, userId, user, now));
-    for (const item of menu.querySelectorAll(':scope > [data-user-id]')) if (!entries.includes(item)) item.remove();
-    let next = menu.querySelector(':scope > .collaborate-presence__header').nextSibling;
+    for (const item of /** @type {NodeListOf<HTMLButtonElement>} */ (menu.querySelectorAll(':scope > [data-user-id]')))
+      if (!entries.includes(item)) item.remove();
+    let next = /** @type {Element} */ (menu.querySelector(':scope > .collaborate-presence__header')).nextSibling;
     for (const item of entries) {
       if (item !== next) menu.insertBefore(item, next);
       next = item.nextSibling;
     }
-    menu.querySelector('.collaborate-presence__pointers').setAttribute('aria-checked', String(hooks.shown()));
+    /** @type {Element} */ (menu.querySelector('.collaborate-presence__pointers')).setAttribute(
+      'aria-checked',
+      String(hooks.shown())
+    );
   }
 
   function render(now = Date.now()) {
@@ -283,20 +365,40 @@ export function createPresence(
     }
   }
 
-  /** Whether what is told of where a peer is changed. */
+  /**
+   * Whether what is told of where a peer is changed.
+   *
+   * @param {PresentUser} user
+   * @param {string | null} file
+   * @param {import('./geometry.js').Popup | null} popup
+   */
   const placed = (user, file, popup) =>
     user.file !== file || user.popup?.kind !== popup?.kind || user.popup?.key !== popup?.key;
 
   /**
    * A page of a peer said something: they are here, in that page, as of now (on a record, in a popup, their
    * pointer moving).
+   *
+   * @param {{
+   *   userId: number,
+   *   clientId: string,
+   *   label: string,
+   *   color: string,
+   *   avatar?: unknown,
+   *   file?: string | null,
+   *   popup?: import('./geometry.js').Popup | null,
+   *   moving?: boolean,
+   * }} seen
+   * @param {number} [now]
    */
   function see(
     { userId, clientId, label, color, avatar, file = null, popup = null, moving = false },
     now = Date.now()
   ) {
     const known = users.get(userId);
-    const user = known || { clients: new Map(), moved: now, idle: false, file: null, popup: null };
+    // Completed below, with what they look like.
+    const user =
+      known || /** @type {PresentUser} */ ({ clients: new Map(), moved: now, idle: false, file: null, popup: null });
     const changed = !known || user.label !== label || user.color !== color || user.avatar !== avatarUrl(avatar);
     // Where a peer is shows in the menu alone; the avatars stay as they are, and only the marks move.
     const moved = placed(user, file, popup);
@@ -315,6 +417,10 @@ export function createPresence(
     if (changed || wasIdle !== user.idle || moved) hooks.change();
   }
 
+  /**
+   * @param {number} userId
+   * @param {string} clientId
+   */
   function leave(userId, clientId) {
     const user = users.get(userId);
     if (!user?.clients.delete(clientId) || user.clients.size) return;
@@ -325,6 +431,10 @@ export function createPresence(
 
   // A client counts as gone `ttl` milliseconds after its last event was received; a peer who became idle
   // meanwhile is said to be.
+  /**
+   * @param {number} now
+   * @param {number} ttl
+   */
   function expire(now, ttl) {
     let changed = false;
     for (const [userId, user] of users) {
@@ -347,10 +457,18 @@ export function createPresence(
     hooks.change();
   }
 
-  /** The colour a peer is drawn in on this page, or null for one who is not here. */
+  /**
+   * The colour a peer is drawn in on this page, or null for one who is not here.
+   *
+   * @param {number} userId
+   */
   const colorOf = (userId) => users.get(userId)?.shown ?? null;
 
-  /** What the cursors tell of the peers and do for them. */
+  /**
+   * What the cursors tell of the peers and do for them.
+   *
+   * @param {Partial<typeof hooks>} next
+   */
   function bind(next) {
     Object.assign(hooks, next);
   }

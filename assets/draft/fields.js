@@ -7,6 +7,33 @@ import { textChange } from '../ckeditor5/text-change.js';
 // The journal's label length (`config.labelLength`), in code points: a split surrogate pair is not valid JSON for PHP.
 const LABEL_LENGTH = 255;
 
+/** @typedef {import('./session.js').DraftSession} DraftSession */
+/** @typedef {import('./session.js').DraftEvent} DraftEvent */
+
+/**
+ * A value field's control other than a radio or checkbox group: an input or a select, read through whichever
+ * of these properties its tag has; `tomselect` is the TomSelect instance an autocomplete attaches.
+ *
+ * @typedef {HTMLInputElement & Pick<HTMLSelectElement, 'options' | 'selectedOptions' | 'add'> & { tomselect?: any }}
+ *   SingleControl
+ */
+
+/** @typedef {{ id: string, kind: string, value: any }} PendingValue */
+
+/**
+ * @typedef {object} ValueAdapter
+ * @property {() => object | null} next
+ * @property {(event: DraftEvent & { version: number }) => void} receive a value event names the version it was made on
+ * @property {(value: unknown, extra?: object) => void} send
+ * @property {(value: any) => void} [adopt]
+ */
+
+/**
+ * @param {DraftSession} session
+ * @param {HTMLInputElement | HTMLTextAreaElement} control
+ * @param {string} name
+ * @param {import('./session.js').DraftField} state
+ */
 export function initializeText(session, control, name, state) {
   const model = new Model();
   const root = model.document.createRoot();
@@ -32,7 +59,7 @@ export function initializeText(session, control, name, state) {
       // Tagify dispatches change while it reloads the value; that is not a local edit.
       session.withApplying(() => {
         control.value = value();
-        control.__tagify?.loadOriginalValues(control.value);
+        /** @type {any} */ (control).__tagify?.loadOriginalValues(control.value);
         if (from && to) control.setSelectionRange(from.offset, to.offset);
         control.dispatchEvent(new Event('input', { bubbles: true }));
         control.dispatchEvent(new Event('change', { bubbles: true }));
@@ -89,12 +116,14 @@ export function initializeText(session, control, name, state) {
  * A value field's model: one version, at most one unsent value, which replaces whatever a peer sent.
  * `show(event, pending)` renders a received value; `drops(event)` names a received value that cancels the unsent one.
  *
- * @param {any} session
- * @param {(event: any, pending: any) => void} show
- * @param {(event: any) => boolean} [drops]
+ * @param {DraftSession} session
+ * @param {(event: DraftEvent, pending: PendingValue | null | undefined) => void} show
+ * @param {(event: DraftEvent) => boolean} [drops]
+ * @returns {ValueAdapter}
  */
 export function valueAdapter(session, show, drops = () => false) {
   let version = 0;
+  /** @type {PendingValue | null | undefined} */
   let pending;
   return {
     next: () => (pending ? { ...pending, version } : null),
@@ -104,6 +133,10 @@ export function valueAdapter(session, show, drops = () => false) {
       if (pending?.id === event.id || drops(event)) pending = null;
       show(event, pending);
     },
+    /**
+     * @param {unknown} value
+     * @param {object} [extra]
+     */
     send(value, extra = {}) {
       pending = { id: crypto.randomUUID(), kind: 'value', value, ...extra };
       session.schedule();
@@ -111,10 +144,18 @@ export function valueAdapter(session, show, drops = () => false) {
   };
 }
 
+/**
+ * @param {DraftSession} session
+ * @param {RadioNodeList | SingleControl} control
+ * @param {string} name
+ * @param {import('./session.js').DraftField} state
+ */
 export function initializeValue(session, control, name, state) {
+  /** @type {string | undefined} */
   let observed;
   const controls = control instanceof RadioNodeList ? Array.from(control) : [control];
-  const singleMultipleChoice = control.type === 'checkbox' && Array.isArray(state.initial);
+  const singleMultipleChoice =
+    /** @type {SingleControl} */ (control).type === 'checkbox' && Array.isArray(state.initial);
   const read = () => {
     if (control instanceof RadioNodeList) {
       if (controls.every((element) => element.type === 'checkbox'))
@@ -128,8 +169,8 @@ export function initializeValue(session, control, name, state) {
   };
   // A choice names its ids: a peer's autocomplete renders only the options it already selected.
   const labels = () => {
-    if (control.tagName !== 'SELECT') return {};
-    const selected = Array.from(control.selectedOptions)
+    if (/** @type {SingleControl} */ (control).tagName !== 'SELECT') return {};
+    const selected = Array.from(/** @type {SingleControl} */ (control).selectedOptions)
       .filter((option) => option.value)
       .map((option) => [
         option.value,
@@ -139,6 +180,10 @@ export function initializeValue(session, control, name, state) {
       ]);
     return selected.length ? { labels: Object.fromEntries(selected) } : {};
   };
+  /**
+   * @param {any} value
+   * @param {Record<string, string>} [names]
+   */
   const render = (value, names = {}) => {
     if (control instanceof RadioNodeList) {
       if (controls.every((element) => element.type === 'checkbox')) {
@@ -175,6 +220,7 @@ export function initializeValue(session, control, name, state) {
   });
   render(state.initial);
   session.register(name, adapter);
+  /** @param {unknown} value */
   adapter.adopt = (value) => {
     render(value);
     adapter.send(value, labels());

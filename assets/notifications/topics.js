@@ -9,13 +9,23 @@
 import { backgroundFetch, isAccepted } from '../http.js';
 import { settingsOf } from './shared.js';
 
-/** Starts the switches of a topics list. */
+/**
+ * Starts the switches of a topics list.
+ *
+ * @param {Element} root
+ * @param {{ fetcher?: typeof fetch }} [options]
+ */
 export function initTopics(root, { fetcher = backgroundFetch } = {}) {
   const settings = settingsOf(root, 'data-collaborate-notification-topics');
-  const status = root.querySelector('.collaborate-notification-topics__status');
+  const status = /** @type {HTMLElement | null} */ (root.querySelector('.collaborate-notification-topics__status'));
   // The latest change of each switch: an earlier answer arriving after it changes nothing.
+  /** @type {WeakMap<HTMLInputElement, number>} */
   const turns = new WeakMap();
 
+  /**
+   * @param {string} key
+   * @param {HTMLInputElement} input
+   */
   function say(key, input) {
     if (!status) return;
     const sentence = status.dataset[key];
@@ -23,13 +33,14 @@ export function initTopics(root, { fetcher = backgroundFetch } = {}) {
     status.textContent = sentence ? sentence.replace('%topic%', label ?? input.name) : '';
   }
 
+  /** @param {HTMLInputElement} input */
   async function send(input) {
     const on = input.checked;
     const turn = (turns.get(input) ?? 0) + 1;
     turns.set(input, turn);
     let ok = false;
     try {
-      const response = await fetcher(on ? input.dataset.subscribe : input.dataset.unsubscribe, {
+      const response = await fetcher(/** @type {string} */ (on ? input.dataset.subscribe : input.dataset.unsubscribe), {
         method: 'POST',
         credentials: 'same-origin',
         headers: {
@@ -47,6 +58,7 @@ export function initTopics(root, { fetcher = backgroundFetch } = {}) {
     say(ok ? (on ? 'subscribed' : 'unsubscribed') : 'failed', input);
   }
 
+  /** @param {Event} event */
   function change(event) {
     const input = event.target;
     if (input instanceof HTMLInputElement && input.matches('input[role="switch"]')) send(input);

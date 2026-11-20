@@ -37,7 +37,74 @@ export const PULSE = 1200;
 // What the reader chose of the pointers of the others, in every tab (`presence: menu`).
 export const POINTERS = 'collaborate.pointers';
 
-/** The room a grant is to: the same one given again (a page that loaded itself again) keeps its stream. */
+/**
+ * @typedef {import('./geometry.js').Anchor} Anchor
+ * @typedef {import('./geometry.js').Popup} Popup
+ * @typedef {import('./geometry.js').ViewportPoint} ViewportPoint
+ * @typedef {import('./geometry.js').AnchorPath & { start: number, end: number }} Caret a selection: its field, and
+ *   offsets into its text
+ * @typedef {{
+ *   bar: { x: number, y: number, height: number },
+ *   rects: { left: number, top: number, width: number, height: number }[],
+ * }} CaretGeometry
+ * @typedef {{
+ *   element: HTMLDivElement,
+ *   icon: SVGSVGElement,
+ *   path: SVGPathElement,
+ *   label: HTMLSpanElement,
+ *   timer: ReturnType<typeof setTimeout> | null,
+ * }} PointerView
+ * @typedef {{
+ *   element: HTMLDivElement,
+ *   selection: HTMLDivElement,
+ *   bar: HTMLDivElement,
+ *   label: HTMLSpanElement,
+ *   timer: ReturnType<typeof setTimeout> | null,
+ * }} CaretView
+ * @typedef {{
+ *   clientId: string,
+ *   sequence: number,
+ *   kind: string,
+ *   style: string,
+ *   shape: string,
+ *   anchor: Anchor | null,
+ *   caret: Caret | null,
+ *   field: string | null,
+ *   popup?: Popup | null,
+ * }} CursorEvent
+ */
+/**
+ * A peer drawn on the page: where its pointer, caret and field are, and the elements that show them. `from`,
+ * `to` and `started` are where its pointer glides, once it has been drawn.
+ *
+ * @typedef {{
+ *   userId: number,
+ *   clientId: string,
+ *   timestamp: number,
+ *   seen: number,
+ *   moved: number,
+ *   anchor: Anchor | null,
+ *   field: string | null,
+ *   color: string,
+ *   label: string,
+ *   cursor: PointerView | null,
+ *   caretView: CaretView | null,
+ *   caret: Caret | null,
+ *   edge: HTMLDivElement | null,
+ *   point: ViewportPoint | null,
+ *   from: ViewportPoint,
+ *   to: ViewportPoint | null,
+ *   started: number,
+ *   dirty?: boolean,
+ *   caretDirty?: boolean,
+ * }} Peer
+ */
+
+/**
+ * The room a grant is to: the same one given again (a page that loaded itself again) keeps its stream.
+ *
+ * @param {string | undefined} grant
+ */
 const roomOf = (grant) => grant?.split('.')[3] ?? null;
 
 function readPointers() {
@@ -48,6 +115,7 @@ function readPointers() {
   }
 }
 
+/** @param {boolean} shown */
 function writePointers(shown) {
   try {
     localStorage.setItem(POINTERS, shown ? 'shown' : 'hidden');
@@ -78,7 +146,7 @@ export function initCursors(
   // Narrowed for the functions below, which close over it.
   const layer = root;
   layer.dataset.initialized = 'true';
-  const { eventUrl } = layer.dataset;
+  const { eventUrl } = /** @type {{ eventUrl: string }} */ (layer.dataset);
   const config = layerConfig(layer);
   configureGeometry(config);
   // The minimum time between two events sent, the heartbeat's period, and how long a silent peer stays.
@@ -94,8 +162,11 @@ export function initCursors(
   // Where a reader alone points is told to nobody: a peer who comes says hello, and is answered.
   const silentAlone = config.silentAlone === true;
   const clientId = crypto.randomUUID();
+  /** @type {Map<number, Peer>} */
   const peers = new Map();
+  /** @type {Map<string, { sequence: number, seen: number }>} */
   const versions = new Map();
+  /** @type {(() => void)[]} */
   const removers = [];
   const fadeTimers = new Set();
   const marks = createMarks(layer, presence, {
@@ -104,17 +175,23 @@ export function initCursors(
     popups,
     messages,
   });
+  /** @type {number | undefined} */
   let userId;
   let sequence = 0;
   let style = cursorStyle('mouse');
   let shape = 'default';
+  /** @type {Anchor | null} */
   let anchor = null;
+  /** @type {Caret | null} */
   let caret = null;
   // The shared form control focused here: peers mark its field, a select's or a checkbox's as well.
+  /** @type {string | null} */
   let field = null;
   // The popup of a record open here (`cursors.popups`).
+  /** @type {Popup | null} */
   let popup = null;
   // Where the pointer last was; its shape and anchor are measured when an event is sent, not on every move.
+  /** @type {{ x: number, y: number, target?: Node | null } | null} */
   let lastPointer = null;
   let pointerDirty = false;
   // What the next frame draws again: everything after the page moved, else the peers that moved and, once a
@@ -123,13 +200,19 @@ export function initCursors(
   let marksDirty = false;
   // Whether the page changed since the open popup was last read: read in the next frame, with the rest.
   let popupDirty = false;
+  /** @type {string | null} */
   let pending = null;
+  /** @type {string | null} */
   let pendingHello = null;
   let sending = false;
   let lastSend = -Infinity;
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
   let sendTimer;
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
   let touchTimer;
+  /** @type {(() => void) | null | undefined} */
   let leave;
+  /** @type {number | null | undefined} */
   let animation;
   let stopped = false;
   // The server refused the page's grant: nothing is shared until the host enters a place again.
@@ -165,8 +248,13 @@ export function initCursors(
   raise();
 
   // The grant and CSRF token last refused: the hub renews them on the layer once, a second refusal stops.
+  /** @type {string | null} */
   let refused = null;
 
+  /**
+   * @param {string} url
+   * @param {object} body
+   */
   async function request(url, body, keepalive = false, grant = layer.dataset.grant) {
     const { csrf } = layer.dataset;
     const response = await postJson(fetcher, url, csrf, { grant, ...body }, { keepalive });
@@ -192,7 +280,7 @@ export function initCursors(
       sendTimer = setTimeout(flush, delay);
       return;
     }
-    const event = build(pendingHello || pending);
+    const event = build(/** @type {string} */ (pendingHello || pending));
     if (pendingHello) pendingHello = null;
     else pending = null;
     lastSend = performance.now();
@@ -227,6 +315,7 @@ export function initCursors(
   }
 
   // `state` sends the pointer or caret, or hides them; `reply` answers a hello with them, or a heartbeat.
+  /** @param {string} kind */
   function publish(kind) {
     if (stopped || denied || !userId || !navigator.onLine) return;
     if (silentAlone && !presence.users.size && kind !== 'hello' && kind !== 'reply') return;
@@ -245,10 +334,19 @@ export function initCursors(
     anchor = captureAnchor(target, x, y);
   }
 
+  /**
+   * @param {string} kind
+   * @returns {CursorEvent}
+   */
   function build(kind) {
     capture();
     const visible = anchor || caret || field || popup;
-    const resolved = { state: visible ? 'move' : 'hide', reply: visible ? 'move' : 'heartbeat' }[kind] ?? kind;
+    const resolved =
+      /** @type {Record<string, string>} */ ({
+        state: visible ? 'move' : 'hide',
+        reply: visible ? 'move' : 'heartbeat',
+      })[kind] ?? kind;
+    /** @type {CursorEvent} */
     const event = { clientId, sequence: ++sequence, kind: resolved, style, shape, anchor, caret, field };
     if (kinds.length) event.popup = popup;
     return event;
@@ -281,13 +379,18 @@ export function initCursors(
     publish('state');
   }
 
+  /**
+   * @param {number} userId
+   * @returns {PointerView}
+   */
   function makeCursor(userId) {
     const element = document.createElement('div');
     element.className = 'collaborate-cursor';
-    element.dataset.userId = userId;
+    // The dataset keeps the id as its string.
+    element.dataset.userId = /** @type {string} */ (/** @type {unknown} */ (userId));
     const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     icon.setAttribute('viewBox', '0 0 32 36');
-    const path = document.createElementNS(icon.namespaceURI, 'path');
+    const path = /** @type {SVGPathElement} */ (document.createElementNS(icon.namespaceURI, 'path'));
     icon.appendChild(path);
     const label = document.createElement('span');
     label.className = 'collaborate-cursor__label';
@@ -296,10 +399,15 @@ export function initCursors(
     return { element, icon, path, label, timer: null };
   }
 
+  /**
+   * @param {number} userId
+   * @returns {CaretView}
+   */
   function makeCaret(userId) {
     const element = document.createElement('div');
     element.className = 'collaborate-caret';
-    element.dataset.userId = userId;
+    // The dataset keeps the id as its string.
+    element.dataset.userId = /** @type {string} */ (/** @type {unknown} */ (userId));
     const selection = document.createElement('div');
     selection.className = 'collaborate-caret__selection';
     const bar = document.createElement('div');
@@ -312,9 +420,10 @@ export function initCursors(
     return { element, selection, bar, label, timer: null };
   }
 
+  /** @param {Peer} peer */
   function dropPointer(peer) {
     const element = peer.cursor?.element;
-    clearTimeout(peer.cursor?.timer);
+    clearTimeout(/** @type {ReturnType<typeof setTimeout> | undefined} */ (peer.cursor?.timer));
     marks.dropEdge(peer);
     peer.cursor = null;
     peer.point = null;
@@ -331,13 +440,15 @@ export function initCursors(
     fadeTimers.add(timer);
   }
 
+  /** @param {Peer} peer */
   function dropCaret(peer) {
-    clearTimeout(peer.caretView?.timer);
+    clearTimeout(/** @type {ReturnType<typeof setTimeout> | undefined} */ (peer.caretView?.timer));
     peer.caretView?.element.remove();
     peer.caretView = null;
     peer.caret = null;
   }
 
+  /** @param {number} id */
   function removePeer(id) {
     const peer = peers.get(id);
     if (!peer) return;
@@ -349,6 +460,7 @@ export function initCursors(
 
   // Each peer's focused field, outlined in its colour and named; a replay may have redrawn the field since.
   function markFields() {
+    /** @type {Map<Element, Peer[]>} */
     const marked = new Map();
     for (const peer of peers.values()) {
       if (!peer.field) continue;
@@ -360,7 +472,7 @@ export function initCursors(
         const group = rowOf(control) || control;
         if (!group) continue;
         if (!marked.has(group)) marked.set(group, []);
-        marked.get(group).push(peer);
+        /** @type {Peer[]} */ (marked.get(group)).push(peer);
       }
     }
     for (const element of document.querySelectorAll('[data-peer-focus]')) {
@@ -369,29 +481,34 @@ export function initCursors(
         element.removeAttribute('data-peer-focus-label');
       }
     }
-    for (const [group, list] of marked) {
+    // Rows and controls, which the HTML forms hold.
+    for (const [group, list] of /** @type {Map<HTMLElement, Peer[]>} */ (marked)) {
       group.dataset.peerFocus = list[0].color;
       group.dataset.peerFocusLabel = list.map((peer) => peer.label).join(', ');
     }
   }
 
   // The name flag shows while the caret changes, then fades.
+  /** @param {CaretView} view */
   function flagCaret(view) {
     view.element.classList.add('collaborate-caret--labelled');
-    clearTimeout(view.timer);
+    clearTimeout(/** @type {ReturnType<typeof setTimeout> | undefined} */ (view.timer));
     view.timer = setTimeout(() => view.element.classList.remove('collaborate-caret--labelled'), 2000);
   }
 
   // The name of a pointer shows while it moves, then fades (`cursors.idle`).
+  /** @param {PointerView} view */
   function flagPointer(view) {
     view.element.classList.add('collaborate-cursor--labelled');
-    clearTimeout(view.timer);
+    clearTimeout(/** @type {ReturnType<typeof setTimeout> | undefined} */ (view.timer));
     view.timer = setTimeout(() => view.element.classList.remove('collaborate-cursor--labelled'), LABEL_DELAY);
   }
 
   // The colour of the peer on this page, which the presence saw as the event came.
+  /** @param {{ userId: number }} event */
   const colorOf = (event) => presence.colorOf(event.userId);
 
+  /** @param {{ data: string }} message */
   function receive(message) {
     if (entering) return;
     const event = peerEvent(message.data, { colors, kinds, since: serverTime - expiry });
@@ -441,7 +558,10 @@ export function initCursors(
       removePeer(event.userId);
       return;
     }
-    const peer = previous || { cursor: null, caretView: null, caret: null, point: null, edge: null, moved: Date.now() };
+    // The rest of a new peer is assigned below.
+    const peer = /** @type {Peer} */ (
+      previous || { cursor: null, caretView: null, caret: null, point: null, edge: null, moved: Date.now() }
+    );
     const focus = focusOf(previous);
     Object.assign(peer, {
       userId: event.userId,
@@ -466,7 +586,9 @@ export function initCursors(
         path.removeAttribute('transform');
         icon.style.translate = '';
       } else {
-        const drawn = CURSOR_SHAPES[event.style][event.shape];
+        const drawn = /** @type {Record<string, Record<string, import('./shapes.js').Shape>>} */ (CURSOR_SHAPES)[
+          event.style
+        ][event.shape];
         const [x, y] = shapeHotspot(drawn);
         path.setAttribute('d', drawn.d);
         if (drawn.rotate) path.setAttribute('transform', `rotate(${drawn.rotate} 16 16)`);
@@ -499,20 +621,24 @@ export function initCursors(
   }
 
   // What the marks of a peer show: the record and popup the markers and the popup line name, and how.
+  /** @param {number} id */
   function markedAs(id) {
     const user = presence.users.get(id);
     return user ? JSON.stringify([user.file, user.popup?.kind, user.popup?.key, user.label, presence.colorOf(id)]) : '';
   }
 
   // What the outline of the field a peer is in shows.
+  /** @param {Peer | undefined} peer */
   const focusOf = (peer) => (peer?.field ? JSON.stringify([peer.field, peer.color, peer.label]) : '');
 
   // A frame that only animates a pointer measures nothing: carets and anchors move with layout and events.
+  /** @param {number} now */
   function draw(now) {
     animation = null;
     measure(() => paint(now));
   }
 
+  /** @param {number} now */
   function paint(now) {
     // Read before the frame writes anything: in the observer, it would lay the page out on every mutation.
     if (popupDirty) {
@@ -542,7 +668,8 @@ export function initCursors(
       return { peer, caret, target, edge };
     });
     for (const { peer, caret, target, edge } of measured) {
-      if (caret !== undefined) drawCaret(peer.caretView, caret);
+      // A caret is measured for a peer that shows one.
+      if (caret !== undefined) drawCaret(/** @type {CaretView} */ (peer.caretView), caret);
       if (!peer.cursor) continue;
       const { element } = peer.cursor;
       element.hidden = !target;
@@ -563,6 +690,10 @@ export function initCursors(
   }
 
   // Carets snap: typing moves them by a glyph, which interpolation would only blur.
+  /**
+   * @param {CaretView} view
+   * @param {CaretGeometry | null} geometry
+   */
   function drawCaret(view, geometry) {
     view.element.hidden = !geometry;
     if (!geometry) return;
@@ -571,10 +702,10 @@ export function initCursors(
     view.bar.style.height = `${bar.height}px`;
     view.element.dataset.edge = bar.x > innerWidth - 240 ? 'right' : 'left';
     view.element.dataset.top = String(bar.y < 24);
-    while (view.selection.children.length > rects.length) view.selection.lastChild.remove();
+    while (view.selection.children.length > rects.length) /** @type {ChildNode} */ (view.selection.lastChild).remove();
     while (view.selection.children.length < rects.length) view.selection.appendChild(document.createElement('div'));
     rects.forEach((rect, index) => {
-      const tint = view.selection.children[index];
+      const tint = /** @type {HTMLCollectionOf<HTMLDivElement>} */ (view.selection.children)[index];
       tint.style.transform = `translate3d(${rect.left}px, ${rect.top}px, 0)`;
       tint.style.width = `${rect.width}px`;
       tint.style.height = `${rect.height}px`;
@@ -618,15 +749,23 @@ export function initCursors(
     leave = null;
   }
 
+  /**
+   * @template {Event} E
+   * @param {EventTarget} target
+   * @param {string} name
+   * @param {(event: E) => void} callback
+   * @param {AddEventListenerOptions} [options]
+   */
   function listen(target, name, callback, options) {
-    target.addEventListener(name, callback, options);
-    removers.push(() => target.removeEventListener(name, callback, options));
+    target.addEventListener(name, /** @type {EventListener} */ (callback), options);
+    removers.push(() => target.removeEventListener(name, /** @type {EventListener} */ (callback), options));
   }
 
+  /** @param {PointerEvent} event */
   function move(event) {
     clearTimeout(touchTimer);
     // A finger is captured by what it touched first: what it moves onto is found where it is.
-    const target = event.pointerType === 'touch' ? null : event.target;
+    const target = event.pointerType === 'touch' ? null : /** @type {Node | null} */ (event.target);
     lastPointer = { x: event.clientX, y: event.clientY, target };
     pointerDirty = true;
     style = cursorStyle(event.pointerType);
@@ -635,7 +774,7 @@ export function initCursors(
 
   listen(document, 'pointermove', move, { passive: true });
   listen(document, 'pointerdown', move, { passive: true });
-  listen(document, 'pointerup', (event) => {
+  listen(document, 'pointerup', (/** @type {PointerEvent} */ event) => {
     if (event.pointerType === 'touch') {
       clearTimeout(touchTimer);
       touchTimer = setTimeout(hide, 400);
@@ -646,7 +785,7 @@ export function initCursors(
   listen(
     document,
     'dragover',
-    (event) => {
+    (/** @type {DragEvent} */ event) => {
       if (lastPointer?.x === event.clientX && lastPointer?.y === event.clientY) return;
       lastPointer = { x: event.clientX, y: event.clientY, target: null };
       pointerDirty = true;
@@ -654,7 +793,7 @@ export function initCursors(
     },
     { passive: true }
   );
-  listen(document.documentElement, 'pointerleave', (event) => {
+  listen(document.documentElement, 'pointerleave', (/** @type {PointerEvent} */ event) => {
     if (event.pointerType !== 'touch') hide();
   });
   function refreshLayout() {
@@ -729,7 +868,7 @@ export function initCursors(
       ).catch(() => {});
   }
   // A page the back/forward cache keeps leaves like a hidden tab and joins again when it is restored.
-  listen(window, 'pagehide', (event) => {
+  listen(window, 'pagehide', (/** @type {PageTransitionEvent} */ event) => {
     depart();
     if (!event.persisted) {
       stop();
@@ -742,12 +881,13 @@ export function initCursors(
     clearTimeout(touchTimer);
     pause();
   });
-  listen(window, 'pageshow', (event) => {
+  listen(window, 'pageshow', (/** @type {PageTransitionEvent} */ event) => {
     if (!event.persisted) return;
     caret = captureCaret();
     field = focusedField();
     connect();
   });
+  /** @param {Node} node */
   const own = (node) =>
     (!!announcer && announcer.contains(node)) ||
     !!node.parentElement?.closest('[data-collaborate-popup-line]') ||
@@ -797,6 +937,8 @@ export function initCursors(
    * Shares in the place another grant is to, without loading the page: a host that replaces its content (a
    * listing loaded in place of another) renders `collaborate_grant()` there and enters it. A grant to the same
    * room keeps the stream open.
+   *
+   * @param {unknown} grant
    */
   function enter(grant) {
     if (stopped || typeof grant !== 'string' || grant === '') return;
@@ -825,15 +967,22 @@ export function initCursors(
     connect();
   }
 
-  /** Where a peer is, as the menu says it: in a record's popup, on a record, or on the page. */
+  /**
+   * Where a peer is, as the menu says it: in a record's popup, on a record, or on the page.
+   *
+   * @param {{ popup?: Popup | null, file?: string | null }} user
+   */
   function describe(user) {
+    /** @param {unknown} key */
     const nameOf = (key) => findRecord(key)?.dataset.collaborateLabel || null;
     const opened = user.popup && nameOf(user.popup.key);
-    if (opened) return format(popups[user.popup.kind]?.where ?? messages.where, { name: opened });
+    if (opened)
+      return format(popups[/** @type {Popup} */ (user.popup).kind]?.where ?? messages.where, { name: opened });
     const pointed = user.file && nameOf(user.file);
     return pointed ? format(messages.on, { name: pointed }) : (messages.here ?? '');
   }
 
+  /** @param {string} message */
   function announce(message) {
     if (!announcer) return;
     // Emptied first: the same sentence twice is said twice.
@@ -844,6 +993,7 @@ export function initCursors(
   }
 
   /** Finds a peer on the page: what they point at, or their popup's record, scrolled to, pointed out and said. */
+  /** @param {number} id */
   function findReader(id) {
     const user = presence.users.get(id);
     if (!user) return;
@@ -862,6 +1012,7 @@ export function initCursors(
   }
 
   /** Shows the pointers of the others, or hides them: what the reader chose, in every tab. */
+  /** @param {boolean} next */
   function show(next) {
     shown = next;
     layer.dataset.hidden = String(!shown);
@@ -870,7 +1021,7 @@ export function initCursors(
     redraw();
   }
   if (menu)
-    listen(window, 'storage', (event) => {
+    listen(window, 'storage', (/** @type {StorageEvent} */ event) => {
       if (event.key === POINTERS) show(event.newValue !== 'hidden');
     });
 
@@ -885,6 +1036,7 @@ export function initCursors(
     change: redraw,
   });
 
+  /** @param {CustomEvent<{ grant?: unknown } | null>} event */
   const onEnter = (event) => enter(event.detail?.grant);
   listen(document, 'collaborate:enter', onEnter);
 
@@ -899,7 +1051,7 @@ export function initCursors(
     marks.clear();
     for (const timer of fadeTimers) clearTimeout(timer);
     for (const timer of [sendTimer, touchTimer]) clearTimeout(timer);
-    cancelAnimationFrame(animation);
+    cancelAnimationFrame(/** @type {number} */ (animation));
     observer.disconnect();
     resizer.disconnect();
     for (const remove of removers) remove();

@@ -16,6 +16,13 @@ const worker = /** @type {any} */ (self);
 
 const settings = () => worker.collaborateNotifications || {};
 
+/**
+ * What the server pushes, or what a click hands back of it (`data`, the id and the url).
+ *
+ * @typedef {{ id?: string | number | null, title?: string, body?: string, url?: string | null, icon?: string, tag?: string }} PushPayload
+ */
+
+/** @param {CollaborateWindowClient} client */
 const sameOrigin = (client) => {
   try {
     return new URL(client.url).origin === worker.location.origin;
@@ -28,12 +35,17 @@ const sameOrigin = (client) => {
 const windows = async () =>
   (await worker.clients.matchAll({ type: 'window', includeUncontrolled: true })).filter(sameOrigin);
 
-/** What a push says: its payload, or what the server says of a push without one. */
+/**
+ * What a push says: its payload, or what the server says of a push without one.
+ *
+ * @param {CollaboratePushEvent} event
+ */
 function payloadOf(event) {
   const { title, body, icon } = settings();
+  /** @type {PushPayload | null} */
   let data = null;
   try {
-    data = event.data ? event.data.json() : null;
+    data = event.data ? /** @type {PushPayload | null} */ (event.data.json()) : null;
   } catch {
     data = null;
   }
@@ -48,6 +60,7 @@ function payloadOf(event) {
   };
 }
 
+/** @param {CollaboratePushEvent} event */
 async function received(event) {
   const notification = payloadOf(event);
   const open = await windows();
@@ -67,7 +80,11 @@ async function received(event) {
   });
 }
 
-/** Reads the notification clicked, then shows what it is about: in a page already there, else in a new one. */
+/**
+ * Reads the notification clicked, then shows what it is about: in a page already there, else in a new one.
+ *
+ * @param {PushPayload} data
+ */
 async function clicked(data) {
   const read = settings().read;
   if (data.id !== null && data.id !== undefined && read) {

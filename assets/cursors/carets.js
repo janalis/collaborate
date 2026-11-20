@@ -2,6 +2,17 @@
 import { entrySelector, rowOf } from '../markup.js';
 import { anchorPath, isTextControl, resolvePath, sharesCaret } from './geometry.js';
 
+/** @typedef {import('./geometry.js').AnchorPath & { start: number, end: number }} Caret a text field's selection: its anchor and its focus, as text offsets */
+/** @typedef {{ x: number, y: number, height: number }} CaretBar */
+/** @typedef {{ left: number, top: number, width: number, height: number }} CaretRect */
+/**
+ * What a walk's step sees: a boundary point (`container` and `index`) or a text node, at a text offset.
+ *
+ * @typedef {{ container: Node, index: number, text?: undefined, offset: number }
+ *   | { container?: undefined, index?: undefined, text: Text, offset: number }} WalkPoint
+ */
+/** @typedef {{ end: number, node?: undefined }} WalkEnd the text length, when no step ended the walk */
+
 export const MAX_CARET_OFFSET = 10485760;
 const MAX_RECTS = 64;
 
@@ -10,13 +21,23 @@ const SKIPPED =
   '.ck-fake-selection-container, [data-cke-filler], .ck-widget__type-around, .ck-widget__selection-handle, .ck-widget__resizer';
 const BLOCKS = /^(p|h[1-6]|li|ul|ol|blockquote|pre|figure|figcaption|table|tr|td|th|div|hr|br)$/;
 const FILLER = /⁠/g;
+/** @param {string} text */
 const visibleLength = (text) => text.replace(FILLER, '').length;
+/** @param {string} value */
 const px = (value) => parseFloat(value) || 0;
 
-// Walks the editable in document order with a running text offset, where every block or line break counts one.
-// `step` sees each boundary point and each text node; the first value it returns ends the walk.
+/**
+ * Walks the editable in document order with a running text offset, where every block or line break counts one.
+ * `step` sees each boundary point and each text node; the first value it returns ends the walk.
+ *
+ * @template T
+ * @param {Node} root
+ * @param {(point: WalkPoint) => T | undefined} step
+ * @returns {T | WalkEnd}
+ */
 function walk(root, step) {
   let offset = 0;
+  /** @type {(container: Node) => T | undefined} */
   const visit = (container) => {
     for (let index = 0; index <= container.childNodes.length; index++) {
       let result = step({ container, index, offset });
@@ -24,11 +45,11 @@ function walk(root, step) {
       const child = container.childNodes[index];
       if (!child) break;
       if (child.nodeType === Node.TEXT_NODE) {
-        result = step({ text: child, offset });
+        result = step({ text: /** @type {Text} */ (child), offset });
         if (result !== undefined) return result;
-        offset += visibleLength(child.data);
-      } else if (child.nodeType === Node.ELEMENT_NODE && !child.matches(SKIPPED)) {
-        if (BLOCKS.test(child.localName)) offset++;
+        offset += visibleLength(/** @type {Text} */ (child).data);
+      } else if (child.nodeType === Node.ELEMENT_NODE && !(/** @type {Element} */ (child).matches(SKIPPED))) {
+        if (BLOCKS.test(/** @type {Element} */ (child).localName)) offset++;
         result = visit(child);
         if (result !== undefined) return result;
       }
@@ -37,14 +58,25 @@ function walk(root, step) {
   return visit(root) ?? { end: offset };
 }
 
+/**
+ * @param {Node} root
+ * @param {Node | null} node
+ * @param {number} nodeOffset
+ * @returns {number}
+ */
 export function textOffset(root, node, nodeOffset) {
   const result = walk(root, ({ container, index, text, offset }) => {
-    if (text === node) return offset + visibleLength(node.data.slice(0, nodeOffset));
+    if (text === node) return offset + visibleLength(/** @type {Text} */ (node).data.slice(0, nodeOffset));
     if (container === node && index === nodeOffset) return offset;
   });
   return typeof result === 'number' ? result : result.end;
 }
 
+/**
+ * @param {Node} root
+ * @param {number} target
+ * @returns {{ node: Node, offset: number }}
+ */
 export function domPosition(root, target) {
   const result = walk(root, ({ container, index, text, offset }) => {
     if (container && offset >= target) return { node: container, offset: index };
@@ -61,7 +93,12 @@ export function domPosition(root, target) {
   return result.node ? result : { node: root, offset: root.childNodes.length };
 }
 
-// The focused field's selection as offsets into its text; `end` is the focus, so direction survives.
+/**
+ * The focused field's selection as offsets into its text; `end` is the focus, so direction survives.
+ *
+ * @param {Element | null} [element]
+ * @returns {Caret | null}
+ */
 export function captureCaret(element = document.activeElement) {
   // Monaco types through an invisible proxy (a transparent textarea or edit context) whose offsets are not the
   // text on screen, and it moves that proxy's selection constantly: sharing it would only flood the channel.
@@ -86,6 +123,10 @@ export function captureCaret(element = document.activeElement) {
   return { ...path, start, end };
 }
 
+/**
+ * @param {Caret | null} a
+ * @param {Caret | null} b
+ */
 export function sameCaret(a, b) {
   return (
     a === b ||
@@ -93,7 +134,7 @@ export function sameCaret(a, b) {
   );
 }
 
-const MIRRORED = [
+const MIRRORED = /** @type {const} */ ([
   'boxSizing',
   'width',
   'height',
@@ -120,9 +161,18 @@ const MIRRORED = [
   'wordSpacing',
   'tabSize',
   'direction',
-];
+]);
 
-// Text controls expose no geometry for their content: lay the value out again in an invisible copy.
+/**
+ * Text controls expose no geometry for their content: lay the value out again in an invisible copy.
+ *
+ * @param {HTMLInputElement | HTMLTextAreaElement} field
+ * @param {Element} layer
+ * @param {number} from
+ * @param {number} to
+ * @param {number} focus
+ * @returns {{ rects: DOMRect[], bar: DOMRect }}
+ */
 function controlRanges(field, layer, from, to, focus) {
   const box = field.getBoundingClientRect();
   const style = getComputedStyle(field);
@@ -163,6 +213,13 @@ function controlRanges(field, layer, from, to, focus) {
   return { rects, bar };
 }
 
+/**
+ * @param {HTMLElement} field
+ * @param {number} from
+ * @param {number} to
+ * @param {number} focus
+ * @returns {{ rects: DOMRect[], bar: { left: number, top: number, height: number } }}
+ */
 function editableRanges(field, from, to, focus) {
   const range = document.createRange();
   const start = domPosition(field, from);
@@ -177,7 +234,9 @@ function editableRanges(field, from, to, focus) {
   let bar = range.getClientRects()[0];
   if (!bar?.height) {
     // A collapsed range in an empty block has no box: use the line box of the block itself.
-    const element = point.node.nodeType === Node.ELEMENT_NODE ? point.node : point.node.parentElement;
+    const element = /** @type {Element} */ (
+      point.node.nodeType === Node.ELEMENT_NODE ? point.node : point.node.parentElement
+    );
     const box = element.getBoundingClientRect();
     const style = getComputedStyle(element);
     bar = {
@@ -189,9 +248,15 @@ function editableRanges(field, from, to, focus) {
   return { rects, bar };
 }
 
-// Viewport geometry of a peer's caret, or null when its field is gone, hidden, clipped or covered.
+/**
+ * Viewport geometry of a peer's caret, or null when its field is gone, hidden, clipped or covered.
+ *
+ * @param {Caret | null | undefined} caret
+ * @param {Element} layer
+ * @returns {{ bar: CaretBar, rects: CaretRect[] } | null}
+ */
 export function resolveCaret(caret, layer) {
-  const field = caret && resolvePath(caret);
+  const field = /** @type {HTMLElement | null | undefined} */ (caret && resolvePath(caret));
   if (!field || !(isTextControl(field) || field.isContentEditable)) return null;
   const box = field.getBoundingClientRect();
   if (!box.width || !box.height) return null;
@@ -209,6 +274,7 @@ export function resolveCaret(caret, layer) {
     return null;
   const hit = document.elementFromPoint(Math.min(x, box.right - 1), y + height / 2);
   if (!hit || !field.contains(hit)) return null;
+  /** @type {CaretRect[]} */
   const clipped = [];
   for (const rect of rects) {
     const left = Math.max(rect.left, box.left);

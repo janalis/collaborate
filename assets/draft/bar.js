@@ -9,6 +9,7 @@ import Modal from 'bootstrap/js/src/modal.js';
  * whether Discard can succeed from it. An action a state does not offer is hidden, not just disabled: the only
  * button of a bar saying "unsaved changes" must never be the one that erases them.
  */
+/** @type {Record<string, { variant: string, icon: string | null, announce: boolean, save: boolean, discard: boolean }>} */
 export const STATES = {
   connecting: { variant: 'secondary', icon: null, announce: true, save: false, discard: false },
   saved: { variant: 'success', icon: 'fa-circle-check', announce: true, save: false, discard: false },
@@ -26,6 +27,12 @@ export const STATES = {
   unavailable: { variant: 'secondary', icon: 'fa-link-slash', announce: true, save: false, discard: false },
 };
 
+/**
+ * @template {keyof HTMLElementTagNameMap} K
+ * @param {K} tag
+ * @param {string} [className]
+ * @param {string} [text]
+ */
 const element = (tag, className = '', text = '') => {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -70,6 +77,10 @@ export class CollaborateBar {
     this.announced = '';
   }
 
+  /**
+   * @param {string} key
+   * @param {string} text
+   */
   setState(key, text) {
     const state = STATES[key] || STATES.failed;
     this.key = key;
@@ -83,6 +94,7 @@ export class CollaborateBar {
     this.gate();
   }
 
+  /** @param {string} text */
   announce(text) {
     if (text === this.announced) return;
     this.announced = text;
@@ -90,20 +102,26 @@ export class CollaborateBar {
   }
 
   /** Each action waits for the request it started, and is hidden in the states that do not offer it. */
+  /** @param {boolean} busy */
   setBusy(busy) {
     this.busy = busy;
     this.gate();
   }
 
   gate() {
-    const state = STATES[this.key];
+    // No state yet before the first setState: nothing is offered.
+    const state = STATES[/** @type {string} */ (this.key)];
     this.discard.hidden = !state?.discard;
     this.discard.disabled = this.busy || !state?.discard;
     this.save.hidden = !this.canSave || !state?.save;
     this.save.disabled = this.busy || this.save.hidden;
   }
 
-  /** A dismissible line under the state, for what happened before this page loaded. */
+  /**
+   * A dismissible line under the state, for what happened before this page loaded.
+   *
+   * @param {string} text
+   */
   notice(text) {
     this.noticeElement?.remove();
     this.noticeElement = element('div', 'collaborate-bar__notice alert alert-light alert-dismissible py-2 mb-0 w-100');
@@ -121,7 +139,11 @@ export class CollaborateBar {
     this.announce(text);
   }
 
-  /** Copies the absolute invitation URL; where the clipboard refuses, shows it selected for copying by hand. */
+  /**
+   * Copies the absolute invitation URL; where the clipboard refuses, shows it selected for copying by hand.
+   *
+   * @param {string} url
+   */
   invitation(url) {
     const href = new URL(url, location.href).href;
     const button = element('button', 'btn btn-sm btn-secondary');
@@ -149,8 +171,11 @@ export class CollaborateBar {
     return button;
   }
 
+  /** @param {string} href */
   manualInvitation(href) {
-    let field = this.element.querySelector('[data-collaborate-invitation-url]');
+    let field = /** @type {HTMLInputElement | null} */ (
+      this.element.querySelector('[data-collaborate-invitation-url]')
+    );
     if (!field) {
       const wrapper = element('label', 'collaborate-bar__invitation w-100 small');
       wrapper.append(element('span', 'd-block mb-1', this.messages.copyInvitationFallback));
@@ -165,6 +190,7 @@ export class CollaborateBar {
     field.select();
   }
 
+  /** @param {string} href */
   openRecord(href) {
     const link = element('a', 'btn btn-sm btn-primary', this.messages.openRecord);
     link.href = href;
@@ -174,9 +200,25 @@ export class CollaborateBar {
   }
 }
 
-let dialog = null;
+/**
+ * @typedef {object} ConfirmDialog
+ * @property {HTMLElement} root
+ * @property {HTMLElement} heading
+ * @property {HTMLElement} text
+ * @property {HTMLButtonElement} no
+ * @property {HTMLButtonElement} yes
+ * @property {{ show(): void, hide(): void }} modal Bootstrap's Modal
+ */
 
-/** Asks before an action every editor of the record sees; resolves whether it was confirmed. */
+// The one confirmation dialog: confirmAction builds it before anything reads it.
+let dialog = /** @type {ConfirmDialog} */ (/** @type {unknown} */ (null));
+
+/**
+ * Asks before an action every editor of the record sees; resolves whether it was confirmed.
+ *
+ * @param {{ title: string, body: string, confirm: string, cancel: string }} messages
+ * @returns {Promise<boolean>}
+ */
 export function confirmAction({ title, body, confirm, cancel }) {
   if (!dialog?.root.isConnected) {
     const root = element('div', 'modal fade');

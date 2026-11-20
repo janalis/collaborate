@@ -2,6 +2,20 @@
 import { bridge } from '../bridge.js';
 import { CURSOR_SHAPE_NAMES } from './shapes.js';
 
+/** @typedef {{ region: string, selector: string }} AnchorPath where an element is: its region, and the path from its root */
+/** @typedef {AnchorPath & { x: number, y: number }} Anchor a pointer: an element, and fractions of its box */
+/** @typedef {{ x: number, y: number }} ViewportPoint */
+/** @typedef {{ kind: string, key: string }} Popup a popup of the host's, open on a record */
+/**
+ * @typedef {object} GeometrySettings
+ * @property {Record<string, string>} regions
+ * @property {string | null} keyAttribute
+ * @property {string} keyScope
+ * @property {string[]} anchorAttributes
+ * @property {boolean} anchorClasses
+ * @property {string[]} caretRegions
+ */
+
 // The shapes are their own module; they stay importable from here.
 export { CURSOR_SHAPE_NAMES, CURSOR_SHAPES, shapeHotspot } from './shapes.js';
 
@@ -22,10 +36,15 @@ export const CURSOR_COLORS = [
   'gray-dark',
 ];
 
+/** @param {number} id */
 export function cursorColor(id) {
   return CURSOR_COLORS[id % CURSOR_COLORS.length];
 }
 
+/**
+ * @param {string} pointerType
+ * @param {string} [platform]
+ */
 export function cursorStyle(
   pointerType,
   platform = navigator.userAgentData?.platform || navigator.platform || navigator.userAgent
@@ -39,6 +58,7 @@ export function cursorStyle(
 const ANCHOR_ATTRIBUTES = ['data-id', 'data-column', 'name', 'id'];
 
 // What the layer's configuration says of the host's pages; `configureGeometry()` sets it.
+/** @type {GeometrySettings} */
 let settings;
 
 /**
@@ -46,6 +66,8 @@ let settings;
  * the first one an element is in naming it), the attribute naming a record wherever a page shows it and
  * where those records are found, the attributes and classes a path names an element by, and the regions
  * whose text fields share their caret.
+ *
+ * @param {Partial<GeometrySettings>} [config]
  */
 export function configureGeometry({
   // The bridge's, unless the host names its own (`cursors.regions`).
@@ -65,10 +87,12 @@ export function regionNames() {
 }
 
 /** Whether a caret in a region is shared: every region's, unless the host names some. */
+/** @param {string} region */
 export function sharesCaret(region) {
   return !settings.caretRegions.length || settings.caretRegions.includes(region);
 }
 
+/** @param {Element} element */
 function visible(element) {
   const box = element.getBoundingClientRect();
   return box.width > 0 && box.height > 0;
@@ -76,9 +100,16 @@ function visible(element) {
 
 // The lookups a frame repeats for every peer and record, kept while it measures the page (`measure()`): what
 // it writes, the layer's own elements and marks, changes none of them.
+/** @type {Map<string, unknown> | null} */
 let frame = null;
 
-/** Runs `work` with the page's regions, paths and records looked up once each. */
+/**
+ * Runs `work` with the page's regions, paths and records looked up once each.
+ *
+ * @template T
+ * @param {() => T} work
+ * @returns {T}
+ */
 export function measure(work) {
   if (frame) return work();
   frame = new Map();
@@ -89,12 +120,19 @@ export function measure(work) {
   }
 }
 
+/**
+ * @template T
+ * @param {string} key
+ * @param {() => T} lookup
+ * @returns {T}
+ */
 function cached(key, lookup) {
   if (!frame) return lookup();
   if (!frame.has(key)) frame.set(key, lookup());
-  return frame.get(key);
+  return /** @type {T} */ (frame.get(key));
 }
 
+/** @param {string} region */
 function regionRoot(region) {
   return cached(`region ${region}`, () =>
     [...document.querySelectorAll(Object.hasOwn(settings.regions, region) ? settings.regions[region] : ':not(*)')].find(
@@ -109,6 +147,7 @@ const generatedId = /[0-9A-HJKMNP-TV-Z]{26}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-
 
 // Stable semantic attributes survive different scroll positions, translations and viewport widths. A record's
 // key names it however long, the path as a whole being bounded.
+/** @param {Element} element */
 function segment(element) {
   const { keyAttribute, anchorAttributes, anchorClasses } = settings;
   for (const name of keyAttribute ? [keyAttribute, ...anchorAttributes] : anchorAttributes) {
@@ -117,7 +156,7 @@ function segment(element) {
     if (value && (name === keyAttribute || value.length < 160))
       return `${element.localName}[${name}="${CSS.escape(value)}"]`;
   }
-  const siblings = [...element.parentElement.children];
+  const siblings = [.../** @type {HTMLElement} */ (element.parentElement).children];
   const [first] = element.classList;
   if (anchorClasses && first && siblings.filter((sibling) => sibling.classList.contains(first)).length === 1)
     return `${element.localName}.${CSS.escape(first)}`;
@@ -126,6 +165,10 @@ function segment(element) {
 }
 
 /** The element showing a record among the ones the page shows (`cursors.key_scope`), or null: a key is compared, never queried. */
+/**
+ * @param {unknown} key
+ * @returns {HTMLElement | null}
+ */
 export function findRecord(key) {
   const { keyAttribute } = settings;
   if (!keyAttribute || typeof key !== 'string') return null;
@@ -135,31 +178,42 @@ export function findRecord(key) {
   return null;
 }
 
+/** @returns {Generator<HTMLElement>} */
 function* keyed() {
   const { keyAttribute, keyScope } = settings;
-  for (const scope of document.querySelectorAll(keyScope)) yield* scope.querySelectorAll(`[${keyAttribute}]`);
+  for (const scope of document.querySelectorAll(keyScope))
+    yield* /** @type {NodeListOf<HTMLElement>} */ (scope.querySelectorAll(`[${keyAttribute}]`));
 }
 
-/** Every record the page shows, by key: the first element of each, as `findRecord()` finds it. */
+/**
+ * Every record the page shows, by key: the first element of each, as `findRecord()` finds it.
+ *
+ * @returns {Map<string | null, HTMLElement>}
+ */
 function records() {
   const found = new Map();
   for (const element of keyed()) {
-    const key = element.getAttribute(settings.keyAttribute);
+    const key = element.getAttribute(/** @type {string} */ (settings.keyAttribute));
     if (!found.has(key) && !element.closest('[data-collaborate-popup]')) found.set(key, element);
   }
   return found;
 }
 
+/** @param {Element} element */
 const inScope = (element) => [...document.querySelectorAll(settings.keyScope)].some((scope) => scope.contains(element));
 
 // A region in a dialog holds popups: a path in it is of a record's popup, which another one, of the same shape,
 // is not.
+/** @param {Element} root */
 const popupRoot = (root) => root.closest('dialog, .modal') !== null;
 
 /**
  * The region and selector path from a region root, or null when the element is too deep to name. With a key
  * attribute, the path starts at the record the element is in, which a peer's page finds wherever it shows it;
  * a record the page shows only to its reader (one outside the key scope) is never named.
+ *
+ * @param {unknown} target
+ * @returns {AnchorPath | null}
  */
 export function anchorPath(target) {
   if (!(target instanceof Element) || target.closest('[data-collaborate-layer]')) return null;
@@ -175,6 +229,7 @@ export function anchorPath(target) {
   const segments = [];
   /** @type {Element | null} */
   let element = target;
+  /** @type {Element | null} */
   let record = null;
   while (element && element !== root && !record && segments.join(' > ').length < 1000) {
     segments.unshift(segment(element));
@@ -182,10 +237,15 @@ export function anchorPath(target) {
     element = element.parentElement;
   }
   if (element !== root && !record) return null;
-  if (record && !inScope(record) && !findRecord(record.getAttribute(keyAttribute))) return null;
+  if (record && !inScope(record) && !findRecord(record.getAttribute(/** @type {string} */ (keyAttribute)))) return null;
   return { region, selector: segments.join(' > ') };
 }
 
+/**
+ * @param {Element} root
+ * @param {string} selector
+ * @returns {Element | null}
+ */
 function query(root, selector) {
   try {
     return root.querySelector(selector);
@@ -199,11 +259,19 @@ function query(root, selector) {
  * record out another way, a row here where the peer has a tile) leads to its last step in the record, or else
  * to the record itself. In a popup, the kind of the record's element stays: two popups of a record are not one
  * another, and a path that names no record names nothing of the popup open here.
+ *
+ * @param {AnchorPath} path
+ * @returns {Element | null}
  */
 export function resolvePath({ region, selector }) {
   return cached(`path ${region} ${selector}`, () => lookUpPath(region, selector));
 }
 
+/**
+ * @param {string} region
+ * @param {string} selector
+ * @returns {Element | null}
+ */
 function lookUpPath(region, selector) {
   const root = regionRoot(region);
   if (!root) return null;
@@ -213,16 +281,24 @@ function lookUpPath(region, selector) {
   const steps = selector.split(' > ');
   if (!keyAttribute || !steps[0].includes(`[${keyAttribute}=`))
     return popup ? null : query(root, `:scope > ${selector}`);
+  /** @param {string} path */
   const anyKind = (path) => (popup ? path : path.replace(/^[a-zA-Z0-9-]+/, ''));
   const record = anyKind(steps[0]);
   return (
     query(root, anyKind(selector)) ??
-    (steps.length > 1 ? query(root, `${record} ${steps.at(-1).replace(/:nth-of-type\(\d+\)$/, '')}`) : null) ??
+    (steps.length > 1
+      ? query(root, `${record} ${/** @type {string} */ (steps.at(-1)).replace(/:nth-of-type\(\d+\)$/, '')}`)
+      : null) ??
     query(root, record)
   );
 }
 
-/** The key of the record a pointer is on, among the ones the page shows, or null. */
+/**
+ * The key of the record a pointer is on, among the ones the page shows, or null.
+ *
+ * @param {AnchorPath | null | undefined} anchor
+ * @returns {string | null}
+ */
 export function keyOf(anchor) {
   const { keyAttribute } = settings;
   if (!keyAttribute || !anchor?.selector.split(' > ')[0].includes(`[${keyAttribute}=`)) return null;
@@ -230,6 +306,12 @@ export function keyOf(anchor) {
   return record && inScope(record) ? record.getAttribute(keyAttribute) : null;
 }
 
+/**
+ * @param {unknown} target
+ * @param {number} x
+ * @param {number} y
+ * @returns {Anchor | null}
+ */
 export function captureAnchor(target, x, y) {
   if (!(target instanceof Element)) return null;
   const box = target.getBoundingClientRect();
@@ -243,7 +325,12 @@ export function captureAnchor(target, x, y) {
   };
 }
 
-/** Whether two pointers are at the same point of the same element. */
+/**
+ * Whether two pointers are at the same point of the same element.
+ *
+ * @param {Anchor | null} a
+ * @param {Anchor | null} b
+ */
 export function sameAnchor(a, b) {
   return a === b || (!!a && !!b && a.region === b.region && a.selector === b.selector && a.x === b.x && a.y === b.y);
 }
@@ -252,6 +339,11 @@ export function sameAnchor(a, b) {
  * The point of an element at fractions of its box where it can be seen, or null: off screen, hidden, clipped
  * or covered. The browser resolves clipping, fixed-position containing blocks and occlusion: a fixed modal can
  * escape a scrolling ancestor, so rectangle-only clipping is incorrect.
+ *
+ * @param {Element} element
+ * @param {number} [fx]
+ * @param {number} [fy]
+ * @returns {ViewportPoint | null}
  */
 export function seen(element, fx = 0.5, fy = 0.5) {
   const box = element.getBoundingClientRect();
@@ -263,6 +355,10 @@ export function seen(element, fx = 0.5, fy = 0.5) {
   return { x, y };
 }
 
+/**
+ * @param {Anchor | null | undefined} anchor
+ * @returns {ViewportPoint | null}
+ */
 export function resolveAnchor(anchor) {
   if (!anchor) return null;
   const target = resolvePath(anchor);
@@ -276,17 +372,23 @@ const EDGE_MARGIN = 16;
  * Where the edge of a pane (`cursors.edges`) is pointed at for a pointer its pane scrolled out of sight, above
  * it (under the head of a table, which stays in place) or below it, or null for one that is not: seen, gone,
  * outside any pane, or the pane itself covered.
+ *
+ * @param {Anchor | null | undefined} anchor
+ * @param {string | null | undefined} panes
+ * @returns {(ViewportPoint & { side: 'above' | 'below' }) | null}
  */
 export function offscreenAnchor(anchor, panes) {
   if (!anchor || !panes) return null;
   const target = resolvePath(anchor);
   const pane = target?.closest(panes);
   if (!pane) return null;
-  const box = target.getBoundingClientRect();
+  // A pane is only found from a target.
+  const box = /** @type {Element} */ (target).getBoundingClientRect();
   const view = pane.getBoundingClientRect();
   if (!box.width || !box.height || !view.width || !view.height) return null;
   const top = view.top + (pane.querySelector(':scope thead')?.getBoundingClientRect().height ?? 0);
   const y = box.top + box.height * anchor.y;
+  /** @type {'above' | 'below' | null} */
   let side = null;
   if (y < top) side = 'above';
   else if (y > view.bottom) side = 'below';
@@ -298,11 +400,26 @@ export function offscreenAnchor(anchor, panes) {
   return { x, y: edge, side };
 }
 
-/** Whether a popup is one of the host's kinds, open on a record. */
+/**
+ * Whether a popup is one of the host's kinds, open on a record.
+ *
+ * @param {any} popup what a peer sent, checked here
+ * @param {unknown} kinds the host's kinds, a list of names
+ * @returns {popup is Popup}
+ */
 export function isPopup(popup, kinds) {
-  return kinds.includes(popup?.kind) && typeof popup.key === 'string' && popup.key !== '' && popup.key.length <= 255;
+  return (
+    /** @type {unknown[]} */ (kinds).includes(popup?.kind) &&
+    typeof popup.key === 'string' &&
+    popup.key !== '' &&
+    popup.key.length <= 255
+  );
 }
 
+/**
+ * @param {Popup | null | undefined} a
+ * @param {Popup | null | undefined} b
+ */
 export function samePopup(a, b) {
   return a?.kind === b?.kind && a?.key === b?.key;
 }
@@ -310,6 +427,9 @@ export function samePopup(a, b) {
 /**
  * The popup of a record the reader has open (`data-collaborate-popup="<kind>"` beside the key attribute), or
  * null: one of a record the page shows to its peers alone, since naming another would hand them its key.
+ *
+ * @param {string[]} kinds
+ * @returns {Popup | null}
  */
 export function capturePopup(kinds) {
   const { keyAttribute } = settings;
@@ -324,7 +444,15 @@ export function capturePopup(kinds) {
   return null;
 }
 
-/** A point on its way from one place to another, a tenth of a second long, or there at once. */
+/**
+ * A point on its way from one place to another, a tenth of a second long, or there at once.
+ *
+ * @param {ViewportPoint} from
+ * @param {ViewportPoint} to
+ * @param {number} elapsed
+ * @param {boolean} [reducedMotion]
+ * @returns {ViewportPoint}
+ */
 export function interpolate(from, to, elapsed, reducedMotion = false) {
   const fraction = reducedMotion ? 1 : Math.min(1, Math.max(0, elapsed / 100));
   // The point itself: the sum of the way may miss it by a rounding, and ask frames for good.
@@ -332,6 +460,7 @@ export function interpolate(from, to, elapsed, reducedMotion = false) {
   return { x: from.x + (to.x - from.x) * fraction, y: from.y + (to.y - from.y) * fraction };
 }
 
+/** @type {Record<string, string>} */
 const CURSOR_ALIASES = {
   'all-scroll': 'move',
   'e-resize': 'ew-resize',
@@ -350,7 +479,7 @@ const TEXT_INPUT_TYPES = ['text', 'search', 'url', 'tel'];
  * Controls whose value and selection can be shared: never passwords, hidden or non-text inputs.
  *
  * @param {unknown} element
- * @returns {boolean}
+ * @returns {element is HTMLInputElement | HTMLTextAreaElement}
  */
 export function isTextControl(element) {
   return (
@@ -359,6 +488,10 @@ export function isTextControl(element) {
   );
 }
 
+/**
+ * @param {number} x
+ * @param {number} y
+ */
 function overGlyph(x, y) {
   const position = document.caretPositionFromPoint?.(x, y);
   const range = position ? null : document.caretRangeFromPoint?.(x, y);
@@ -378,6 +511,12 @@ function overGlyph(x, y) {
 }
 
 // The shape the sender's browser shows: the computed CSS cursor, or for `auto` an I-beam over text.
+/**
+ * @param {unknown} target
+ * @param {number} x
+ * @param {number} y
+ * @returns {string}
+ */
 export function pointerShape(target, x, y) {
   if (!(target instanceof Element)) return 'default';
   const style = getComputedStyle(target);

@@ -16,29 +16,60 @@ const EMPTY = /^t\d+$/;
 /** How long a field's rebuild may take before the page stops waiting for it. */
 const TIMEOUT = 15000;
 
-/** The rows of a collection, its own and not a nested one's. */
+/**
+ * Drupal's AJAX, as the page it runs in has it: its instances, one per bound element, and jQuery to trigger them.
+ *
+ * @typedef {{ element: Element, event: string, ajaxing: boolean }} DrupalAjax
+ * @typedef {{ Drupal?: { ajax: { instances: (DrupalAjax | null)[] } }, jQuery?: (element: Element) => { trigger(event: string): unknown } }} DrupalGlobals
+ */
+
+/**
+ * The rows of a collection, its own and not a nested one's.
+ *
+ * @param {Element} container
+ */
 function rowsOf(container) {
-  return Array.from(container.querySelectorAll('tr.draggable')).filter(
+  return Array.from(/** @type {NodeListOf<HTMLTableRowElement>} */ (container.querySelectorAll('tr.draggable'))).filter(
     (row) => row.closest('[data-collaborate-collection]') === container
   );
 }
 
-/** The key a row's controls name, below the collection's path. */
+/**
+ * The key a row's controls name, below the collection's path.
+ *
+ * @param {Element} row
+ * @param {string} path
+ */
 function keyOf(row, path) {
-  const control = Array.from(row.querySelectorAll('[name]')).find((input) => input.name.startsWith(`${path}[`));
+  const control = Array.from(/** @type {NodeListOf<HTMLInputElement>} */ (row.querySelectorAll('[name]'))).find(
+    (input) => input.name.startsWith(`${path}[`)
+  );
   return control?.name.slice(path.length + 1).split(']')[0];
 }
 
-/** A button of the collection's, not a nested one's. */
+/**
+ * A button of the collection's, not a nested one's (or the select of Paragraphs' types).
+ *
+ * @param {Element} element
+ * @param {Element | null | undefined} container
+ * @param {string} selector
+ */
 function buttonOf(element, container, selector) {
-  return Array.from(element.querySelectorAll(selector)).find(
-    (button) => button.closest('[data-collaborate-collection]') === container
-  );
+  return Array.from(
+    /** @type {NodeListOf<HTMLInputElement | HTMLSelectElement>} */ (element.querySelectorAll(selector))
+  ).find((button) => button.closest('[data-collaborate-collection]') === container);
 }
 
+/** @type {Promise<unknown>} */
 let queue = Promise.resolve();
 
-/** Runs Drupal's AJAX operations one after the other: each rebuilds from the form the previous one left. */
+/**
+ * Runs Drupal's AJAX operations one after the other: each rebuilds from the form the previous one left.
+ *
+ * @template T
+ * @param {() => Promise<T>} operation
+ * @returns {Promise<T>}
+ */
 function serially(operation) {
   const next = queue.then(operation);
   queue = next.catch(() => {});
@@ -48,10 +79,14 @@ function serially(operation) {
 /**
  * Presses one of Form API's AJAX buttons, as Drupal binds them (on their event, submitting the form with them),
  * and waits until Drupal has applied its response.
+ *
+ * @param {Element} button
  */
 async function press(button) {
-  const ajax = globalThis.Drupal?.ajax.instances.find((instance) => instance?.element === button);
-  const jquery = globalThis.jQuery;
+  const ajax = /** @type {DrupalGlobals} */ (globalThis).Drupal?.ajax.instances.find(
+    (instance) => instance?.element === button
+  );
+  const jquery = /** @type {DrupalGlobals} */ (globalThis).jQuery;
   if (!ajax || !jquery || ajax.ajaxing) return false;
   jquery(button).trigger(ajax.event);
   const started = Date.now();
@@ -62,7 +97,12 @@ async function press(button) {
   return true;
 }
 
-/** The collection a path names now: Drupal replaced the field's markup with its rebuild. */
+/**
+ * The collection a path names now: Drupal replaced the field's markup with its rebuild.
+ *
+ * @param {HTMLFormElement} form
+ * @param {string} path
+ */
 const collectionOf = (form, path) =>
   Array.from(form.querySelectorAll('[data-collaborate-collection]')).find(
     (element) => /** @type {HTMLElement} */ (element).dataset.collaborateCollection === path
@@ -74,6 +114,9 @@ const PARAGRAPH = /^n([a-z0-9_]+)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4
 /**
  * The button adding an item to a collection: "Add another item", or a paragraph type's ("Add Text", or the
  * type chosen in Paragraphs' select).
+ *
+ * @param {Element} container
+ * @param {string | undefined} type
  */
 function addButton(container, type) {
   if (!type) return buttonOf(container, container, '.field-add-more-submit');
@@ -85,7 +128,11 @@ function addButton(container, type) {
   return buttonOf(container, container, 'input[type="submit"][name$="_add_more"]');
 }
 
-/** A row no one typed in yet, the one the user is in excepted. */
+/**
+ * A row no one typed in yet, the one the user is in excepted.
+ *
+ * @param {Element} container
+ */
 const emptyRow = (container) =>
   rowsOf(container).find((row) => 'collaboratePending' in row.dataset && !row.contains(document.activeElement));
 

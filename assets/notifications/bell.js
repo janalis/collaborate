@@ -30,15 +30,25 @@ const UNREAD = `${ITEM}[data-unread="true"]`;
 const HEADER = '.collaborate-notifications__header';
 
 // The notifications the host was told of, once each whatever told the page (hub, service worker, bells).
+/** @type {Set<string | undefined>} */
 const told = new Set();
 
-/** A web push public key, base64url as the server gives it, as the bytes `pushManager.subscribe()` takes. */
+/**
+ * A web push public key, base64url as the server gives it, as the bytes `pushManager.subscribe()` takes.
+ *
+ * @param {string} value
+ */
 export function decodeKey(value) {
   const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
   return Uint8Array.from(atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')), (char) => char.charCodeAt(0));
 }
 
-/** Whether a subscription was made with these key bytes: one made with a key since rotated is not. */
+/**
+ * Whether a subscription was made with these key bytes: one made with a key since rotated is not.
+ *
+ * @param {ArrayBuffer | null | undefined} buffer
+ * @param {Uint8Array} key
+ */
 export function sameKey(buffer, key) {
   if (!buffer) return false;
   const bytes = new Uint8Array(buffer);
@@ -51,7 +61,11 @@ export function pushEncoding(encodings = globalThis.PushManager?.supportedConten
   return known.includes('aes128gcm') ? 'aes128gcm' : (known[0] ?? 'aes128gcm');
 }
 
-/** Whether this browser can be sent web pushes, and the server sends them. */
+/**
+ * Whether this browser can be sent web pushes, and the server sends them.
+ *
+ * @param {Record<string, any>} settings
+ */
 export const pushSupported = (settings) =>
   Boolean(
     settings.push &&
@@ -63,6 +77,15 @@ export const pushSupported = (settings) =>
 /**
  * Counts the notifications of a bell, keeps them told of what the hub and the service worker say, marks them
  * read, and switches web push on this device.
+ *
+ * @param {Element} root
+ * @param {{
+ *   hub?: import('../hub.js').CollaborateHub | null,
+ *   fetcher?: typeof fetch,
+ *   navigate?: (url: string) => void,
+ *   serviceWorker?: ServiceWorkerContainer | null,
+ *   announced?: Set<string | undefined>,
+ * }} [options]
  */
 export function initBell(
   root,
@@ -75,16 +98,19 @@ export function initBell(
   } = {}
 ) {
   const settings = settingsOf(root, 'data-collaborate-notifications');
-  const toggle = root.querySelector('.collaborate-notifications__toggle');
-  const menu = root.querySelector('.collaborate-notifications__menu');
-  const badge = root.querySelector('.collaborate-notifications__count');
+  // Typed as found: a bell without either does not start, which the line below checks.
+  const toggle = /** @type {HTMLElement} */ (root.querySelector('.collaborate-notifications__toggle'));
+  const menu = /** @type {HTMLElement} */ (root.querySelector('.collaborate-notifications__menu'));
+  const badge = /** @type {HTMLElement | null} */ (root.querySelector('.collaborate-notifications__count'));
   if (!toggle || !menu || !settings.src) return null;
   const maxCount = Number.isInteger(settings.maxCount) ? settings.maxCount : MAX_COUNT;
   // The name of the bell without its count, which the count is added to.
   const label = toggle.dataset.label ?? '';
   const unreadLabel = unreadPattern();
 
+  /** @type {ReturnType<typeof setTimeout> | null} */
   let timer = null;
+  /** @type {(() => void) | null} */
   let leave = null;
   let stopped = false;
   // A notice came while the menu was open: the list is asked for once it is closed.
@@ -109,13 +135,19 @@ export function initBell(
   }
 
   function newestShown() {
-    return Math.max(0, ...[...menu.querySelectorAll(ITEM)].map((item) => Number(item.dataset.id) || 0));
+    return Math.max(
+      0,
+      ...[.../** @type {NodeListOf<HTMLElement>} */ (menu.querySelectorAll(ITEM))].map(
+        (item) => Number(item.dataset.id) || 0
+      )
+    );
   }
 
   const isOpen = () => toggle.getAttribute('aria-expanded') === 'true';
-  const unread = () => [...menu.querySelectorAll(UNREAD)];
-  const header = () => menu.querySelector(HEADER);
+  const unread = () => [.../** @type {NodeListOf<HTMLElement>} */ (menu.querySelectorAll(UNREAD))];
+  const header = () => /** @type {HTMLElement | null} */ (menu.querySelector(HEADER));
 
+  /** @param {number} count */
   function showCount(count) {
     const text = count > maxCount ? `${maxCount}+` : String(count);
     if (badge) {
@@ -137,7 +169,7 @@ export function initBell(
   }
 
   /** Shows what is left unread: as the server counted it when it answered, as the list tells it otherwise. */
-  /** @param {{ unread?: number, total?: number } | null} [answer] */
+  /** @param {{ unread: number, total?: number | null } | null} [answer] */
   function settle(answer = null) {
     const counts = answer && Number.isInteger(answer.unread) ? answer : null;
     const head = header();
@@ -152,6 +184,10 @@ export function initBell(
     return { unread: count, total: Number.isInteger(reported) ? reported : total() };
   }
 
+  /**
+   * @param {{ unread: number, total: number | null | undefined }} counts
+   * @param {boolean} [wasHeard]
+   */
   function changed(counts, wasHeard = false) {
     document.dispatchEvent(
       new CustomEvent('collaborate:notifications-changed', {
@@ -163,6 +199,10 @@ export function initBell(
   /**
    * Tells the host of a notification, once whatever told the page of it. A page without the focus says nothing
    * on a device web push reaches: the system shows it there, and a toast nobody looks at would show it twice.
+   *
+   * @param {string | undefined} id
+   * @param {string} text
+   * @param {string | null} url
    */
   function announce(id, text, url) {
     if (announced.has(id)) return;
@@ -171,7 +211,12 @@ export function initBell(
     document.dispatchEvent(new CustomEvent('collaborate:notification', { detail: { id, text, url } }));
   }
 
-  /** Marks notifications read once the server knows; a request that failed leaves them as they are. */
+  /**
+   * Marks notifications read once the server knows; a request that failed leaves them as they are.
+   *
+   * @param {HTMLElement[]} items
+   * @param {string | null} [id]
+   */
   async function markRead(items, id = null) {
     const answer = await postChange(settings.read, id, fetcher);
     if (!answer || stopped) return false;
@@ -238,23 +283,24 @@ export function initBell(
     }
   }
 
+  /** @param {MouseEvent} event */
   function click(event) {
-    if (event.target.closest('.collaborate-notifications__read-all')) {
+    if (/** @type {Element} */ (event.target).closest('.collaborate-notifications__read-all')) {
       markRead(unread());
       return;
     }
-    if (event.target.closest('.collaborate-notifications__push')) {
+    if (/** @type {Element} */ (event.target).closest('.collaborate-notifications__push')) {
       switchPush();
       return;
     }
-    const item = event.target.closest(UNREAD);
+    const item = /** @type {HTMLElement | null} */ (/** @type {Element} */ (event.target).closest(UNREAD));
     if (!item || !menu.contains(item)) return;
     if (item.matches('a[href]') && leaves(event)) {
       // Followed once the server knows it read: the page it leads to then counts it read, which a beacon
       // racing that page's own request could not promise. Followed all the same when the server was not told.
       event.preventDefault();
       markRead([item], item.dataset.id).then(() => {
-        if (!stopped) navigate(item.getAttribute('href'));
+        if (!stopped) navigate(/** @type {string} */ (item.getAttribute('href')));
       });
       return;
     }
@@ -263,13 +309,16 @@ export function initBell(
   }
 
   // The page of all notifications read, unread or cleared some: the bell shows the count it was answered.
+  /** @param {Event} event the page's `collaborate:notifications-changed` */
   function pageChanged(event) {
-    if (event.detail?.origin !== 'page') return;
-    if (Number.isInteger(event.detail.unread)) settle(event.detail);
+    if (/** @type {CustomEvent} */ (event).detail?.origin !== 'page') return;
+    if (Number.isInteger(/** @type {CustomEvent} */ (event).detail.unread))
+      settle(/** @type {CustomEvent} */ (event).detail);
     ask();
   }
 
   // The service worker was pushed a notification while this page is open: the page says it, the hub may not.
+  /** @param {MessageEvent} event */
   function pushed(event) {
     const data = event.data;
     // A page without the focus is told to count what the system shows: its list again, without a word.
@@ -286,13 +335,14 @@ export function initBell(
   // Web push on this device: the switch of the menu, which a new list draws again.
   const push = pushSupported(settings) ? settings.push : null;
   const pushKey = push ? decodeKey(push.key) : null;
+  /** @type {PushSubscription | null} */
   let subscription = null;
   let denied = false;
   let switching = false;
 
   function renderPush() {
-    const button = menu.querySelector('.collaborate-notifications__push');
-    const note = menu.querySelector('.collaborate-notifications__push-denied');
+    const button = /** @type {HTMLElement | null} */ (menu.querySelector('.collaborate-notifications__push'));
+    const note = /** @type {HTMLElement | null} */ (menu.querySelector('.collaborate-notifications__push-denied'));
     if (button) {
       button.hidden = !push;
       button.setAttribute('aria-checked', String(subscription !== null));
@@ -303,6 +353,10 @@ export function initBell(
     if (note) note.hidden = !denied;
   }
 
+  /**
+   * @param {string} url
+   * @param {object} data
+   */
   async function postPush(url, data) {
     try {
       return isAccepted(await postJson(fetcher, url, push.token, data));
@@ -311,7 +365,11 @@ export function initBell(
     }
   }
 
-  /** Attaches a subscription of this browser to the signed-in user; one the server refused is dropped. */
+  /**
+   * Attaches a subscription of this browser to the signed-in user; one the server refused is dropped.
+   *
+   * @param {PushSubscription} current
+   */
   async function attach(current) {
     const { endpoint, keys } = current.toJSON();
     if (await postPush(push.subscribe, { endpoint, keys, encoding: pushEncoding() })) return current;
@@ -319,6 +377,7 @@ export function initBell(
     return null;
   }
 
+  /** @param {ServiceWorkerRegistration} registration */
   async function subscribe(registration) {
     return attach(await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushKey }));
   }
@@ -344,7 +403,7 @@ export function initBell(
       const registration = await register();
       const existing = await registration.pushManager.getSubscription();
       if (!existing) subscription = null;
-      else if (sameKey(existing.options?.applicationServerKey, pushKey))
+      else if (sameKey(existing.options?.applicationServerKey, /** @type {Uint8Array} */ (pushKey)))
         // Idempotent: attaches the device again to whoever is signed in now.
         subscription = await attach(existing);
       else {
@@ -406,12 +465,14 @@ export function initBell(
 
   // Joined while the page is hidden: a notification still comes to a tab nobody looks at. A page kept in the
   // back/forward cache leaves, and asks again on its return.
+  /** @param {PageTransitionEvent} event */
   function hide(event) {
     leave?.();
     leave = null;
     if (!event.persisted) stop();
   }
 
+  /** @param {PageTransitionEvent} event */
   function show(event) {
     if (!event.persisted || stopped || leave) return;
     join();
@@ -420,7 +481,7 @@ export function initBell(
 
   function stop() {
     stopped = true;
-    clearTimeout(timer);
+    clearTimeout(/** @type {number} */ (timer));
     leave?.();
     leave = null;
     menu.removeEventListener('click', click);

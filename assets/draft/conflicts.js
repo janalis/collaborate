@@ -6,20 +6,40 @@ import { entrySelector, rowOf } from '../markup.js';
 const MAX_DIFF_TOKENS = 2000;
 const BLOCKS = 'p, h1, h2, h3, h4, h5, h6, li, blockquote, pre, div, tr, br';
 
+/** @typedef {import('./session.js').DraftSession} DraftSession */
+/** @typedef {RadioNodeList | HTMLInputElement | null} FieldControl what a field's name finds in the form */
+
+/**
+ * @param {DraftSession} session
+ * @param {string} name
+ * @returns {FieldControl}
+ */
 const control = (session, name) => {
-  const found = session.form.elements.namedItem(session.formName(name));
+  const found = /** @type {FieldControl} */ (session.form.elements.namedItem(session.formName(name)));
   return found instanceof RadioNodeList ? found : found || null;
 };
 
+/**
+ * @param {FieldControl} found
+ * @returns {HTMLInputElement | null}
+ */
 const first = (found) => (found instanceof RadioNodeList ? found[0] : found);
 
-/** The rich editor a source textarea feeds: its model, not the textarea, holds the current text. */
+/**
+ * The rich editor a source textarea feeds: its model, not the textarea, holds the current text.
+ *
+ * @param {Element} element
+ */
 const editorOf = (element) =>
   Array.from(document.querySelectorAll('.ck-editor__editable')).find(
     (editable) => editable.ckeditorInstance?.sourceElement === element
   )?.ckeditorInstance;
 
-/** Rich text as read: one line per block, no markup. Markdown source has none and stays as it is. */
+/**
+ * Rich text as read: one line per block, no markup. Markdown source has none and stays as it is.
+ *
+ * @param {unknown} html
+ */
 const richText = (html) => {
   if (typeof html !== 'string' || !/<[a-z]/i.test(html)) return String(html ?? '');
   const body = new DOMParser().parseFromString(html, 'text/html').body;
@@ -30,26 +50,43 @@ const richText = (html) => {
 /**
  * An entry's or a collection's own state (`path[@key]`, `path[__collection__]`) has no control: it is named
  * after its collection, and an entry after the first text its row shows.
+ *
+ * @param {DraftSession} session
+ * @param {string} name
  */
 function collectionLabel(session, name) {
   const type = session.state?.fields?.[name]?.type;
   const match = /^(.*)\[(?:@([^\]]+)|__collection__)\]$/.exec(session.formName(name));
   if (!match || !['member', 'collection'].includes(type)) return null;
-  const container = Array.from(session.form.querySelectorAll('[data-collaborate-collection]')).find(
-    (element) => element.dataset.collaborateCollection === match[1]
-  );
+  const container = Array.from(
+    /** @type {NodeListOf<HTMLElement>} */ (session.form.querySelectorAll('[data-collaborate-collection]'))
+  ).find((element) => element.dataset.collaborateCollection === match[1]);
   const parent = container?.querySelector('label, legend')?.textContent.trim();
   if (!parent) return null;
+  // A label found means a container found.
   const row = match[2]
-    ? Array.from(container.querySelectorAll(entrySelector())).find((node) => node.dataset.collaborateItem === match[2])
+    ? Array.from(
+        /** @type {NodeListOf<HTMLElement>} */ (
+          /** @type {HTMLElement} */ (container).querySelectorAll(entrySelector())
+        )
+      ).find((node) => node.dataset.collaborateItem === match[2])
     : null;
-  const text = Array.from(row?.querySelectorAll('input:not([type]), input[type="text"]') ?? [])
+  const text = Array.from(
+    /** @type {NodeListOf<HTMLInputElement> | undefined} */ (
+      row?.querySelectorAll('input:not([type]), input[type="text"]')
+    ) ?? []
+  )
     .map((input) => input.value.trim())
     .find(Boolean);
   return text ? `${parent} › ${text}` : parent;
 }
 
-/** The field's label; a collection entry's names its collection first. */
+/**
+ * The field's label; a collection entry's names its collection first.
+ *
+ * @param {DraftSession} session
+ * @param {string} name
+ */
 export function fieldLabel(session, name) {
   const entry = collectionLabel(session, name);
   if (entry) return entry;
@@ -66,7 +103,12 @@ export function fieldLabel(session, name) {
   return own || parent || session.formName(name);
 }
 
-/** What the draft holds for a field now, read from its control. */
+/**
+ * What the draft holds for a field now, read from its control.
+ *
+ * @param {DraftSession} session
+ * @param {string} name
+ */
 export function draftValue(session, name) {
   const type = session.state?.fields?.[name]?.type;
   if (type === 'member' || type === 'collection') return session.state.fields[name].value;
@@ -82,7 +124,14 @@ export function draftValue(session, name) {
   return found.value;
 }
 
-/** A value as the editor reads it: option labels for ids, Yes/No, text for markup, words for structure. */
+/**
+ * A value as the editor reads it: option labels for ids, Yes/No, text for markup, words for structure.
+ *
+ * @param {DraftSession} session
+ * @param {string} name
+ * @param {any} value the field's value as the draft or the record holds it
+ * @returns {string}
+ */
 export function describe(session, name, value) {
   const messages = session.configuration.messages;
   const type = session.state?.fields?.[name]?.type;
@@ -101,6 +150,7 @@ export function describe(session, name, value) {
   if (element instanceof HTMLSelectElement) {
     // A peer's pick may not be among this page's options: the event that chose it carries its label.
     const labels = (session.history?.get(name) || []).at(-1)?.labels || {};
+    /** @param {string | number} id */
     const label = (id) =>
       Array.from(element.options)
         .find((option) => option.value === String(id))
@@ -117,7 +167,14 @@ export function describe(session, name, value) {
   return JSON.stringify(value, null, 2);
 }
 
-/** Fills both sides with their words, marking what the draft removed and added. Text only, never markup. */
+/**
+ * Fills both sides with their words, marking what the draft removed and added. Text only, never markup.
+ *
+ * @param {HTMLElement} savedElement
+ * @param {HTMLElement} draftElement
+ * @param {string} saved
+ * @param {string} draft
+ */
 export function renderDiff(savedElement, draftElement, saved, draft) {
   const before = saved.split(/(\s+)/);
   const after = draft.split(/(\s+)/);
@@ -129,9 +186,14 @@ export function renderDiff(savedElement, draftElement, saved, draft) {
     return;
   }
   // Consecutive changed words, and the spaces between them, read as one mark.
+  /**
+   * @param {HTMLElement} element
+   * @param {string} tag
+   * @param {string} text
+   */
   const mark = (element, tag, text) => {
-    if (element.lastChild?.localName === tag) {
-      element.lastChild.textContent += text;
+    if (/** @type {Element | null} */ (element.lastChild)?.localName === tag) {
+      /** @type {Element} */ (element.lastChild).textContent += text;
       return;
     }
     const node = document.createElement(tag);
@@ -149,10 +211,19 @@ export function renderDiff(savedElement, draftElement, saved, draft) {
   }
 }
 
+/**
+ * @param {DraftSession & { conflictIdentity?: string }} session the identity of the conflicts it shows, kept here
+ * @param {Record<string, unknown>} conflicts
+ */
 export function renderConflicts(session, conflicts) {
   session.conflicts = conflicts;
   const identity = JSON.stringify(conflicts);
   const messages = session.configuration.messages;
+  /**
+   * @param {string} name
+   * @param {HTMLElement} savedElement
+   * @param {HTMLElement} draftElement
+   */
   const refresh = (name, savedElement, draftElement) =>
     renderDiff(
       savedElement,
@@ -161,8 +232,15 @@ export function renderConflicts(session, conflicts) {
       describe(session, name, draftValue(session, name))
     );
   if (identity === session.conflictIdentity) {
-    for (const element of session.conflictPanel.querySelectorAll('[data-draft-field]'))
-      refresh(element.dataset.draftField, element.previousElementSibling.previousElementSibling, element);
+    // A draft value comes two elements after its saved value: its side's heading between (built below).
+    for (const element of /** @type {NodeListOf<HTMLElement>} */ (
+      session.conflictPanel.querySelectorAll('[data-draft-field]')
+    ))
+      refresh(
+        /** @type {string} */ (element.dataset.draftField),
+        /** @type {HTMLElement} */ (/** @type {Element} */ (element.previousElementSibling).previousElementSibling),
+        element
+      );
     if (Object.keys(conflicts).length) session.setStatus('conflict');
     return;
   }

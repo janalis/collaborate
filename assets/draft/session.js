@@ -7,18 +7,100 @@ import { initializeCollections } from './collections.js';
 import { renderConflicts } from './conflicts.js';
 import { initializeText, initializeValue, valueAdapter } from './fields.js';
 
+/**
+ * What a form's `data-collaborate` attribute holds (FormDraft's Configuration).
+ *
+ * @typedef {object} DraftConfiguration
+ * @property {string} grant
+ * @property {string} url
+ * @property {string} csrf
+ * @property {Record<string, string>} messages
+ * @property {boolean} isNew
+ * @property {string} editUrl
+ * @property {string | null} invitation
+ * @property {Record<string, number>} config
+ */
+
+/**
+ * A field's state in the draft, as Join and Replay answer it, or as the grant's schema defines a field added since.
+ *
+ * @typedef {object} DraftField
+ * @property {string} type text, value, rich, member or collection
+ * @property {any} initial
+ * @property {any} value
+ * @property {any} [saved]
+ * @property {number | null} [version]
+ * @property {number | null} [savedVersion]
+ * @property {number} [initialVersion]
+ * @property {string} [schema]
+ * @property {string} [formName]
+ */
+
+/**
+ * What Join answers: the draft at its current revision.
+ *
+ * @typedef {object} DraftState
+ * @property {Record<string, DraftField>} fields
+ * @property {DraftEvent[]} events
+ * @property {number} generation
+ * @property {number} revision
+ * @property {number} savedRevision
+ * @property {Actor | null} [savedBy]
+ * @property {string} [digest]
+ * @property {string} [stamp]
+ * @property {string | number | null} [recordId]
+ * @property {Record<string, unknown>} [conflicts]
+ */
+
+/**
+ * A journal event, or a hub notice of one: a field's value or model operations, a Discard, a record saved.
+ *
+ * @typedef {object} DraftEvent
+ * @property {string} kind
+ * @property {string} field
+ * @property {number} revision
+ * @property {number} [generation]
+ * @property {number} [version]
+ * @property {string} [id]
+ * @property {any} [value]
+ * @property {Record<string, string>} [labels]
+ */
+
+/** @typedef {{ label?: string, userId?: string | number } | null | undefined} Actor */
+
+/**
+ * A field's model as the session drives it: an OperationBuffer, or a value adapter (fields.js).
+ *
+ * @typedef {object} Adapter
+ * @property {() => object | null} next the batch to send, marked as sent
+ * @property {(event: any) => void} receive
+ * @property {number} [version]
+ * @property {() => boolean} [hasPending]
+ * @property {(value: any) => void} [adopt]
+ * @property {() => void} [destroy]
+ */
+
+/** @typedef {{ ready: boolean, resolve: () => void, promise: Promise<void> }} EditorWaiter */
+
+/** @type {WeakMap<HTMLFormElement, DraftSession>} */
 const sessions = new WeakMap();
 
 /** What a grant signs, its first part: the draft, the user and the field schema, as base64 JSON. */
+/** @param {string} grant */
 const grantScope = (grant) =>
   JSON.parse(
     new TextDecoder().decode(Uint8Array.from(atob(grant.split('.')[0]), (character) => character.charCodeAt(0)))
   );
 /** @param {unknown} error */
 const messageOf = (error) => (error instanceof Error ? error.message : String(error));
+/** @param {string} text */
 const escapePattern = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const matchers = new WeakMap();
-/** Compiled once per grant schema: every form mutation looks each control up again. */
+/**
+ * Compiled once per grant schema: every form mutation looks each control up again.
+ *
+ * @param {Record<string, any>} schema the grant's field definitions, by pattern
+ */
 const matcher = (schema) => {
   if (!matchers.has(schema)) {
     const entries = Object.entries(schema);
@@ -48,22 +130,34 @@ const matcher = (schema) => {
 
 /** A form owns one ordered network queue; individual fields own their model versions. */
 export class DraftSession {
+  /**
+   * @param {HTMLFormElement} form
+   * @param {DraftConfiguration} configuration
+   * @param {typeof fetch} [fetcher]
+   * @param {import('../hub.js').CollaborateHub | null} [hub]
+   */
   constructor(form, configuration, fetcher = backgroundFetch, hub = hubFor()) {
     this.form = form;
     this.configuration = configuration;
     this.fetcher = fetcher;
     this.hub = hub;
+    /** @type {Map<string, Adapter>} */
     this.adapters = new Map();
+    /** @type {Map<string, DraftEvent[]>} */
     this.history = new Map();
+    /** @type {Set<string>} */
     this.reported = new Set();
     // Typed Markdown source not yet applied to its editor's model: flush() applies it before sending.
+    /** @type {Map<string, () => void>} */
     this.sources = new Map();
     this.revision = 0;
     this.generation = 0;
     // The highest revision a notice announced while a replay was under way (Infinity: unknown).
     this.awaited = 0;
     this.abort = new AbortController();
+    /** @type {(() => void)[]} */
     this.removers = [];
+    /** @type {WeakSet<Element>} */
     this.bound = new WeakSet();
     // Set by the modules sharing the session: a received value being written to a control (fields.js and the
     // CKEditor plugin), the scan of the form's collection rows (collections.js), the conflicts the review shows
@@ -75,6 +169,7 @@ export class DraftSession {
     this.conflicts = undefined;
     // When the last replay answered: none yet.
     this.pulled = 0;
+    /** @type {Map<string, EditorWaiter>} */
     this.editorWaiters = new Map();
     this.schema = grantScope(configuration.grant).fields;
     // Lock existing content, not the live status/recovery controls added below.
@@ -98,6 +193,7 @@ export class DraftSession {
     this.conflictPanel.hidden = true;
     this.conflictPanel.dataset.collaborateConflicts = '';
     this.bar.element.after(this.conflictPanel);
+    /** @param {Event} event */
     this.earlySubmit = (event) => {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -113,7 +209,9 @@ export class DraftSession {
     };
     form.addEventListener('compositionstart', this.compositionStart);
     form.addEventListener('compositionend', this.compositionEnd);
+    /** @param {PageTransitionEvent} event */
     this.unload = (event) => (event.persisted ? this.suspend() : this.stop());
+    /** @param {PageTransitionEvent} event */
     this.restore = (event) => {
       if (event.persisted) this.resume();
     };
@@ -121,24 +219,43 @@ export class DraftSession {
     window.addEventListener('pageshow', this.restore);
   }
 
-  /** A timing or size the form's `config` sets, or its default. */
+  /**
+   * A timing or size the form's `config` sets, or its default.
+   *
+   * @param {string} name
+   * @param {number} fallback
+   */
   setting(name, fallback) {
     return this.configuration.config?.[name] ?? fallback;
   }
 
-  /** Shows a state; `name`, another editor's, takes the message that names who did it. */
+  /**
+   * Shows a state; `name`, another editor's, takes the message that names who did it.
+   *
+   * @param {string} key
+   * @param {string | null} [name]
+   */
   setStatus(key, name = null) {
     this.form.dataset.collaborateState = key;
     this.bar.setState(key, this.message(key, name));
   }
 
+  /**
+   * @param {string} key
+   * @param {string | null} [name]
+   */
   message(key, name = null) {
     const messages = this.configuration.messages;
     if (name && messages[`${key}By`]) return messages[`${key}By`].replace('%name%', name);
     return messages[key] || key;
   }
 
-  /** The other editor who did what `actor` names, or nobody: this account's own sessions are no one else. */
+  /**
+   * The other editor who did what `actor` names, or nobody: this account's own sessions are no one else.
+   *
+   * @param {Actor} actor
+   * @returns {string | null}
+   */
   peerName(actor) {
     return actor?.label && actor.userId && actor.userId !== grantScope(this.configuration.grant).userId
       ? actor.label
@@ -151,7 +268,11 @@ export class DraftSession {
     else this.setStatus('draft');
   }
 
-  /** What a failed action tells the editor: a lost connection waits, a refusal does not. */
+  /**
+   * What a failed action tells the editor: a lost connection waits, a refusal does not.
+   *
+   * @param {any} error whatever the action threw: an HttpError, an AbortError, a network failure
+   */
   failed(error) {
     if (this.stopped || this.suspended || error?.name === 'AbortError') return;
     const status = error?.status;
@@ -162,6 +283,12 @@ export class DraftSession {
     } else this.setStatus('failed');
   }
 
+  /**
+   * @param {string} action
+   * @param {object} [body]
+   * @param {boolean} [renewed]
+   * @returns {Promise<any>} the server's JSON answer, or null for 204
+   */
   async request(action, body = {}, renewed = false) {
     if (this.suspended) throw new DOMException('Collaborate session suspended.', 'AbortError');
     const signal = this.abort.signal;
@@ -180,7 +307,10 @@ export class DraftSession {
       if (this.acknowledged === grant) this.acknowledged = null;
       return this.request(action, body, renewed);
     }
-    if (response.ok) this.acknowledged = grant;
+    if (response.ok) {
+      /** @type {string | null} the grant the server verified: requests send its signature alone */
+      this.acknowledged = grant;
+    }
     if (isDenied(response)) {
       // A grant expires after 10 h: the form's action signs another one, unless the editor lost the right to it.
       if (!response.redirected && !renewed && (await this.renewGrant(grant))) return this.request(action, body, true);
@@ -222,6 +352,7 @@ export class DraftSession {
         this.recordCreated(this.state.recordId);
         return;
       }
+      /** @param {SubmitEvent} event */
       this.onSubmit = async (event) => {
         if (this.submitting) return;
         event.preventDefault();
@@ -246,6 +377,7 @@ export class DraftSession {
           this.submitting = true;
           // The form posts the revision above: an edit sent after it would read as a peer's and fail the save.
           // A submission that no handler cancelled leaves the page; one blocked by validation dispatches nothing.
+          /** @param {SubmitEvent} submission */
           const posted = (submission) => {
             if (!submission.defaultPrevented) this.posted = true;
           };
@@ -282,8 +414,13 @@ export class DraftSession {
     }
   }
 
+  /**
+   * @param {string} name
+   * @param {string} value
+   */
   hidden(name, value) {
-    let control = this.form.elements.namedItem(name);
+    // The hidden inputs this session added, or the host's of the same name.
+    let control = /** @type {HTMLInputElement | null} */ (this.form.elements.namedItem(name));
     if (!control) {
       control = document.createElement('input');
       control.type = 'hidden';
@@ -293,6 +430,7 @@ export class DraftSession {
     control.value = value;
   }
 
+  /** @param {HTMLTextAreaElement} field the rich editor's source element */
   async editorConfiguration(field) {
     try {
       await this.ready;
@@ -306,9 +444,14 @@ export class DraftSession {
     return { initialData: state.initial, collaborate: { getSession: () => this, field: name } };
   }
 
+  /**
+   * @param {string} name
+   * @returns {EditorWaiter}
+   */
   editorWaiter(name) {
     if (!this.editorWaiters.has(name)) {
-      const waiter = { ready: false };
+      // Its resolve and promise are set right below.
+      const waiter = /** @type {EditorWaiter} */ ({ ready: false });
       const promise = /** @type {Promise<void>} */ (
         new Promise((done) => {
           waiter.resolve = () => {
@@ -321,9 +464,10 @@ export class DraftSession {
       waiter.promise = promise;
       this.editorWaiters.set(name, waiter);
     }
-    return this.editorWaiters.get(name);
+    return /** @type {EditorWaiter} */ (this.editorWaiters.get(name));
   }
 
+  /** @param {string} name */
   editorReady(name) {
     this.editorWaiter(this.fieldKey(name)).resolve();
   }
@@ -366,13 +510,21 @@ export class DraftSession {
     this.removers.push(remove);
   }
 
-  /** A field no longer on the page (its collection entry removed): its adapter ends, and nothing waits for its editor. */
+  /**
+   * A field no longer on the page (its collection entry removed): its adapter ends, and nothing waits for its editor.
+   *
+   * @param {string} name
+   */
   detachField(name) {
     this.adapters.get(name)?.destroy?.();
     this.adapters.delete(name);
     this.editorWaiters.get(name)?.resolve();
   }
 
+  /**
+   * @param {string} name
+   * @param {Adapter} buffer
+   */
   register(name, buffer) {
     const state = this.state.fields[name];
     if (
@@ -393,7 +545,11 @@ export class DraftSession {
     return () => this.adapters.delete(name);
   }
 
-  /** What a field registered later replays: a value replaces the one before it, model operations accumulate. */
+  /**
+   * What a field registered later replays: a value replaces the one before it, model operations accumulate.
+   *
+   * @param {DraftEvent} event
+   */
   remember(event) {
     if (event.kind === 'discard') return;
     const events = this.history.get(event.field);
@@ -402,6 +558,11 @@ export class DraftSession {
   }
 
   // Save stays paused, but the page must remain readable so unsent content can be copied.
+  /**
+   * @param {string} cause
+   * @param {string} field
+   * @param {string} detail
+   */
   incompatible(cause, field, detail) {
     this.halt('incompatible');
     this.report(cause, field, detail);
@@ -437,7 +598,11 @@ export class DraftSession {
       .catch(() => {});
   }
 
-  /** Stops following the draft: no more requests, stream or timers. The form keeps its collaborative Save guard. */
+  /**
+   * Stops following the draft: no more requests, stream or timers. The form keeps its collaborative Save guard.
+   *
+   * @param {string} [status]
+   */
   halt(status) {
     this.stopped = true;
     if (status) this.setStatus(status);
@@ -449,12 +614,17 @@ export class DraftSession {
     this.recordTimer = null;
   }
 
+  /**
+   * @param {string} name
+   * @param {any} editor the CKEditor instance, its `sourceElement` the textarea
+   * @param {(source: string) => void} applySource
+   */
   registerMode(name, editor, applySource) {
     const field = editor.sourceElement;
     if (!field) return () => {};
-    const radios = Array.from(this.form.querySelectorAll('input[type="radio"]')).filter(
-      (radio) => radio.name === `${field.id}_view`
-    );
+    const radios = Array.from(
+      /** @type {NodeListOf<HTMLInputElement>} */ (this.form.querySelectorAll('input[type="radio"]'))
+    ).filter((radio) => radio.name === `${field.id}_view`);
     const readOnly = field.readOnly;
     const uploadChanged = () => {
       const pendingUpload = hasPendingUpload(editor.model.document.getRoot());
@@ -480,12 +650,14 @@ export class DraftSession {
     });
     const modeName = `${name}[__mode__]`;
     if (this.ensureField(modeName)) this.register(modeName, adapter);
+    /** @param {Event} event */
     const modeChanged = (event) => {
-      if (remote || !event.target.checked) return;
-      adapter.send(event.target.value);
+      if (remote || !(/** @type {HTMLInputElement} */ (event.target).checked)) return;
+      adapter.send(/** @type {HTMLInputElement} */ (event.target).value);
     };
     // Parsing the whole document on every keystroke lags a long field: typing settles first. Blur (a mode
     // switch blurs the source) and flush() apply what is still pending.
+    /** @type {ReturnType<typeof setTimeout> | null} */
     let sourceTimer = null;
     const settle = () => {
       if (sourceTimer === null) return;
@@ -499,7 +671,7 @@ export class DraftSession {
         document.activeElement === field &&
         radios.some((radio) => radio.checked && radio.value === 'markdown')
       ) {
-        clearTimeout(sourceTimer);
+        clearTimeout(/** @type {number | undefined} */ (sourceTimer));
         sourceTimer = setTimeout(settle, 100);
       }
     };
@@ -508,7 +680,7 @@ export class DraftSession {
     field.addEventListener('input', sourceChanged);
     field.addEventListener('blur', settle);
     return () => {
-      clearTimeout(sourceTimer);
+      clearTimeout(/** @type {number | undefined} */ (sourceTimer));
       this.sources.delete(name);
       editor.model.document.off('change:data', uploadChanged);
       this.adapters.delete(modeName);
@@ -518,15 +690,20 @@ export class DraftSession {
     };
   }
 
-  /** Applies a rich field's source typing that still waits for its pause. */
+  /**
+   * Applies a rich field's source typing that still waits for its pause.
+   *
+   * @param {string} name
+   */
   settleSource(name) {
     this.sources.get(name)?.();
   }
 
   initializeControls() {
     // A row that is no entry yet, or one its host is removing, follows no draft.
+    /** @param {Element} element */
     const outside = (element) => element.closest('[data-collaborate-pending], [data-collaborate-removed]');
-    for (const control of this.form.elements) {
+    for (const control of /** @type {Iterable<HTMLInputElement>} */ (this.form.elements)) {
       if (control.name && !outside(control) && !this.state.fields[this.fieldKey(control.name)])
         this.ensureField(this.fieldKey(control.name));
     }
@@ -536,13 +713,22 @@ export class DraftSession {
       if (!element || !['text', 'value'].includes(state.type) || this.bound.has(element) || outside(element)) continue;
       this.bound.add(element);
       if (state.type === 'text' && control instanceof HTMLElement) {
-        initializeText(this, control, name, state);
+        initializeText(this, /** @type {HTMLInputElement | HTMLTextAreaElement} */ (control), name, state);
       } else {
-        initializeValue(this, control, name, state);
+        initializeValue(
+          this,
+          /** @type {RadioNodeList | import('./fields.js').SingleControl} */ (control),
+          name,
+          state
+        );
       }
     }
   }
 
+  /**
+   * @param {string} name
+   * @returns {DraftField | null}
+   */
   ensureField(name) {
     if (this.state.fields[name]) return this.state.fields[name];
     const definition = this.definition(name);
@@ -554,6 +740,10 @@ export class DraftSession {
     return null;
   }
 
+  /**
+   * @param {string} name
+   * @param {Record<string, any>} [schema]
+   */
   definition(name, schema = this.schema) {
     for (const [pattern, definition, expression] of matcher(schema).definitions) {
       if (expression.test(name)) {
@@ -566,6 +756,10 @@ export class DraftSession {
     return null;
   }
 
+  /**
+   * @param {DraftConfiguration} configuration
+   * @param {boolean} [pull]
+   */
   async refreshConfiguration(configuration, pull = true) {
     const before = grantScope(this.configuration.grant);
     const after = grantScope(configuration.grant);
@@ -591,7 +785,11 @@ export class DraftSession {
     await this.pull();
   }
 
-  /** Renews a refused grant once for every request it failed: whether they may go again with the new one. */
+  /**
+   * Renews a refused grant once for every request it failed: whether they may go again with the new one.
+   *
+   * @param {string} grant
+   */
   async renewGrant(grant) {
     if (this.stopped || !this.initialized) return false;
     if (this.configuration.grant !== grant) return true;
@@ -602,6 +800,7 @@ export class DraftSession {
         () => false
       )
       .finally(() => {
+        /** @type {Promise<boolean> | null} */
         this.renewal = null;
       });
     return (await this.renewal) && !this.stopped && this.configuration.grant !== grant;
@@ -629,20 +828,31 @@ export class DraftSession {
     }
     for (const [name, value] of Object.entries(refreshed.tokens || {})) {
       const current = this.form.elements.namedItem(name);
-      if (current) current.value = value;
+      if (current) /** @type {HTMLInputElement} */ (current).value = value;
     }
     await this.refreshConfiguration(refreshed.configuration, pull);
   }
 
+  /**
+   * @param {string} name
+   * @returns {string}
+   */
   formName(name) {
     return this.state.fields[name]?.formName || name;
   }
 
+  /**
+   * @param {string} name
+   * @returns {string}
+   */
   fieldKey(name) {
     if (this.schema[name]) return name;
     const { keys, fieldKeys } = matcher(this.schema);
     if (!fieldKeys.has(name)) {
-      const match = keys.find(([, , expression]) => expression.test(name));
+      const match = keys.find(
+        /** @param {[string, string, RegExp]} key the logical key, its form name, and the pattern of that name */
+        ([, , expression]) => expression.test(name)
+      );
       fieldKeys.set(name, match ? match[0].slice(0, match[0].length - match[1].length) + name : name);
     }
     return fieldKeys.get(name);
@@ -788,9 +998,10 @@ export class DraftSession {
     if (this.composing) return;
     if (state.unchanged) {
       // Nobody wrote to the draft since, but the answer proves the connection is back.
-      if (['offline', 'changed'].includes(this.form.dataset.collaborateState)) {
+      if (['offline', 'changed'].includes(/** @type {string} */ (this.form.dataset.collaborateState))) {
         this.settled();
-        if (this.configuration === configuration) this.renderConflicts(this.conflicts);
+        if (this.configuration === configuration)
+          this.renderConflicts(/** @type {Record<string, unknown>} */ (this.conflicts));
       }
       return;
     }
@@ -834,11 +1045,16 @@ export class DraftSession {
     if (current) this.renderConflicts(state.conflicts || {});
   }
 
+  /** @param {Record<string, unknown>} conflicts */
   renderConflicts(conflicts) {
     renderConflicts(this, conflicts);
   }
 
-  /** Asks before an action that every editor of the record sees: `kind` names its messages. */
+  /**
+   * Asks before an action that every editor of the record sees: `kind` names its messages.
+   *
+   * @param {string} kind
+   */
   confirm(kind) {
     const messages = this.configuration.messages;
     return confirmAction({
@@ -849,6 +1065,7 @@ export class DraftSession {
     });
   }
 
+  /** @param {boolean} keep */
   async reconcile(keep) {
     if (!keep && !(await this.confirm('confirmSaved'))) return;
     this.bar.setBusy(true);
@@ -956,6 +1173,7 @@ export class DraftSession {
     this.leaveHub = null;
   }
 
+  /** @param {{ kind: string, generation?: number, revision?: number }} event a notice the hub delivered */
   received(event) {
     if (event.kind === 'record') {
       this.recordChanged();
@@ -965,7 +1183,7 @@ export class DraftSession {
     // needs no replay. Any other notice may change anything.
     const revision =
       event.kind === 'append' && event.generation === this.generation && Number.isInteger(event.revision)
-        ? event.revision
+        ? /** @type {number} */ (event.revision)
         : Infinity;
     if (revision <= this.revision) return;
     this.stale = true;
@@ -981,7 +1199,9 @@ export class DraftSession {
    * Buttons outside the form that name it (`form="…"`, as EasyAdmin's page actions do) count.
    */
   submitter() {
-    const buttons = Array.from(this.form.elements).filter((control) => control.type === 'submit' && !control.disabled);
+    const buttons = /** @type {HTMLButtonElement[]} */ (Array.from(this.form.elements)).filter(
+      (control) => control.type === 'submit' && !control.disabled
+    );
     return (
       buttons.find((button) => button.hasAttribute('data-collaborate-submitter')) ??
       bridge()
@@ -1013,6 +1233,7 @@ export class DraftSession {
     }
   }
 
+  /** @param {string | number} id */
   recordCreated(id) {
     this.releaseControls();
     this.halt('created');
@@ -1081,7 +1302,7 @@ export class DraftSession {
     this.releaseControls();
     this.stopped = true;
     this.suspend();
-    this.form.removeEventListener('submit', this.onSubmit, true);
+    this.form.removeEventListener('submit', /** @type {(event: SubmitEvent) => Promise<void>} */ (this.onSubmit), true);
     this.form.removeEventListener('submit', this.earlySubmit, true);
     this.form.removeEventListener('compositionstart', this.compositionStart);
     this.form.removeEventListener('compositionend', this.compositionEnd);
@@ -1091,6 +1312,10 @@ export class DraftSession {
   }
 }
 
+/**
+ * @param {{ form: HTMLFormElement | null }} field a control of the form
+ * @returns {DraftSession | null | undefined}
+ */
 export function sessionFor(field) {
   const form = field.form;
   if (!form?.dataset.collaborate) return null;

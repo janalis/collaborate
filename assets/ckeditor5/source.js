@@ -1,8 +1,23 @@
 // @ts-check
+/**
+ * @typedef {import('ckeditor5').Editor} Editor
+ * @typedef {import('ckeditor5').ModelWriter} ModelWriter
+ * @typedef {import('ckeditor5').ModelElement} ModelElement
+ * @typedef {import('ckeditor5').ModelText} ModelText
+ * @typedef {import('ckeditor5').ModelDocumentFragment} ModelDocumentFragment
+ */
+
+/** @param {ModelElement} node */
 const attributes = (node) => Object.fromEntries(node.getAttributes());
+/**
+ * @param {ModelElement} a
+ * @param {ModelElement} b
+ */
 const sameAttributes = (a, b) => JSON.stringify(attributes(a)) === JSON.stringify(attributes(b));
+/** @param {ModelElement} node */
 const textOf = (node) => Array.from(node.getChildren(), (child) => (child.is('$text') ? child.data : '')).join('');
 
+/** @param {ModelElement | ModelDocumentFragment} root */
 export function hasPendingUpload(root) {
   for (const child of root.getChildren()) {
     if (
@@ -14,25 +29,43 @@ export function hasPendingUpload(root) {
   return false;
 }
 
-/** Translate a source edit to granular model operations, never a document-wide setData(). */
+/**
+ * Translate a source edit to granular model operations, never a document-wide setData().
+ *
+ * @param {Editor} editor
+ * @param {string} source
+ */
 export function applySource(editor, source) {
   const desired = editor.data.parse(source);
   editor.model.change((writer) =>
-    reconcile(writer, editor.model.document.getRoot(), Array.from(desired.getChildren()))
+    reconcile(
+      writer,
+      /** @type {ModelElement} */ (editor.model.document.getRoot()),
+      /** @type {(ModelElement | ModelText)[]} */ (Array.from(desired.getChildren()))
+    )
   );
 }
 
+/**
+ * @param {ModelWriter} writer
+ * @param {ModelElement} parent
+ * @param {(ModelElement | ModelText)[]} desired
+ */
 function reconcile(writer, parent, desired) {
   let offset = 0;
   for (let index = 0; index < desired.length; ) {
     const next = desired[index];
     let current = parent.getChild(parent.offsetToIndex(offset));
     if (next.is('$text')) {
+      /** @type {ModelText[]} */
       const wanted = [];
-      while (index < desired.length && desired[index].is('$text')) wanted.push(desired[index++]);
+      while (index < desired.length && desired[index].is('$text'))
+        wanted.push(/** @type {ModelText} */ (desired[index++]));
+      /** @type {ModelText[]} */
       const existing = [];
       let childIndex = parent.offsetToIndex(offset);
-      while (parent.getChild(childIndex)?.is('$text')) existing.push(parent.getChild(childIndex++));
+      while (parent.getChild(childIndex)?.is('$text'))
+        existing.push(/** @type {ModelText} */ (parent.getChild(childIndex++)));
       const before = existing.map((node) => node.data).join('');
       const after = wanted.map((node) => node.data).join('');
       const { prefix, end, inserted } = textChange(before, after);
@@ -63,9 +96,9 @@ function reconcile(writer, parent, desired) {
     if (
       current?.is('element') &&
       current.name === next.name &&
-      desired[index + 1]?.name === next.name &&
+      /** @type {ModelElement | undefined} */ (desired[index + 1])?.name === next.name &&
       sameAttributes(current, next) &&
-      textOf(current) === textOf(next) + textOf(desired[index + 1]) &&
+      textOf(current) === textOf(next) + textOf(/** @type {ModelElement} */ (desired[index + 1])) &&
       textOf(current).length === current.maxOffset
     ) {
       writer.split(writer.createPositionAt(current, textOf(next).length));
@@ -92,7 +125,7 @@ function reconcile(writer, parent, desired) {
           writer.removeAttribute(name, current);
       }
       for (const [name, value] of next.getAttributes()) writer.setAttribute(name, value, current);
-      reconcile(writer, current, Array.from(next.getChildren()));
+      reconcile(writer, current, /** @type {(ModelElement | ModelText)[]} */ (Array.from(next.getChildren())));
     } else {
       if (current?.is('$text')) writer.remove(current);
       writer.insert(next, parent, offset);

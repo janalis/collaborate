@@ -49,7 +49,11 @@ import { parseSettings } from './settings.js';
  * @property {string[]} submitters the values of the save buttons the bar's Save stands for, in preference
  */
 
-/** The page a host names (`data-collaborate-page="<entity>:<index|detail|edit|new>"` on the body), or null. */
+/**
+ * The page a host names (`data-collaborate-page="<entity>:<index|detail|edit|new>"` on the body), or null.
+ *
+ * @param {HTMLElement} body
+ */
 export function markedPage(body) {
   const match = /^(?:(.+):)?(index|detail|edit|new)$/.exec(body.dataset.collaboratePage ?? '');
   return match ? { entity: match[1] ?? null, kind: match[2] } : null;

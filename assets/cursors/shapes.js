@@ -3,17 +3,33 @@
 // Paths trace the fill of each platform's own cursors, measured against Yaru's bitmaps, apple_cursor's SVGs and
 // Microsoft's cursor images; the contrast outline is painted beneath, outside the fill, as those cursors draw it.
 // `hotspot` is the pointed pixel before `rotate` (degrees about 16,16).
+
+/** @typedef {[number, number]} Point */
+/** @typedef {{ d: string, hotspot: Point, rotate?: number }} Shape */
+/** @typedef {{ l: number, h: number, w: number, s: number }} ArrowSize */
+
+/** @param {number} value */
 const round = (value) => Math.round(value * 100) / 100;
+/** @param {Point} point */
 const point = ([x, y]) => `${round(x)} ${round(y)}`;
+/** @param {Point[]} points */
 const polygon = (points) => `M${points.map(point).join('L')}Z`;
+/** @type {(x: number, y: number, width: number, height: number) => string} */
 const rect = (x, y, width, height) => `M${x} ${y}h${width}v${height}h${-width}Z`;
+/** @type {(cx: number, cy: number, r: number) => string} */
 const circle = (cx, cy, r) => `M${cx - r} ${cy}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0Z`;
-/** @returns {[number, number]} */
+/** @type {(cx: number, cy: number, r: number, degrees: number) => Point} */
 const polar = (cx, cy, r, degrees) => [
   cx + r * Math.cos((degrees * Math.PI) / 180),
   cy + r * Math.sin((degrees * Math.PI) / 180),
 ];
 
+/**
+ * @param {Point[]} points
+ * @param {number} degrees
+ * @param {Point} [center]
+ * @returns {Point[]}
+ */
 function rotated(points, degrees, [cx, cy] = [16, 16]) {
   const angle = (degrees * Math.PI) / 180;
   return points.map(([x, y]) => [
@@ -23,6 +39,7 @@ function rotated(points, degrees, [cx, cy] = [16, 16]) {
 }
 
 // A horizontal arrow with a head at both ends: tips `l` from the centre, heads `h` long and `w` wide, shaft `s`.
+/** @param {ArrowSize} size */
 function doubleArrow({ l, h, w, s }) {
   const [a, b] = [16 - l, 16 + l];
   return polygon([
@@ -40,6 +57,7 @@ function doubleArrow({ l, h, w, s }) {
 }
 
 // Arrows on both sides of a splitter bar, in one outline (macOS) or as separate pieces (Windows).
+/** @param {ArrowSize & { bar: number, barHeight: number }} size */
 function barArrows({ l, h, w, s, bar, barHeight }) {
   const [a, b] = [16 - l, 16 + l];
   return polygon([
@@ -64,7 +82,9 @@ function barArrows({ l, h, w, s, bar, barHeight }) {
   ]);
 }
 
+/** @param {ArrowSize & { gap: number, bar: number, barHeight: number }} size */
 function splitArrows({ l, h, w, s, gap, bar, barHeight }) {
+  /** @param {number} direction */
   const arrow = (direction) =>
     polygon(
       [
@@ -83,7 +103,13 @@ function splitArrows({ l, h, w, s, gap, bar, barHeight }) {
   return `${arrow(1)}${arrow(-1)}${bars.join('')}`;
 }
 
+/**
+ * @param {ArrowSize} size
+ * @param {Point} [center]
+ * @param {number} [turn]
+ */
 function fourWay({ l, h, w, s }, [cx, cy] = [16, 16], turn = 0) {
+  /** @type {Point[]} */
   const quarter = [
     [cx - s, cy - l + h],
     [cx - w, cy - l + h],
@@ -95,14 +121,24 @@ function fourWay({ l, h, w, s }, [cx, cy] = [16, 16], turn = 0) {
   return polygon([0, 90, 180, 270].flatMap((quarterTurn) => rotated(quarter, quarterTurn + turn, [cx, cy])));
 }
 
+/** @type {(length: number, half: number) => string} */
 const plus = (length, half) => fourWay({ l: length, h: 0, w: half, s: half });
+/** @type {(cx: number, cy: number, length: number, half: number) => string} */
 const cross = (cx, cy, length, half) => fourWay({ l: length, h: 0, w: half, s: half }, [cx, cy], 45);
 
 // A ring with a bar across it: the outer disc minus the two circular segments the bar leaves.
 // The bar runs at `angle` degrees: 45 is ↘, -45 is ↗.
+/**
+ * @param {number} cx
+ * @param {number} cy
+ * @param {number} r
+ * @param {number} thickness
+ * @param {number} [angle]
+ */
 function noEntry(cx, cy, r, thickness, angle = 45) {
   const inner = r - thickness;
   const reach = (Math.asin(thickness / 2 / inner) * 180) / Math.PI;
+  /** @param {number} start */
   const segment = (start) =>
     polygon(
       Array.from({ length: 13 }, (_, step) => polar(cx, cy, inner, start + reach + ((180 - 2 * reach) * step) / 12))
@@ -111,12 +147,14 @@ function noEntry(cx, cy, r, thickness, angle = 45) {
 }
 
 // An annular sector between radii `r` and `R`, from `start` to `end` degrees clockwise (0° points right).
+/** @type {(cx: number, cy: number, R: number, r: number, start: number, end: number) => string} */
 function ringArc(cx, cy, R, r, start, end) {
   const large = end - start > 180 ? 1 : 0;
   return `M${point(polar(cx, cy, R, start))}A${R} ${R} 0 ${large} 1 ${point(polar(cx, cy, R, end))}L${point(polar(cx, cy, r, end))}A${r} ${r} 0 ${large} 0 ${point(polar(cx, cy, r, start))}Z`;
 }
 
 // A disc cut by thin curved spokes, the single-colour form of macOS's spinning wheel.
+/** @type {(cx: number, cy: number, r: number, spokes: number) => string} */
 function wheel(cx, cy, r, spokes) {
   let d = circle(cx, cy, r);
   for (let spoke = 0; spoke < spokes; spoke++) {
@@ -127,23 +165,28 @@ function wheel(cx, cy, r, spokes) {
 }
 
 const MAC_ARROW = 'M3.5 3.5v15.6l3.3-3.3 3.2 7.6 2.8-1.3-3.1-7.3h4.9Z';
+/** @type {Point} */
 const MAC_TIP = [3, 2.4];
 // apple_cursor's badged cursors pair a small arrowhead with a disc below it.
 const MAC_SMALL_ARROW = 'M7 2.4v9.2l2.2-2.2h4.4Z';
 const WINDOWS_ARROW = 'M3.3 4v19.3l4.8-4.5 3.2 7.2H14v-2l-2.3-6h5.6Z';
+/** @type {Point} */
 const WINDOWS_TIP = [2.7, 2.7];
 const WINDOWS_PALM = 'V26c0 2-1.3 4.6-4 6.4l-2 .3h-4.7c-1 0-2-.6-2.6-1.4L4.7 22h-1.4v-2.7H6l2.7 2.7H10Z';
 const YARU_PALM =
   'a1.3 1.3 0 0 1-1.3 1.3H12.4c-.7 0-1.3-.3-1.7-.8L5.6 19.6a1.1 1.1 0 0 1 .2-1.6l.4-.3c.7-.5 1.6-.4 2.2.2l2.3 2.4Z';
 const YARU_ARROW = 'M5.3 6.3v17.4l4.2-4 2.8 7.6h2.4l-2.3-8.3 6.3-.3Z';
+/** @type {Point} */
 const YARU_TIP = [5.5, 6];
 const YARU_TEXT =
   'M10.7 5.3h2l1.3.7 1.3-.7h2v1.4h-2l-.6.6v16.1l.6.6h2v1.4h-2l-1.3-.7-1.3.7h-2v-1.4h2l.6-.6V7.3l-.6-.6h-2Z';
 const MAC_TEXT =
   'M11 3.6c2 0 3.8.7 5 1.9 1.2-1.2 3-1.9 5-1.9v2c-1.8 0-3.2.9-4 2.4v7.9h1.6v2H17v7.9c.8 1.5 2.2 2.4 4 2.4v2c-2 0-3.8-.7-5-1.9-1.2 1.2-3 1.9-5 1.9v-2c1.8 0 3.2-.9 4-2.4v-7.9h-1.6v-2H15V8c-.8-1.5-2.2-2.4-4-2.4Z';
 const WINDOWS_TEXT = 'M11.3 4.7h9.4V6h-4v18.7h4V26h-9.4v-1.3h4V6h-4Z';
+/** @type {Point} */
 const center = [16, 16];
 
+/** @type {Record<string, Shape>} */
 const mac = {
   default: { d: MAC_ARROW, hotspot: MAC_TIP },
   pointer: {
@@ -197,6 +240,7 @@ const mac = {
 
 const windowsResize = doubleArrow({ l: 14, h: 5.3, w: 4.7, s: 0.67 });
 const windowsSplit = splitArrows({ l: 14, h: 5.3, w: 4.7, s: 0.67, gap: 0.67, bar: 1.33, barHeight: 9.3 });
+/** @type {Record<string, Shape>} */
 const windows = {
   default: { d: WINDOWS_ARROW, hotspot: WINDOWS_TIP },
   pointer: {
@@ -231,7 +275,9 @@ const windows = {
 };
 
 const yaruResize = doubleArrow({ l: 10.7, h: 6.4, w: 3.6, s: 1.1 });
+/** @type {(cx: number, cy: number, R: number, r: number) => string} */
 const yaruRing = (cx, cy, R, r) => [-75, 45, 165].map((start) => ringArc(cx, cy, R, r, start, start + 90)).join('');
+/** @type {Record<string, Shape>} */
 const ubuntu = {
   default: { d: YARU_ARROW, hotspot: YARU_TIP },
   pointer: {
@@ -281,6 +327,10 @@ export const CURSOR_SHAPES = { mac, windows, ubuntu };
 export const CURSOR_SHAPE_NAMES = Object.keys(CURSOR_SHAPES.mac);
 
 // The pointed pixel after the shape's rotation, in viewBox units.
+/**
+ * @param {Shape} shape
+ * @returns {Point}
+ */
 export function shapeHotspot({ hotspot: [x, y], rotate = 0 }) {
   const angle = (rotate * Math.PI) / 180;
   const [dx, dy] = [x - 16, y - 16];

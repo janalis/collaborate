@@ -16,16 +16,19 @@ export function isMultiplexed() {
  * The turn of a page among the tabs of its browser: `take()` resolves once the page holds it, `give()` lets the
  * next tab have it. A page that does not need one (a multiplexed connection, a browser without Web Locks) holds
  * it at once.
+ *
+ * @typedef {{ given: boolean, release: (value?: unknown) => void, give: () => void, ready: Promise<void>, held: Promise<unknown> }} Turn
  */
 export function createTurn(locks = navigator.locks, multiplexed = isMultiplexed) {
+  /** @type {Turn | null} */
   let turn = null;
 
   function take() {
     if (multiplexed() || !locks) return Promise.resolve();
     if (!turn) {
       const waiting = new AbortController();
-      /** @type {{ given: boolean, release: (value?: unknown) => void, give?: () => void, ready?: Promise<void>, held?: Promise<unknown> }} */
-      const current = { given: false, release: () => {} };
+      // Given its promises and `give()` before anything reads them.
+      const current = /** @type {Turn} */ ({ given: false, release: () => {} });
       current.give = () => {
         current.given = true;
         waiting.abort();

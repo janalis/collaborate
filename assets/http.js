@@ -14,7 +14,18 @@ export class HttpError extends Error {
   constructor(message, status) {
     super(message);
     this.status = status;
+    /** @type {string | undefined} The field whose batch was refused, which a report names. */
+    this.field = undefined;
   }
+}
+
+/**
+ * The status of a failed answer, or null for any other failure (the network, an abort).
+ *
+ * @param {unknown} error
+ */
+export function statusOf(error) {
+  return error instanceof HttpError ? error.status : null;
 }
 
 /**

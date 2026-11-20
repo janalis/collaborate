@@ -10,6 +10,7 @@ vi.mock('../../../assets/draft/bar.js', async (original) => ({
 import { Model } from 'ckeditor5';
 import { confirmAction } from '../../../assets/draft/bar.js';
 import { DraftSession, sessionFor } from '../../../assets/draft/session.js';
+import { HttpError } from '../../../assets/http.js';
 
 const live = [];
 
@@ -1286,6 +1287,40 @@ test('rejects changed identities, schemas and corrupt operation history while re
   );
 });
 
+test('a replay a non-error value breaks is reported with that value', async () => {
+  const { session, form, fetcher } = fixture();
+  await session.ready;
+  session.remember({ field: 'Record[name]', kind: 'operations', version: 100 });
+  expect(() =>
+    session.register('Record[name]', {
+      receive: () => {
+        throw 'corrupt';
+      },
+    })
+  ).toThrow();
+  expect(form.dataset.collaborateState).toBe('incompatible');
+  await vi.waitFor(() =>
+    expect(reports(fetcher)).toEqual([expect.objectContaining({ cause: 'replay', detail: 'corrupt' })])
+  );
+});
+
+test('an edit the network lost waits offline and is reported nowhere', async () => {
+  const { session, form, fetcher } = fixture();
+  await session.ready;
+  const answer = fetcher.getMockImplementation();
+  fetcher.mockImplementation(async (url, options) => {
+    if (url === '/append') throw new TypeError('offline');
+    return answer(url, options);
+  });
+  const control = form.elements.namedItem('Record[name]');
+  control.value = 'Lost';
+  control.dispatchEvent(new Event('input'));
+  await vi.waitFor(() => expect(form.dataset.collaborateState).toBe('offline'));
+  expect(fetcher.mock.calls.map(([url]) => url)).toContain('/append');
+  expect(reports(fetcher)).toEqual([]);
+  session.stop?.();
+});
+
 test('reports an editor initialized from another version than the draft stored', async () => {
   const { session, fetcher } = fixture();
   await session.ready;
@@ -1868,8 +1903,8 @@ test('compares the form with the saved record once a second after record notices
   expect(refresh).toHaveBeenCalledTimes(2);
   expect(session.stopped).not.toBe(true);
   // A busy server read nothing: the notice is compared again a second later, not left to Save.
-  refresh.mockRejectedValueOnce(Object.assign(new Error('busy'), { status: 503 }));
-  refresh.mockRejectedValueOnce(Object.assign(new Error('busy'), { status: 429 }));
+  refresh.mockRejectedValueOnce(new HttpError('busy', 503));
+  refresh.mockRejectedValueOnce(new HttpError('busy', 429));
   record();
   await vi.advanceTimersByTimeAsync(1000);
   expect(refresh).toHaveBeenCalledTimes(3);
@@ -1918,9 +1953,9 @@ test('rescans collections after a replay that brings changed field states only',
 
 test.each([
   ['a lost connection', 'offline', new TypeError('Failed to fetch')],
-  ['a busy server', 'offline', Object.assign(new Error('busy'), { status: 503 })],
-  ['a rate limit', 'offline', Object.assign(new Error('limited'), { status: 429 })],
-  ['a refusal', 'failed', Object.assign(new Error('refused'), { status: 400 })],
+  ['a busy server', 'offline', new HttpError('busy', 503)],
+  ['a rate limit', 'offline', new HttpError('limited', 429)],
+  ['a refusal', 'failed', new HttpError('refused', 400)],
 ])('reports %s as %s', async (_, state, error) => {
   const { session, form } = fixture();
   await session.ready;
@@ -1932,7 +1967,7 @@ test('reports a draft changed meanwhile and reads it again; the next answer sett
   const { session, form, fetcher } = fixture();
   await session.ready;
   fetcher.mockClear();
-  session.failed(Object.assign(new Error('changed'), { status: 409 }));
+  session.failed(new HttpError('changed', 409));
   expect(form.dataset.collaborateState).toBe('changed');
   await vi.waitFor(() => expect(form.dataset.collaborateState).toBe('saved'));
   expect(fetcher.mock.calls.some(([url]) => url === '/replay')).toBe(true);
@@ -1949,7 +1984,7 @@ test('ignores an aborted request and a failure once the session stopped', async 
   session.failed(new DOMException('aborted', 'AbortError'));
   expect(form.dataset.collaborateState).toBe('saved');
   session.halt('denied');
-  session.failed(Object.assign(new Error('refused'), { status: 400 }));
+  session.failed(new HttpError('refused', 400));
   expect(form.dataset.collaborateState).toBe('denied');
 });
 
@@ -2176,7 +2211,7 @@ test('keeps the changed status when the replay a refusal asks for fails', async 
   await session.ready;
   fetcher.mockClear();
   fetcher.mockResolvedValue(new Response('{}', { status: 500 }));
-  session.failed(Object.assign(new Error('changed'), { status: 409 }));
+  session.failed(new HttpError('changed', 409));
   await vi.waitFor(() => expect(fetcher.mock.calls.some(([url]) => url === '/replay')).toBe(true));
   await vi.waitFor(() => expect(session.pulling).toBeNull());
   expect(form.dataset.collaborateState).toBe('changed');

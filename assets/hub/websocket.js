@@ -61,7 +61,8 @@ export function websocketSource(url, { signal, token, onopen, onmessage, WebSock
       socket = new Socket(websocketUrl(url));
     } catch (error) {
       // A URL no socket can open (another scheme, mixed content): retrying soon would not help.
-      reject(failure(`Collaborate hub stream unavailable: ${error.message}`, 1008));
+      const reason = error instanceof Error ? error.message : String(error);
+      reject(failure(`Collaborate hub stream unavailable: ${reason}`, 1008));
       return;
     }
     /** @type {Map<number, { resolve: () => void, reject: (error: Error) => void }>} */

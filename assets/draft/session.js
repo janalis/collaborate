@@ -1,6 +1,6 @@
 import { bridge } from '../bridge.js';
 import { hasPendingUpload } from '../ckeditor5/source.js';
-import { backgroundFetch, HttpError, isAccepted, isDenied, postJson } from '../http.js';
+import { backgroundFetch, HttpError, isAccepted, isDenied, postJson, statusOf } from '../http.js';
 import { hubFor } from '../hub.js';
 import { CollaborateBar, confirmAction } from './bar.js';
 import { initializeCollections } from './collections.js';
@@ -14,6 +14,8 @@ const grantScope = (grant) =>
   JSON.parse(
     new TextDecoder().decode(Uint8Array.from(atob(grant.split('.')[0]), (character) => character.charCodeAt(0)))
   );
+/** @param {unknown} error */
+const messageOf = (error) => (error instanceof Error ? error.message : String(error));
 const escapePattern = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const matchers = new WeakMap();
 /** Compiled once per grant schema: every form mutation looks each control up again. */
@@ -199,7 +201,8 @@ export class DraftSession {
           this.state = await this.request('join');
           break;
         } catch (error) {
-          if (this.stopped || Date.now() >= deadline || ![429, 503].includes(error.status)) throw error;
+          const status = statusOf(error);
+          if (this.stopped || Date.now() >= deadline || status === null || ![429, 503].includes(status)) throw error;
           await new Promise((resolve) => setTimeout(resolve, 1000));
         }
       }
@@ -352,7 +355,7 @@ export class DraftSession {
     try {
       for (const event of this.history.get(name) || []) buffer.receive(event);
     } catch (error) {
-      this.incompatible('replay', name, error?.message);
+      this.incompatible('replay', name, messageOf(error));
       throw error;
     }
     return () => this.adapters.delete(name);
@@ -383,20 +386,16 @@ export class DraftSession {
     this.reported.add(key);
     console.error(`Collaborate: this page stopped following the shared draft (${cause}).`, { field, status, detail });
     const grant = this.configuration.grant;
-    const request = {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': this.configuration.csrf },
-      body: JSON.stringify({
-        grant: this.acknowledged === grant ? grant.split('.')[1] : grant,
-        cause,
-        field,
-        status,
-        detail: detail == null ? null : String(detail),
-      }),
+    const body = {
+      grant: this.acknowledged === grant ? grant.split('.')[1] : grant,
+      cause,
+      field,
+      status,
+      detail: detail == null ? null : String(detail),
     };
+    const url = this.configuration.url.replace('__action__', 'report');
     Promise.resolve()
-      .then(() => this.fetcher(this.configuration.url.replace('__action__', 'report'), request))
+      .then(() => postJson(this.fetcher, url, this.configuration.csrf, body))
       // A report is best effort: the page has already stopped, and nothing waits on it.
       .catch(() => {});
   }
@@ -641,7 +640,8 @@ export class DraftSession {
         await this.refreshRecord();
       } catch (error) {
         // A busy server read nothing: compare again a second later. Otherwise Save refreshes the record again before it submits.
-        if ([429, 503].includes(error?.status)) this.recordChanged();
+        const status = statusOf(error);
+        if (status === 429 || status === 503) this.recordChanged();
       }
     }, 1000);
   }
@@ -740,7 +740,7 @@ export class DraftSession {
       state = await this.request('replay', { since: this.revision, digest: this.digest, stamp: this.stamp });
     } catch (error) {
       // Replay answers 409 for a missing draft only: the purge deleted it while this page stayed open.
-      if (error.status === 409) this.superseded();
+      if (statusOf(error) === 409) this.superseded();
       throw error;
     }
     this.pulled = Date.now();
@@ -772,7 +772,7 @@ export class DraftSession {
         this.adapters.get(event.field)?.receive(event);
       } catch (error) {
         this.halt('incompatible');
-        this.report('replay', event.field, error?.message);
+        this.report('replay', event.field, messageOf(error));
         throw error;
       }
       this.remember(event);
@@ -869,8 +869,8 @@ export class DraftSession {
           await this.request('append', outgoing);
         } catch (error) {
           // A refusal names its field to the report it may end in.
-          error.field = outgoing.field;
-          if (error.status !== 409) throw error;
+          if (error instanceof HttpError) error.field = outgoing.field;
+          if (statusOf(error) !== 409) throw error;
         }
         await this.pull();
       }

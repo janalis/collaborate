@@ -202,6 +202,18 @@ test('a socket that cannot be created fails as a client error', async () => {
   expect(outcome.error.message).toContain('The URL is invalid.');
 });
 
+// jsdom's DOMException is no Error: the test above reads it as a value, this one as an error.
+test('a socket constructor that throws an error fails as a client error with its message', async () => {
+  class Refusing {
+    constructor() {
+      throw new TypeError('no socket');
+    }
+  }
+  const outcome = await settled(connect('/hub', { WebSocket: Refusing }));
+  expect(outcome.error.code).toBe(1008);
+  expect(outcome.error.message).toContain('no socket');
+});
+
 test('resolves on abort, closing the socket normally, and ignores its close event then', async () => {
   const done = connect();
   socket().open();

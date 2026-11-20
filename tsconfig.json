@@ -1,10 +1,16 @@
 {
-  // Type-checks every module (`strict` stays off for now); typings/ declares what the DOM library lacks.
+  // Type-checks every module; typings/ declares what the DOM library lacks.
   "compilerOptions": {
     "allowJs": true,
     "checkJs": true,
     "noEmit": true,
     "strict": false,
+    // strict's flags, one at a time: noImplicitAny, strictNullChecks and strictPropertyInitialization are next.
+    "alwaysStrict": true,
+    "noImplicitThis": true,
+    "strictBindCallApply": true,
+    "strictFunctionTypes": true,
+    "useUnknownInCatchVariables": true,
     "target": "es2024",
     "module": "esnext",
     "moduleResolution": "bundler",

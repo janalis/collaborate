@@ -4,16 +4,24 @@
 
 /** A session of the draft, as the script reads it. */
 function fakeSession(overrides = {}) {
-  return {
+  const session = {
     initialized: true,
     stopped: false,
     editorConfiguration: vi.fn(async () => ({})),
-    editorFailed: vi.fn(),
+    // As the session does: it stops following the draft.
+    editorFailed: vi.fn(() => {
+      session.stopped = true;
+    }),
     initializeControls: vi.fn(),
     scanCollections: vi.fn(),
     ...overrides,
   };
+  return session;
 }
+
+/** A session whose draft follows the field in an editor. */
+const followed = (configuration = {}) =>
+  fakeSession({ editorConfiguration: vi.fn(async () => ({ collaborate: {}, ...configuration })) });
 
 let errors;
 let attach;
@@ -102,7 +110,7 @@ test("a shared field's editor follows the draft, created on its content with the
 });
 
 test("without Drupal's editor build, the field takes Drupal's own editor and the form stops following its draft", async () => {
-  const session = await load();
+  const session = await load({ session: followed() });
 
   globalThis.Drupal.editors.ckeditor5.attach(body(), format);
 
@@ -112,17 +120,27 @@ test("without Drupal's editor build, the field takes Drupal's own editor and the
   expect(errors).toHaveBeenCalledOnce();
 });
 
-test("a plugin that does not load stops the editor's draft alone: rows still follow it", async () => {
+test('a plugin that does not load leaves a form whose draft follows no editor following it', async () => {
   build();
   const session = await load({ plugin: false });
   globalThis.Drupal.editors.ckeditor5.attach(body(), format);
   await vi.waitFor(() => expect(attach).toHaveBeenCalledWith(body(), format));
-  expect(session.editorFailed).toHaveBeenCalledOnce();
+  expect(session.editorFailed).not.toHaveBeenCalled();
 
-  session.stopped = false;
   const input = /** @type {HTMLInputElement} */ (document.querySelector('[name="notes[t0][value]"]'));
   input.dispatchEvent(new Event('input', { bubbles: true }));
   expect(session.scanCollections).toHaveBeenCalledOnce();
+
+  // An editor the draft follows needs it: the form stops following its draft, and its rows with it.
+  const editor = await (async () => {
+    vi.resetModules();
+    return load({ plugin: false, session: followed() });
+  })();
+  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledWith(body(), format));
+  expect(editor.editorFailed).toHaveBeenCalledOnce();
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(editor.scanCollections).not.toHaveBeenCalled();
 });
 
 test('without the drafts, every field takes Drupal’s own editor, and the failure is said once', async () => {
@@ -158,7 +176,7 @@ test('a form without a session gives its field Drupal’s editor', async () => {
   await vi.waitFor(() => expect(attach).toHaveBeenCalledWith(body(), format));
 });
 
-test("Drupal's own failure is said, and the field is attached once", async () => {
+test("Drupal's own failure is said, the field attached once and the form released", async () => {
   build();
   const session = await load({
     session: fakeSession({ editorConfiguration: vi.fn(async () => ({ collaborate: {} })) }),
@@ -171,7 +189,7 @@ test("Drupal's own failure is said, and the field is attached once", async () =>
 
   await vi.waitFor(() => expect(errors).toHaveBeenCalledWith(new Error('Malformed settings.')));
   expect(attach).toHaveBeenCalledOnce();
-  expect(session.editorFailed).not.toHaveBeenCalled();
+  expect(session.editorFailed).toHaveBeenCalledOnce();
 });
 
 test("typing in an empty row makes it an item, what was typed kept, a file input's file left alone", async () => {
@@ -241,7 +259,11 @@ test("Drupal's AJAX rebuild binds the form's controls again, unless its draft st
 
   session.stopped = true;
   behavior(document.body);
-  await vi.waitFor(() => expect(rows).toHaveBeenCalledTimes(2));
+  session.stopped = false;
+  session.initialized = false;
+  behavior(document.body);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(rows).toHaveBeenCalledOnce();
   expect(session.initializeControls).toHaveBeenCalledOnce();
   document.removeEventListener('collaborate:rows-changed', rows);
 });

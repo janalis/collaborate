@@ -56,7 +56,7 @@ final class OptionsTest extends UnitTestCase
         self::assertSame('use collaborate', $options['role']);
     }
 
-    public function testTheModulesServicesWinOverEveryLayer(): void
+    public function testTheModulesServicesWinOverTheAdvancedTreeButNotSettingsPhp(): void
     {
         $options = Options::bundle([
             'advanced' => ['notifications' => ['bus' => 'my.bus', 'locales' => 'my.locales']],
@@ -64,8 +64,15 @@ final class OptionsTest extends UnitTestCase
 
         self::assertSame(Options::BUS, self::at($options, 'notifications', 'bus'));
         self::assertSame(Options::LOCALES, self::at($options, 'notifications', 'locales'));
-        self::assertSame(Options::PLACES, self::at($options, 'cursors', 'places'));
-        self::assertSame('receive collaborate notifications', self::at($options, 'notifications', 'role'));
+        self::assertSame('my.places', self::at($options, 'cursors', 'places'));
+        self::assertSame('other permission', self::at($options, 'notifications', 'role'));
+        // settings.php names a service of its own: nothing to warn of.
+        self::assertSame(
+            ['notifications.bus'],
+            Options::ignored([
+                'advanced' => ['notifications' => ['bus' => 'my.bus']],
+            ], ['notifications' => ['locales' => 'my.locales']]),
+        );
     }
 
     public function testTheAdvancedTreeOverridesTheModulesDefaultsButNotTheFormsChoices(): void
@@ -140,8 +147,8 @@ final class OptionsTest extends UnitTestCase
                 'updates.path_pattern',
                 'drafts.rich_text.ckeditor_version',
                 'role',
-                'notifications.bus',
                 'cursors.regions',
+                'notifications.bus',
             ],
             Options::ignored([
                 'advanced' => [

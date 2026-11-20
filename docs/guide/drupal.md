@@ -115,9 +115,11 @@ sets. The options of Symfony's forms and Doctrine's flushes
 `drafts.position_field`, `drafts.rich_text.schema_option` and
 `ckeditor_version`) change nothing under Drupal, whose entity forms and
 hooks the module uses instead, and neither do the ones the module decides
-(`bridge`, `identity`, `access`, `role`, `cursors.places`,
-`notifications.role`, `bus` and `locales`, and `cursors.regions`, which
-the form sets): the status report names any the site sets.
+(`bridge`, `identity`, `access`, `role`, and `cursors.regions`, which the
+form sets). Its services and notifications permission (`cursors.places`,
+`notifications.bus`, `notifications.locales`, `notifications.role`) are
+the module's too, unless settings.php names others. The status report names
+any of these the site sets where it changes nothing.
 
 ```yaml
 # config/sync/collaborate.settings.yml

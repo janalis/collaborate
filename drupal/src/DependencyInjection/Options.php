@@ -27,7 +27,7 @@ final class Options
     /**
      * Options a site sets for nothing: those of the bundle's form extension and Doctrine change collector, which the
      * module replaces with its own entity forms and hooks. Accepted by the configuration tree, read by nothing; the
-     * options the module decides ({@see DECIDED}, `cursors.regions`) are named with them.
+     * options the module decides ({@see DECIDED}, {@see SERVICES}, `cursors.regions`) are named with them.
      */
     public const array IGNORED = [
         'updates.path_pattern',
@@ -40,14 +40,21 @@ final class Options
     ];
 
     /**
-     * What the module decides itself, over every layer: its services, its permissions as the roles. The regions of
-     * Drupal's pages, or the form's, are decided with them.
+     * What the module decides itself, over every layer: its bridge, the users as Drupal's, its permission as the
+     * role. The regions of Drupal's pages, or the form's, are decided with them.
      */
     private const array DECIDED = [
         'bridge' => Bridge::None->value,
         'identity' => self::IDENTITY,
         'access' => self::ACCESS,
         'role' => 'use collaborate',
+    ];
+
+    /**
+     * The module's services and its notifications permission: over the `advanced` tree, under settings.php, where a
+     * site may name its own (a bus of its own, say).
+     */
+    private const array SERVICES = [
         'cursors' => ['places' => self::PLACES],
         'notifications' => [
             'role' => 'receive collaborate notifications',
@@ -117,6 +124,7 @@ final class Options
                 ],
                 static fn(mixed $value): bool => null !== $value,
             ),
+            self::SERVICES,
         );
         // settings.php: the hub and its secrets, and anything a site keeps out of its exported configuration.
         $options = self::merge($options, $settings);
@@ -196,7 +204,8 @@ final class Options
     }
 
     /**
-     * The {@see IGNORED} and {@see DECIDED} options the site sets, in its `advanced` tree or settings.php.
+     * The {@see IGNORED} and decided options the site sets, in its `advanced` tree or settings.php: settings.php may
+     * name the module's {@see SERVICES}.
      *
      * @param array<string, mixed>|null $config   `collaborate.settings`, read from the active storage when null
      * @param array<string, mixed>|null $settings `$settings['collaborate']`, read from settings.php when null
@@ -206,11 +215,17 @@ final class Options
     public static function ignored(?array $config = null, ?array $settings = null): array
     {
         $config ??= self::stored();
-        $sources = [\is_array($config['advanced'] ?? null) ? $config['advanced'] : [], $settings ?? self::settings()];
+        $advanced = \is_array($config['advanced'] ?? null) ? $config['advanced'] : [];
+        $settings ??= self::settings();
+        $decided = [...self::IGNORED, ...self::paths(self::DECIDED), 'cursors.regions'];
+        $services = self::paths(self::SERVICES);
 
-        $paths = [...self::IGNORED, ...self::paths(self::DECIDED), 'cursors.regions'];
-
-        return array_values(array_filter($paths, static function (string $path) use ($sources): bool {
+        return array_values(array_filter([...$decided, ...$services], static function (string $path) use (
+            $advanced,
+            $settings,
+            $services,
+        ): bool {
+            $sources = \in_array($path, $services, true) ? [$advanced] : [$advanced, $settings];
             foreach ($sources as $source) {
                 $value = $source;
                 foreach (explode('.', $path) as $key) {
@@ -240,11 +255,10 @@ final class Options
         $paths = [];
         // @mago-expect analysis:mixed-assignment an option's value: a map is walked, anything else is a leaf
         foreach ($options as $key => $value) {
-            $path = $prefix . $key;
-            $paths = [...$paths, ...(\is_array($value) ? self::paths($value, $path . '.') : [$path])];
+            $paths[] = \is_array($value) ? self::paths($value, $prefix . $key . '.') : [$prefix . $key];
         }
 
-        return $paths;
+        return array_values(array_merge(...$paths));
     }
 
     /** The secret grants are signed with: derived from the site's hash salt, never stored as is. */

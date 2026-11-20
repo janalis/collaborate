@@ -69,37 +69,43 @@ if (editors?.ckeditor5 && shared()) {
    */
   editors.ckeditor5.attach = function (element, format) {
     if (!element.form?.dataset.collaborate) return attach.call(this, element, format);
-    // A field the draft does not follow: Drupal's own editor.
-    const plain = /** @type {{ collaborate?: undefined, initialData?: undefined }} */ ({});
     loadDrafts()
-      .then(async ({ sessionFor }) => {
-        const session = sessionFor(element);
-        if (!session) return plain;
-        try {
-          await loadPlugins();
-          return await session.editorConfiguration(element);
-        } catch {
-          // The form stops following its draft, its controls released, and the field takes Drupal's own editor.
-          session.editorFailed();
-          return plain;
-        }
-      })
-      // The drafts never loaded: nothing follows the form.
-      .catch(() => plain)
-      .then((configuration) => {
-        if (!configuration.collaborate) return attach.call(this, element, format);
-        if (typeof configuration.initialData === 'string') element.value = configuration.initialData;
-        const settings = format.editorSettings;
-        attach.call(this, element, {
-          ...format,
-          editorSettings: {
-            ...settings,
-            plugins: [...settings.plugins, 'collaborate.Collaborate', 'collaborate.CollaborateReady'],
-            config: { ...settings.config, collaborate: configuration.collaborate },
-          },
-        });
-      })
-      // Drupal's own failure, said as Drupal would: the field is attached once.
+      .then(
+        async ({ sessionFor }) => {
+          const session = sessionFor(element);
+          if (!session) return attach.call(this, element, format);
+          let configuration;
+          try {
+            configuration = await session.editorConfiguration(element);
+            // A field the draft does not follow needs nothing of the bundle's editors.
+            if (configuration.collaborate) await loadPlugins();
+          } catch {
+            // The form stops following its draft, its controls released, and the field takes Drupal's own editor.
+            session.editorFailed();
+            return attach.call(this, element, format);
+          }
+          if (!configuration.collaborate) return attach.call(this, element, format);
+          if (typeof configuration.initialData === 'string') element.value = configuration.initialData;
+          const settings = format.editorSettings;
+          try {
+            attach.call(this, element, {
+              ...format,
+              editorSettings: {
+                ...settings,
+                plugins: [...settings.plugins, 'collaborate.Collaborate', 'collaborate.CollaborateReady'],
+                config: { ...settings.config, collaborate: configuration.collaborate },
+              },
+            });
+          } catch (error) {
+            // The editor the draft waits for never comes: the form is released, the field attached once.
+            session.editorFailed();
+            throw error;
+          }
+        },
+        // The drafts never loaded: nothing follows the form.
+        () => attach.call(this, element, format)
+      )
+      // Drupal's own failure, said as Drupal would.
       .catch((error) => console.error(error));
     return true;
   };
@@ -173,7 +179,8 @@ if (page.Drupal) {
       loadDrafts().then(
         ({ sessionFor }) => {
           const session = sessionFor({ form });
-          if (session?.initialized && !session.stopped) session.initializeControls();
+          if (!session?.initialized || session.stopped) return;
+          session.initializeControls();
           document.dispatchEvent(new Event('collaborate:rows-changed'));
         },
         () => {}

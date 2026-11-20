@@ -15,8 +15,7 @@ use Symfony\Component\HttpFoundation\RequestStack;
 
 /**
  * The `onFlush` half of the saved-view updates: which entity classes an admin write can alter, and the
- * drafts of the records it changed. It records them as {@see SavedChanges} for the response to announce, each class
- * by its short name: EasyAdmin's entity name (`EntityDto::getName()`), which its pages carry.
+ * drafts of the records it changed. It records them as {@see SavedChanges} for the response to announce.
  */
 final class ChangeCollector
 {
@@ -134,10 +133,7 @@ final class ChangeCollector
         if ([] === $changed) {
             return;
         }
-        SavedChanges::data($request, ...array_map(
-            static fn(string $class): string => basename(str_replace('\\', '/', $class)),
-            $this->affected($em, $changed),
-        ));
+        SavedChanges::data($request, ...$this->affected($em, $changed));
         // A numeric key is an int: the draft id is its string.
         // @infection-ignore-all: a draft id is a hash; no test can make one PHP reads as an integer key.
         SavedChanges::records($request, ...array_map(strval(...), array_keys($records)));

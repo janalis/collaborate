@@ -8,3 +8,8 @@ interface Navigator {
   /** User-Agent Client Hints: Chromium's platform, which `navigator.platform` reports less exactly. */
   readonly userAgentData?: { readonly platform?: string };
 }
+
+// Drupal's globals, which its own scripts define before the module's: the module's scripts read them where Drupal
+// runs (its behaviors, its editors, the CKEditor 5 build it ships as a DLL).
+declare var Drupal: any;
+declare var CKEditor5: any;

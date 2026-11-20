@@ -141,7 +141,7 @@ final class UpdatesSubscriberTest extends TestCase
         $collector->onFlush($this->flush(new Tag(), ['name' => ['old', 'new']]));
         // A second flush in the same request names its entities once.
         $collector->onFlush($this->flush(new Tag(), ['name' => ['new', 'newer']]));
-        self::assertSame(['Tag'], $request->attributes->all('_collaborate_data_changed'));
+        self::assertSame(['Tag'], SavedChanges::dataNames($request));
         SavedChanges::committed($request, 'draft');
         $this->subscriber($publisher)->publish($this->response($request, 302));
         $terminated = true;
@@ -171,7 +171,7 @@ final class UpdatesSubscriberTest extends TestCase
         $collector->onFlush(new OnFlushEventArgs($em));
         $collector->onFlush(new OnFlushEventArgs($em));
 
-        self::assertSame(['Tag'], $requests->getMainRequest()?->attributes->all('_collaborate_data_changed'));
+        self::assertSame(['Tag'], SavedChanges::dataNames($requests->getMainRequest() ?? new Request()));
     }
 
     public function testIgnoresSessionNoisePublicRequestsAndFailedResponses(): void
@@ -206,7 +206,7 @@ final class UpdatesSubscriberTest extends TestCase
         new ChangeCollector($this->access(), $draftRequests, ['enabled' => false], null, true)->onFlush($this->flush(
             new Tag(),
         ));
-        self::assertContains('Tag', $other->attributes->all('_collaborate_data_changed'));
+        self::assertContains('Tag', SavedChanges::dataNames($other));
         $this->subscriber($publisher, false)->publish($this->response($request));
         $publisher->publish();
     }
@@ -223,7 +223,7 @@ final class UpdatesSubscriberTest extends TestCase
         $requests->push($other);
         $collector->onFlush($this->flush(new Tag()));
 
-        self::assertSame(['Tag'], $configured->attributes->all('_collaborate_data_changed'));
+        self::assertSame(['Tag'], SavedChanges::dataNames($configured));
         self::assertFalse($other->attributes->has('_collaborate_data_changed'));
     }
 
@@ -254,7 +254,7 @@ final class UpdatesSubscriberTest extends TestCase
         $this->collector($requests)->onFlush(new OnFlushEventArgs($em));
         $this->subscriber($publisher)->publish($this->response($request));
         $publisher->publish();
-        self::assertSame(['Tag'], $request->attributes->get('_collaborate_data_changed'));
+        self::assertSame(['Tag'], SavedChanges::dataNames($request));
     }
 
     public function testConfiguredRoutesInvalidateAndHubFailuresDoNotFailTheSavedResponse(): void
@@ -272,7 +272,7 @@ final class UpdatesSubscriberTest extends TestCase
         $logger->expects($this->once())->method('warning');
         $publisher = new HubPublisher(new MercureTransport($hub), $logger);
         $this->collector($requests, ['routes' => ['sort_entries']])->onFlush($this->flush(new Tag()));
-        self::assertSame(['Tag'], $request->attributes->get('_collaborate_data_changed'));
+        self::assertSame(['Tag'], SavedChanges::dataNames($request));
         $this->subscriber($publisher)->publish($this->response($request));
         $publisher->publish();
     }

@@ -88,6 +88,11 @@ final class OptionsTest extends UnitTestCase
         ], ['hub' => ['transport' => 'websocket']]);
 
         self::assertSame(['red', 'green'], self::at($options, 'colors'));
+
+        // An empty map leaves the one below it as it was.
+        $kept = Options::bundle(['advanced' => ['drafts' => []]], ['notifications' => []]);
+        self::assertSame(Options::GRANT_CACHE, self::at($kept, 'drafts', 'grant_cache'));
+        self::assertSame(Options::BUS, self::at($kept, 'notifications', 'bus'));
         self::assertSame('websocket', self::at($options, 'hub', 'transport'));
     }
 

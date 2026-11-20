@@ -42,10 +42,19 @@ final class SavedChanges
         $request->attributes->set(self::COMMITTED, $draft);
     }
 
-    /** @return list<string> the names {@see data()} recorded, each once, in order; empty when it recorded none */
+    /**
+     * The names {@see data()} recorded, each once, in order; empty when it recorded none. A class name, Doctrine's
+     * or one a host wrote into the attribute itself, reads as its short name: EasyAdmin's entity name
+     * (`EntityDto::getName()`), which its pages carry.
+     *
+     * @return list<string>
+     */
     public static function dataNames(Request $request): array
     {
-        return self::strings($request->attributes->all(self::DATA));
+        // @infection-ignore-all: strrpos() finds the backslash str_contains() saw: the cast only types its integer.
+        return self::strings(array_map(static fn(mixed $name): mixed => \is_string($name) && str_contains($name, '\\')
+            ? substr($name, (int) strrpos($name, '\\') + 1)
+            : $name, $request->attributes->all(self::DATA)));
     }
 
     /** Whether a save recorded saved views, none of them named included. */

@@ -9,8 +9,10 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "lib": ["es2024", "dom", "dom.iterable"],
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    // The Drupal module's scripts import the bundle's by the name its import map gives them.
+    "paths": { "@janalis/collaborate/*": ["./assets/*"] }
   },
-  "include": ["assets/**/*.js", "typings/*.d.ts"],
+  "include": ["assets/**/*.js", "drupal/js/*.js", "typings/*.d.ts"],
   "exclude": ["assets/vendor"]
 }

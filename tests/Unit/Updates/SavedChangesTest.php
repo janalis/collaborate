@@ -36,6 +36,14 @@ final class SavedChangesTest extends TestCase
         self::assertSame('b', SavedChanges::committedDraft($request));
     }
 
+    public function testAClassNameReadsAsItsShortNameAndAnyOtherNameAsIs(): void
+    {
+        $request = new Request();
+        SavedChanges::data($request, 'App\\Entity\\Tag', 'admin/article', 'Tag', 'Article');
+
+        self::assertSame(['Tag', 'admin/article', 'Article'], SavedChanges::dataNames($request));
+    }
+
     public function testWhatIsNoNameIsSkipped(): void
     {
         $request = new Request(attributes: [

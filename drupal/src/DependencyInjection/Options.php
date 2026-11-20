@@ -128,16 +128,20 @@ final class Options
             foreach ($layer as $key => $value) {
                 // @mago-expect analysis:mixed-assignment the layer below's value: the next line narrows it
                 $below = $merged[$key] ?? null;
-                $merged[$key] = \is_array($value)
-                && \is_array($below)
-                && !array_is_list($value)
-                && !array_is_list($below)
+                // An empty array changes nothing of a map below it, and empties a list.
+                $merged[$key] = \is_array($value) && \is_array($below) && !self::isList($value) && !self::isList($below)
                     ? self::merge($below, $value)
                     : $value;
             }
         }
 
         return $merged;
+    }
+
+    /** @param array<array-key, mixed> $array */
+    private static function isList(array $array): bool
+    {
+        return [] !== $array && array_is_list($array);
     }
 
     /**

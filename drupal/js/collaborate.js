@@ -16,6 +16,7 @@ if (document.querySelector('[data-collaborate-notifications]')) {
 }
 
 // Loaded with the first shared form: its CKEditor plugin needs Drupal's editor build on the page.
+/** @type {Promise<typeof import('@janalis/collaborate/draft/session.js')> | null} */
 let drafts = null;
 const loadDrafts = () => {
   drafts ??= Promise.all([
@@ -47,6 +48,10 @@ const loadDrafts = () => {
 const editors = globalThis.Drupal?.editors;
 if (editors?.ckeditor5 && shared()) {
   const attach = editors.ckeditor5.attach;
+  /**
+   * @param {HTMLTextAreaElement} element
+   * @param {any} format Drupal's editor settings for the field's text format
+   */
   editors.ckeditor5.attach = function (element, format) {
     if (!element.form?.dataset.collaborate) return attach.call(this, element, format);
     loadDrafts()
@@ -75,13 +80,19 @@ if (shared()) loadDrafts();
 // Typing in a multi-value field's empty row makes it an item: the row takes a key of its own and follows the
 // draft from then on. The draft's controls replace what the row shows as they bind: what was typed is put back
 // before the event reaches its control, whose binding sends it.
+/** @type {typeof import('@janalis/collaborate/draft/session.js') | null} */
 let sessions = null;
+/** @param {Event} event */
 const touch = (event) => {
-  const row = event.target instanceof Element ? event.target.closest('[data-collaborate-pending]') : null;
+  const row = /** @type {HTMLElement | null} */ (
+    event.target instanceof Element ? event.target.closest('[data-collaborate-pending]') : null
+  );
   const form = row?.closest('form[data-collaborate]');
-  const session = form && sessions ? sessions.sessionFor(event.target) : null;
+  // A pending row is found from a control.
+  const session = form && sessions ? sessions.sessionFor(/** @type {any} */ (event.target)) : null;
   if (!row || !session?.initialized || !session.scanCollections) return;
-  const controls = Array.from(row.querySelectorAll('input, select, textarea'));
+  // Inputs, selects and textareas: each read by what its type has.
+  const controls = /** @type {any[]} */ (Array.from(row.querySelectorAll('input, select, textarea')));
   const typed = controls.map((control) =>
     control.type === 'checkbox' || control.type === 'radio'
       ? control.checked
@@ -110,6 +121,7 @@ if (shared()) {
 // draft again, and its collections are scanned for their entries.
 if (globalThis.Drupal) {
   globalThis.Drupal.behaviors.collaborate = {
+    /** @param {any} context the part of the page Drupal attached behaviors to */
     attach(context) {
       if (context === document) return;
       const form = context.closest?.('form[data-collaborate]') ?? context.querySelector?.('form[data-collaborate]');

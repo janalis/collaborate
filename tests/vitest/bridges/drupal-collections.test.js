@@ -104,6 +104,9 @@ test('adds no row outside a form, or while the button is busy', async () => {
   const [busy] = drupal({});
   busy.ajaxing = true;
   expect(await create(container, 'nPeer', vi.fn())).toBeNull();
+  // A page without core/drupal.ajax has no instances.
+  globalThis.Drupal = {};
+  expect(await create(container, 'nPeer', vi.fn())).toBeNull();
 });
 
 test('gives up on a rebuild that takes too long, and without jQuery', async () => {

@@ -16,8 +16,11 @@ const EMPTY = /^t\d+$/;
 /** How long a field's rebuild may take before the page stops waiting for it. */
 const TIMEOUT = 15000;
 
-/** Drupal's AJAX, as the page it runs in has it: its instances, one per bound element, and jQuery to trigger them. */
-/** @typedef {import('../../typings/drupal.js').DrupalGlobals} DrupalGlobals */
+/**
+ * Drupal's AJAX, as the page it runs in has it: its instances, one per bound element, and jQuery to trigger them.
+ *
+ * @typedef {import('../../typings/drupal.js').DrupalGlobals} DrupalGlobals
+ */
 
 /**
  * The rows of a collection, its own and not a nested one's.
@@ -79,7 +82,7 @@ function serially(operation) {
  * @param {Element} button
  */
 async function press(button) {
-  const ajax = /** @type {DrupalGlobals} */ (globalThis).Drupal?.ajax.instances.find(
+  const ajax = /** @type {DrupalGlobals} */ (globalThis).Drupal?.ajax?.instances.find(
     (instance) => instance?.element === button
   );
   const jquery = /** @type {DrupalGlobals} */ (globalThis).jQuery;

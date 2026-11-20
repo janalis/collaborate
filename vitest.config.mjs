@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 // Stylesheets imported from JS (CKEditor's) become <link> tags in the browser; under test they resolve
@@ -11,6 +12,8 @@ const styleStub = {
 
 export default defineConfig({
   plugins: [styleStub],
+  // The Drupal module's scripts import the bundle's by the name its import map gives them.
+  resolve: { alias: { '@janalis/collaborate': fileURLToPath(new URL('./assets', import.meta.url)) } },
   test: {
     environment: 'jsdom',
     // The page URL jsdom starts with; tests compare absolute URLs against it.
@@ -22,8 +25,7 @@ export default defineConfig({
     include: ['tests/vitest/**/*.test.js'],
     coverage: {
       provider: 'v8',
-      // drupal/js/collaborate.js wires Drupal's editors and behaviors: the Drupal scenarios (make drupal-e2e) run it.
-      include: ['assets/**/*.js', 'drupal/js/modal.js', 'drupal/js/ckeditor5.js'],
+      include: ['assets/**/*.js', 'drupal/js/*.js'],
       exclude: ['assets/vendor/**'],
       reportsDirectory: 'var/coverage-vitest',
       reporter: ['html', 'text'],

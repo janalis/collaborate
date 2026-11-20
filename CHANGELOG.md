@@ -35,10 +35,14 @@ versions follow [Semantic Versioning](https://semver.org/).
   map below; an empty array leaves any other map as it was.
 - Drupal: a shared rich-text field whose draft scripts fail to load gets
   Drupal's own editor instead of none, the form stops following its draft,
-  and the console says why.
-- Drupal: the status report also names the options the module decides
-  over every layer (`bridge`, `identity`, `access`, `role`,
-  `cursors.regions`) when a site sets them.
+  and the console says why. The draft itself loads apart from the editor
+  plugin: without Drupal's CKEditor build, the form's other fields and its
+  "Add another item" rows still follow the draft, and a rebuild no longer
+  binds controls to a draft that stopped.
+- Drupal: the module's services and permissions (`bridge`, `identity`,
+  `access`, `role`, `cursors.places`, `notifications.role`, `bus`,
+  `locales`) are decided over every layer, settings.php included, and the
+  status report names any a site sets, with `cursors.regions`.
 - Drupal: the `advanced` settings override the module's defaults (the grant
   cache, the notifications layout), and the status report warns of the
   options the module reads nothing of. It no longer sets

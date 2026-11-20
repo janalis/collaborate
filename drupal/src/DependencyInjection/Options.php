@@ -26,8 +26,8 @@ final class Options
 
     /**
      * Options a site sets for nothing: those of the bundle's form extension and Doctrine change collector, which the
-     * module replaces with its own entity forms and hooks, and those the module decides over every layer. Accepted
-     * by the configuration tree, read by nothing.
+     * module replaces with its own entity forms and hooks. Accepted by the configuration tree, read by nothing; the
+     * options the module decides ({@see DECIDED}, `cursors.regions`) are named with them.
      */
     public const array IGNORED = [
         'updates.path_pattern',
@@ -37,13 +37,23 @@ final class Options
         'drafts.position_field',
         'drafts.rich_text.schema_option',
         'drafts.rich_text.ckeditor_version',
-        // What the module decides itself, over any layer: its services, its permissions as the roles, the regions
-        // of Drupal's pages or the form's.
-        'bridge',
-        'identity',
-        'access',
-        'role',
-        'cursors.regions',
+    ];
+
+    /**
+     * What the module decides itself, over every layer: its services, its permissions as the roles. The regions of
+     * Drupal's pages, or the form's, are decided with them.
+     */
+    private const array DECIDED = [
+        'bridge' => Bridge::None->value,
+        'identity' => self::IDENTITY,
+        'access' => self::ACCESS,
+        'role' => 'use collaborate',
+        'cursors' => ['places' => self::PLACES],
+        'notifications' => [
+            'role' => 'receive collaborate notifications',
+            'bus' => self::BUS,
+            'locales' => self::LOCALES,
+        ],
     ];
 
     /**
@@ -94,7 +104,6 @@ final class Options
                         'max_avatars' => (int) ($cursors['max_avatars'] ?? 5),
                         'idle' => (int) ($cursors['idle'] ?? 0),
                         'markers' => (bool) ($cursors['markers'] ?? false),
-                        'places' => self::PLACES,
                     ],
                     'drafts' => [
                         'enabled' => (bool) ($drafts['enabled'] ?? true),
@@ -103,9 +112,6 @@ final class Options
                     'updates' => ['enabled' => (bool) ($updates['enabled'] ?? true)],
                     'notifications' => [
                         'enabled' => (bool) ($notifications['enabled'] ?? false),
-                        'role' => 'receive collaborate notifications',
-                        'bus' => self::BUS,
-                        'locales' => self::LOCALES,
                         'web_push' => ['enabled' => (bool) ($notifications['web_push'] ?? false)],
                     ],
                 ],
@@ -116,13 +122,7 @@ final class Options
         $options = self::merge($options, $settings);
 
         // The module's own decisions, whatever the configuration says.
-        return self::escape(self::merge($options, [
-            'bridge' => Bridge::None->value,
-            'identity' => self::IDENTITY,
-            'access' => self::ACCESS,
-            'role' => 'use collaborate',
-            'cursors' => ['regions' => $regions],
-        ]));
+        return self::escape(self::merge($options, self::DECIDED, ['cursors' => ['regions' => $regions]]));
     }
 
     /**
@@ -196,7 +196,7 @@ final class Options
     }
 
     /**
-     * The {@see IGNORED} options the site sets, in its `advanced` tree or settings.php.
+     * The {@see IGNORED} and {@see DECIDED} options the site sets, in its `advanced` tree or settings.php.
      *
      * @param array<string, mixed>|null $config   `collaborate.settings`, read from the active storage when null
      * @param array<string, mixed>|null $settings `$settings['collaborate']`, read from settings.php when null
@@ -208,7 +208,9 @@ final class Options
         $config ??= self::stored();
         $sources = [\is_array($config['advanced'] ?? null) ? $config['advanced'] : [], $settings ?? self::settings()];
 
-        return array_values(array_filter(self::IGNORED, static function (string $path) use ($sources): bool {
+        $paths = [...self::IGNORED, ...self::paths(self::DECIDED), 'cursors.regions'];
+
+        return array_values(array_filter($paths, static function (string $path) use ($sources): bool {
             foreach ($sources as $source) {
                 $value = $source;
                 foreach (explode('.', $path) as $key) {
@@ -224,6 +226,25 @@ final class Options
 
             return false;
         }));
+    }
+
+    /**
+     * The dotted paths of a map's leaves.
+     *
+     * @param array<array-key, mixed> $options
+     *
+     * @return list<string>
+     */
+    private static function paths(array $options, string $prefix = ''): array
+    {
+        $paths = [];
+        // @mago-expect analysis:mixed-assignment an option's value: a map is walked, anything else is a leaf
+        foreach ($options as $key => $value) {
+            $path = $prefix . $key;
+            $paths = [...$paths, ...(\is_array($value) ? self::paths($value, $path . '.') : [$path])];
+        }
+
+        return $paths;
     }
 
     /** The secret grants are signed with: derived from the site's hash salt, never stored as is. */

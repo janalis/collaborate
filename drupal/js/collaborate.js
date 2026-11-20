@@ -17,39 +17,45 @@ if (document.querySelector('[data-collaborate-notifications]')) {
   import('@janalis/collaborate/notifications/topics.js');
 }
 
-// Loaded with the first shared form: its CKEditor plugin needs Drupal's editor build on the page.
+// The draft's sessions, loaded with the first shared form: following one needs nothing more.
 /** @type {Promise<typeof import('@janalis/collaborate/draft/session.js')> | null} */
 let drafts = null;
 const loadDrafts = () => {
-  drafts ??= Promise.all([
-    import('@janalis/collaborate/draft/session.js'),
-    import('@janalis/collaborate/ckeditor5/collaborate.js'),
-  ]).then(([session, plugin]) => {
-    const dll = page.CKEditor5?.dll;
-    if (!dll) throw new Error("Collaborate: Drupal's CKEditor 5 build is not on the page.");
-    const { Plugin } = dll('./src/core.js');
-    // Tells the session its editor is following the draft: the host's part of the contract.
-    class CollaborateReady extends Plugin {
-      static get pluginName() {
-        return 'CollaborateReady';
-      }
-
-      init() {
-        const configuration = this.editor.config.get('collaborate');
-        if (!configuration) return;
-        this.editor.on('ready', () => configuration.getSession().editorReady(this.editor.sourceElement.name));
-      }
-    }
-    // Drupal finds an editor's plugins as `CKEditor5.<package>.<plugin>`.
-    /** @type {NonNullable<typeof page.CKEditor5>} */ (page.CKEditor5).collaborate = {
-      Collaborate: plugin.default,
-      CollaborateReady,
-    };
-    return session;
-  });
-  // Said once: every caller then goes on without the drafts.
-  drafts.catch((error) => console.error('Collaborate: the shared draft could not load.', error));
+  if (!drafts) {
+    drafts = import('@janalis/collaborate/draft/session.js');
+    // Said once: every caller then goes on without the drafts.
+    drafts.catch((error) => console.error('Collaborate: the shared draft could not load.', error));
+  }
   return drafts;
+};
+
+// The bundle's CKEditor plugin, registered once on Drupal's editor build, which it needs on the page.
+/** @type {Promise<void> | null} */
+let plugins = null;
+const loadPlugins = () => {
+  if (!plugins) {
+    plugins = import('@janalis/collaborate/ckeditor5/collaborate.js').then((plugin) => {
+      const ckeditor = page.CKEditor5;
+      if (!ckeditor?.dll) throw new Error("Collaborate: Drupal's CKEditor 5 build is not on the page.");
+      const { Plugin } = ckeditor.dll('./src/core.js');
+      // Tells the session its editor is following the draft: the host's part of the contract.
+      class CollaborateReady extends Plugin {
+        static get pluginName() {
+          return 'CollaborateReady';
+        }
+
+        init() {
+          const configuration = this.editor.config.get('collaborate');
+          if (!configuration) return;
+          this.editor.on('ready', () => configuration.getSession().editorReady(this.editor.sourceElement.name));
+        }
+      }
+      // Drupal finds an editor's plugins as `CKEditor5.<package>.<plugin>`.
+      ckeditor.collaborate = { Collaborate: plugin.default, CollaborateReady };
+    });
+    plugins.catch((error) => console.error('Collaborate: the shared editors could not load.', error));
+  }
+  return plugins;
 };
 
 // Drupal attaches its editors once the page is parsed, through `Drupal.editors.ckeditor5`: an editor of a shared
@@ -63,10 +69,24 @@ if (editors?.ckeditor5 && shared()) {
    */
   editors.ckeditor5.attach = function (element, format) {
     if (!element.form?.dataset.collaborate) return attach.call(this, element, format);
+    // A field the draft does not follow: Drupal's own editor.
+    const plain = /** @type {{ collaborate?: undefined, initialData?: undefined }} */ ({});
     loadDrafts()
       .then(async ({ sessionFor }) => {
         const session = sessionFor(element);
-        const configuration = session ? await session.editorConfiguration(element) : {};
+        if (!session) return plain;
+        try {
+          await loadPlugins();
+          return await session.editorConfiguration(element);
+        } catch {
+          // The form stops following its draft, its controls released, and the field takes Drupal's own editor.
+          session.editorFailed();
+          return plain;
+        }
+      })
+      // The drafts never loaded: nothing follows the form.
+      .catch(() => plain)
+      .then((configuration) => {
         if (!configuration.collaborate) return attach.call(this, element, format);
         if (typeof configuration.initialData === 'string') element.value = configuration.initialData;
         const settings = format.editorSettings;
@@ -79,22 +99,12 @@ if (editors?.ckeditor5 && shared()) {
           },
         });
       })
-      .catch(async () => {
-        // The form stops following its draft, its controls released, and the field takes Drupal's own editor. The
-        // session's module may have loaded and started a session without the plugin's.
-        const module = await import('@janalis/collaborate/draft/session.js').catch(() => null);
-        try {
-          module?.sessionFor(element)?.editorFailed();
-        } catch {
-          // A form whose draft never started: nothing follows it.
-        }
-        attach.call(this, element, format);
-      });
+      // Drupal's own failure, said as Drupal would: the field is attached once.
+      .catch((error) => console.error(error));
     return true;
   };
+  loadPlugins().catch(() => {});
 }
-
-if (shared()) loadDrafts().catch(() => {});
 
 // Typing in a multi-value field's empty row makes it an item: the row takes a key of its own and follows the
 // draft from then on. The draft's controls replace what the row shows as they bind: what was typed is put back
@@ -108,7 +118,7 @@ const touch = (event) => {
   );
   const form = /** @type {HTMLFormElement | null | undefined} */ (row?.closest('form[data-collaborate]'));
   const session = form && sessions ? sessions.sessionFor({ form }) : null;
-  if (!row || !session?.initialized || !session.scanCollections) return;
+  if (!row || !session?.initialized || session.stopped || !session.scanCollections) return;
   // Each control read by what its type has: a box its check, a multiple select its options, any other its value.
   // A file input keeps its file: a script may only empty it.
   const restores = Array.from(
@@ -163,7 +173,7 @@ if (page.Drupal) {
       loadDrafts().then(
         ({ sessionFor }) => {
           const session = sessionFor({ form });
-          if (session?.initialized) session.initializeControls();
+          if (session?.initialized && !session.stopped) session.initializeControls();
           document.dispatchEvent(new Event('collaborate:rows-changed'));
         },
         () => {}

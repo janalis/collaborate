@@ -11,7 +11,8 @@ export interface DrupalAjax {
 
 export interface DrupalGlobals {
   Drupal?: {
-    ajax: { instances: (DrupalAjax | null)[] };
+    /** Missing from a page without core/drupal.ajax. */
+    ajax?: { instances: (DrupalAjax | null)[] };
     behaviors: Record<string, { attach(context: Document | Element): void }>;
     /** Drupal's editors by name; `format` is its settings for a field's text format. */
     // biome-ignore lint/suspicious/noExplicitAny: Drupal's editor settings, which each text format shapes

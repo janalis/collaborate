@@ -1,0 +1,262 @@
+// The module's page script on a shared entity form: Drupal's editors created on the draft, its AJAX rebuilds
+// bound again, a typed empty row made an item, and every failure to load leaving the form to Drupal. The bundle's
+// modules are replaced: their own tests run them.
+
+/** A session of the draft, as the script reads it. */
+function fakeSession(overrides = {}) {
+  return {
+    initialized: true,
+    stopped: false,
+    editorConfiguration: vi.fn(async () => ({})),
+    editorFailed: vi.fn(),
+    initializeControls: vi.fn(),
+    scanCollections: vi.fn(),
+    ...overrides,
+  };
+}
+
+let errors;
+let attach;
+
+/**
+ * The page script, evaluated on the page each test sets.
+ *
+ * @param {{ session?: object | null, drafts?: boolean, plugin?: boolean, drupal?: boolean }} [options]
+ */
+async function load({ session = fakeSession(), drafts = true, plugin = true, drupal = true } = {}) {
+  for (const path of ['bridges/drupal.js', 'cursors/cursors.js', 'updates.js'])
+    vi.doMock(`@janalis/collaborate/${path}`, () => ({}));
+  vi.doMock('@janalis/collaborate/draft/session.js', () => {
+    if (!drafts) throw new Error('No drafts.');
+    return { sessionFor: vi.fn(() => session) };
+  });
+  vi.doMock('@janalis/collaborate/ckeditor5/collaborate.js', () => {
+    if (!plugin) throw new Error('No plugin.');
+    return { default: 'CollaboratePlugin' };
+  });
+  attach = vi.fn();
+  if (drupal) globalThis.Drupal = { behaviors: {}, editors: { ckeditor5: { attach } } };
+  await import('../../../drupal/js/collaborate.js');
+  return session;
+}
+
+/** Drupal's CKEditor 5 build: its `Plugin` base, what the module's plugin extends. */
+function build() {
+  class Plugin {
+    constructor(editor) {
+      this.editor = editor;
+    }
+  }
+  globalThis.CKEditor5 = { dll: vi.fn(() => ({ Plugin })) };
+  return globalThis.CKEditor5;
+}
+
+const format = { editorSettings: { plugins: ['basic'], config: { toolbar: [] } } };
+
+beforeEach(() => {
+  document.body.innerHTML =
+    '<form data-collaborate="{}"><textarea name="body"></textarea><table><tr data-collaborate-pending><td>' +
+    '<input name="notes[t0][value]"><input type="checkbox" name="notes[t0][on]"><input type="file" name="f">' +
+    '<select multiple name="notes[t0][tags]"><option value="a">A</option><option value="b">B</option></select>' +
+    '</td></tr></table></form><textarea name="alone"></textarea>';
+  errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+});
+
+afterEach(() => {
+  vi.resetModules();
+  vi.restoreAllMocks();
+  delete globalThis.Drupal;
+  delete globalThis.CKEditor5;
+});
+
+const body = () => /** @type {HTMLTextAreaElement} */ (document.querySelector('[name="body"]'));
+
+test("a shared field's editor follows the draft, created on its content with the bundle's plugin", async () => {
+  const ckeditor = build();
+  const getSession = () => ({ editorReady });
+  const editorReady = vi.fn();
+  const session = await load({
+    session: fakeSession({
+      editorConfiguration: vi.fn(async () => ({ collaborate: { getSession }, initialData: '<p>Shared</p>' })),
+    }),
+  });
+
+  expect(globalThis.Drupal.editors.ckeditor5.attach(body(), format)).toBe(true);
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledOnce());
+  expect(body().value).toBe('<p>Shared</p>');
+  expect(attach.mock.calls[0][1].editorSettings).toEqual({
+    plugins: ['basic', 'collaborate.Collaborate', 'collaborate.CollaborateReady'],
+    config: { toolbar: [], collaborate: { getSession } },
+  });
+  expect(session.editorFailed).not.toHaveBeenCalled();
+
+  // Drupal finds the plugins on its build; the second tells the session once its editor is ready.
+  expect(ckeditor.collaborate.Collaborate).toBe('CollaboratePlugin');
+  const { CollaborateReady } = ckeditor.collaborate;
+  expect(CollaborateReady.pluginName).toBe('CollaborateReady');
+  const on = vi.fn((_event, ready) => ready());
+  new CollaborateReady({ config: { get: () => ({ getSession }) }, on, sourceElement: body() }).init();
+  expect(editorReady).toHaveBeenCalledWith('body');
+  new CollaborateReady({ config: { get: () => undefined }, on }).init();
+  expect(on).toHaveBeenCalledOnce();
+});
+
+test("without Drupal's editor build, the field takes Drupal's own editor and the form stops following its draft", async () => {
+  const session = await load();
+
+  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
+
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledWith(body(), format));
+  expect(session.editorFailed).toHaveBeenCalledOnce();
+  expect(errors).toHaveBeenCalledWith('Collaborate: the shared editors could not load.', expect.any(Error));
+  expect(errors).toHaveBeenCalledOnce();
+});
+
+test("a plugin that does not load stops the editor's draft alone: rows still follow it", async () => {
+  build();
+  const session = await load({ plugin: false });
+  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledWith(body(), format));
+  expect(session.editorFailed).toHaveBeenCalledOnce();
+
+  session.stopped = false;
+  const input = /** @type {HTMLInputElement} */ (document.querySelector('[name="notes[t0][value]"]'));
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(session.scanCollections).toHaveBeenCalledOnce();
+});
+
+test('without the drafts, every field takes Drupal’s own editor, and the failure is said once', async () => {
+  await load({ drafts: false });
+
+  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
+  globalThis.Drupal.behaviors.collaborate.attach(document.querySelector('form'));
+
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledWith(body(), format));
+  expect(
+    errors.mock.calls.filter(([message]) => message === 'Collaborate: the shared draft could not load.')
+  ).toHaveLength(1);
+});
+
+test('a field the draft does not follow takes Drupal’s editor at once, or once its configuration fails', async () => {
+  build();
+  const session = await load({
+    session: fakeSession({ editorConfiguration: vi.fn(async () => Promise.reject(new Error('No grant.'))) }),
+  });
+  const alone = /** @type {HTMLTextAreaElement} */ (document.querySelector('[name="alone"]'));
+  globalThis.Drupal.editors.ckeditor5.attach(alone, format);
+  expect(attach).toHaveBeenCalledWith(alone, format);
+
+  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledWith(body(), format));
+  expect(session.editorFailed).toHaveBeenCalledOnce();
+});
+
+test('a form without a session gives its field Drupal’s editor', async () => {
+  build();
+  await load({ session: null });
+  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledWith(body(), format));
+});
+
+test("Drupal's own failure is said, and the field is attached once", async () => {
+  build();
+  const session = await load({
+    session: fakeSession({ editorConfiguration: vi.fn(async () => ({ collaborate: {} })) }),
+  });
+  attach.mockImplementation(() => {
+    throw new Error('Malformed settings.');
+  });
+
+  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
+
+  await vi.waitFor(() => expect(errors).toHaveBeenCalledWith(new Error('Malformed settings.')));
+  expect(attach).toHaveBeenCalledOnce();
+  expect(session.editorFailed).not.toHaveBeenCalled();
+});
+
+test("typing in an empty row makes it an item, what was typed kept, a file input's file left alone", async () => {
+  const session = await load();
+  await vi.waitFor(() => {
+    document.querySelector('[name="notes[t0][value]"]').dispatchEvent(new Event('input', { bubbles: true }));
+    expect(session.scanCollections).toHaveBeenCalled();
+  });
+  session.scanCollections.mockClear();
+  const row = /** @type {HTMLElement} */ (document.querySelector('tr'));
+  const text = /** @type {HTMLInputElement} */ (row.querySelector('[name="notes[t0][value]"]'));
+  const box = /** @type {HTMLInputElement} */ (row.querySelector('[type="checkbox"]'));
+  const select = /** @type {HTMLSelectElement} */ (row.querySelector('select'));
+  // The draft's controls replace what the row shows as they bind.
+  session.scanCollections.mockImplementation(() => {
+    text.value = '';
+    box.checked = false;
+    for (const option of select.options) option.selected = false;
+  });
+  text.value = 'Typed';
+  box.checked = true;
+  select.options[1].selected = true;
+
+  box.dispatchEvent(new Event('change', { bubbles: true }));
+
+  expect(row.dataset.collaborateTouched).toBe('');
+  expect([text.value, box.checked, select.options[0].selected, select.options[1].selected]).toEqual([
+    'Typed',
+    true,
+    false,
+    true,
+  ]);
+});
+
+test('a row outside a pending one, or a session that stopped or never joined, makes no item', async () => {
+  const session = await load();
+  const scan = session.scanCollections;
+  const input = document.querySelector('[name="notes[t0][value]"]');
+  await vi.waitFor(() => {
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(scan).toHaveBeenCalledOnce();
+  });
+  document.querySelector('[name="alone"]').dispatchEvent(new Event('input', { bubbles: true }));
+  document.dispatchEvent(new Event('input'));
+  session.stopped = true;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  session.stopped = false;
+  session.initialized = false;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  session.initialized = true;
+  session.scanCollections = undefined;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(scan).toHaveBeenCalledOnce();
+});
+
+test("Drupal's AJAX rebuild binds the form's controls again, unless its draft stopped", async () => {
+  const session = await load();
+  const rows = vi.fn();
+  document.addEventListener('collaborate:rows-changed', rows);
+  const { attach: behavior } = globalThis.Drupal.behaviors.collaborate;
+
+  behavior(document);
+  behavior(document.querySelector('[name="alone"]'));
+  behavior(document.querySelector('tr'));
+  await vi.waitFor(() => expect(rows).toHaveBeenCalledOnce());
+  expect(session.initializeControls).toHaveBeenCalledOnce();
+
+  session.stopped = true;
+  behavior(document.body);
+  await vi.waitFor(() => expect(rows).toHaveBeenCalledTimes(2));
+  expect(session.initializeControls).toHaveBeenCalledOnce();
+  document.removeEventListener('collaborate:rows-changed', rows);
+});
+
+test('a page without a shared form or without Drupal loads no draft', async () => {
+  document.body.innerHTML = '<div data-collaborate-notifications></div>';
+  for (const path of ['bell.js', 'page.js', 'topics.js'])
+    vi.doMock(`@janalis/collaborate/notifications/${path}`, () => ({}));
+  const session = await load();
+  expect(globalThis.Drupal.editors.ckeditor5.attach).toBe(attach);
+  globalThis.Drupal.behaviors.collaborate.attach(document.body);
+
+  vi.resetModules();
+  delete globalThis.Drupal;
+  await load({ drupal: false });
+  expect(globalThis.Drupal).toBeUndefined();
+  expect(session.initializeControls).not.toHaveBeenCalled();
+});

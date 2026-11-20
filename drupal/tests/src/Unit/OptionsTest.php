@@ -52,8 +52,20 @@ final class OptionsTest extends UnitTestCase
         self::assertSame(50, $options['drafts']['max_fields']);
         self::assertTrue($options['notifications']['web_push']['enabled']);
         self::assertSame('websocket', $options['hub']['transport']);
-        // The module's own decisions win over the advanced tree.
+        // The module's own decisions win over the advanced tree and settings.php.
         self::assertSame('use collaborate', $options['role']);
+    }
+
+    public function testTheModulesServicesWinOverEveryLayer(): void
+    {
+        $options = Options::bundle([
+            'advanced' => ['notifications' => ['bus' => 'my.bus', 'locales' => 'my.locales']],
+        ], ['cursors' => ['places' => 'my.places'], 'notifications' => ['role' => 'other permission']]);
+
+        self::assertSame(Options::BUS, self::at($options, 'notifications', 'bus'));
+        self::assertSame(Options::LOCALES, self::at($options, 'notifications', 'locales'));
+        self::assertSame(Options::PLACES, self::at($options, 'cursors', 'places'));
+        self::assertSame('receive collaborate notifications', self::at($options, 'notifications', 'role'));
     }
 
     public function testTheAdvancedTreeOverridesTheModulesDefaultsButNotTheFormsChoices(): void
@@ -124,12 +136,19 @@ final class OptionsTest extends UnitTestCase
     {
         self::assertSame([], Options::ignored(['drafts' => ['position_field' => 'rank']], ['hub' => []]));
         self::assertSame(
-            ['updates.path_pattern', 'drafts.rich_text.ckeditor_version', 'role', 'cursors.regions'],
+            [
+                'updates.path_pattern',
+                'drafts.rich_text.ckeditor_version',
+                'role',
+                'notifications.bus',
+                'cursors.regions',
+            ],
             Options::ignored([
                 'advanced' => [
                     'updates' => ['path_pattern' => '#^/#'],
                     'drafts' => ['rich_text' => 'none'],
                     'role' => 'ROLE_EDITOR',
+                    'notifications' => ['bus' => 'my.bus'],
                 ],
             ], [
                 'drafts' => ['rich_text' => ['ckeditor_version' => '47.0.0']],

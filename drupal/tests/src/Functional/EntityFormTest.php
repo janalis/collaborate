@@ -169,7 +169,7 @@ final class EntityFormTest extends BrowserTestBase
     {
         $node = $this->drupalCreateNode(['type' => 'article']);
         $this->drupalLogin($this->drupalCreateUser(['edit any article content', 'access content']));
-        $this->drupalGet('node/' . $node->id() . '/edit');
+        $this->drupalGet($node->toUrl('edit-form'));
 
         $this->assertSession()->elementNotExists('css', 'form[data-collaborate]');
         $this->assertSession()->elementNotExists('css', '[data-collaborate-layer]');

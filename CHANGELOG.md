@@ -25,6 +25,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Drupal: the `advanced` settings override the module's defaults (the grant
+  cache, the notifications layout), and the status report warns of the
+  options the module reads nothing of. It no longer sets
+  `updates.path_pattern`, which only the Doctrine change collector it
+  removes reads.
 - `notifications/topics.js` and `notifications/page.js` no longer start the
   page's bells when imported: their helpers moved to
   `notifications/shared.js`. A page that shows a bell loads `bell.js`, as the

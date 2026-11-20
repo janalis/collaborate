@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\collaborate\Install\Requirements;
 
+use Drupal\collaborate\DependencyInjection\Options;
 use Drupal\collaborate\Hub\MercureHubs;
 use Drupal\collaborate\Storage\Connections;
 use Drupal\Core\Extension\InstallRequirementsInterface;
@@ -20,8 +21,8 @@ final class CollaborateRequirements implements InstallRequirementsInterface
     }
 
     /**
-     * What the status report says once the module runs: its database, and the hub of the mercure transport, which
-     * settings.php names.
+     * What the status report says once the module runs: its database, the hub of the mercure transport, which
+     * settings.php names, and the options the site sets that the module reads nothing of.
      *
      * @return array<string, array<string, mixed>>
      */
@@ -34,6 +35,18 @@ final class CollaborateRequirements implements InstallRequirementsInterface
                 'value' => new TranslatableMarkup('Not configured'),
                 'description' => new TranslatableMarkup(
                     'The pages hear of nothing until settings.php names the Mercure hub (<code>$settings[\'collaborate_mercure\']</code>), or chooses the WebSocket hub.',
+                ),
+                'severity' => RequirementSeverity::Warning,
+            ];
+        }
+
+        $ignored = Options::ignored();
+        if ([] !== $ignored) {
+            $requirements['collaborate_ignored_options'] = [
+                'title' => new TranslatableMarkup('Collaborate options'),
+                'value' => implode(', ', $ignored),
+                'description' => new TranslatableMarkup(
+                    'These options configure Symfony forms and Doctrine flushes, which the module replaces with Drupal\'s entity forms and hooks: they change nothing here.',
                 ),
                 'severity' => RequirementSeverity::Warning,
             ];

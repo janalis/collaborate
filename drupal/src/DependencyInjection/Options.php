@@ -9,10 +9,10 @@ use Drupal\Core\Site\Settings;
 use Janalis\Collaborate\Bridge\Bridge;
 
 /**
- * The bundle's `collaborate` options under Drupal, read when the container is built: the module's configuration
- * (`collaborate.settings`, what the administration form edits, and its `advanced` tree), then settings.php's
- * `$settings['collaborate']` (the hub, its secrets), then what the module itself decides (the permissions as the
- * roles, its own services). The bundle's configuration tree validates the result.
+ * The bundle's `collaborate` options under Drupal, read when the container is built, each layer over the one before:
+ * the module's defaults, the `advanced` tree of its configuration (`collaborate.settings`), what the administration
+ * form edits, settings.php's `$settings['collaborate']` (the hub, its secrets), then what the module itself decides
+ * (the permissions as the roles, its own services). The bundle's configuration tree validates the result.
  */
 final class Options
 {
@@ -23,6 +23,27 @@ final class Options
     public const string LOCALES = 'collaborate.locales';
     public const string PLACES = 'collaborate.places';
     public const string GRANT_CACHE = 'collaborate.grant_cache';
+
+    /**
+     * Options of the bundle's form extension and Doctrine change collector, which the module replaces with its own
+     * entity forms and hooks: accepted by the configuration tree, read by nothing.
+     */
+    public const array IGNORED = [
+        'updates.path_pattern',
+        'updates.routes',
+        'updates.association_depth',
+        'updates.ignored_fields',
+        'drafts.position_field',
+        'drafts.rich_text.schema_option',
+        'drafts.rich_text.ckeditor_version',
+    ];
+
+    /** What the module chooses unless the `advanced` tree says otherwise. */
+    private const array DEFAULTS = [
+        'drafts' => ['grant_cache' => self::GRANT_CACHE],
+        // Their pages' body, which the module places in the administration theme's page.
+        'notifications' => ['layout' => '@collaborate/collaborate-notifications-layout.html.twig'],
+    ];
 
     /**
      * The options the bundle's extension loads.
@@ -45,41 +66,38 @@ final class Options
             ? $cursors['regions']
             : Bridge::Drupal->regions();
 
-        $options = array_replace_recursive($advanced, array_filter(
-            [
-                'colors' => \is_array($config['colors'] ?? null) && [] !== $config['colors']
-                    ? array_values($config['colors'])
-                    : null,
-                'cursors' => [
-                    'enabled' => (bool) ($cursors['enabled'] ?? true),
-                    'presence' => $cursors['presence'] ?? 'avatars',
-                    'max_avatars' => (int) ($cursors['max_avatars'] ?? 5),
-                    'idle' => (int) ($cursors['idle'] ?? 0),
-                    'markers' => (bool) ($cursors['markers'] ?? false),
-                    'places' => self::PLACES,
+        $options = array_replace_recursive(
+            self::DEFAULTS,
+            $advanced,
+            array_filter(
+                [
+                    'colors' => \is_array($config['colors'] ?? null) && [] !== $config['colors']
+                        ? array_values($config['colors'])
+                        : null,
+                    'cursors' => [
+                        'enabled' => (bool) ($cursors['enabled'] ?? true),
+                        'presence' => $cursors['presence'] ?? 'avatars',
+                        'max_avatars' => (int) ($cursors['max_avatars'] ?? 5),
+                        'idle' => (int) ($cursors['idle'] ?? 0),
+                        'markers' => (bool) ($cursors['markers'] ?? false),
+                        'places' => self::PLACES,
+                    ],
+                    'drafts' => [
+                        'enabled' => (bool) ($drafts['enabled'] ?? true),
+                        'rich_text' => ['block_prefixes' => $drafts['rich_text'] ?? true ? ['text_format'] : []],
+                    ],
+                    'updates' => ['enabled' => (bool) ($updates['enabled'] ?? true)],
+                    'notifications' => [
+                        'enabled' => (bool) ($notifications['enabled'] ?? false),
+                        'role' => 'receive collaborate notifications',
+                        'bus' => self::BUS,
+                        'locales' => self::LOCALES,
+                        'web_push' => ['enabled' => (bool) ($notifications['web_push'] ?? false)],
+                    ],
                 ],
-                'drafts' => [
-                    'enabled' => (bool) ($drafts['enabled'] ?? true),
-                    'grant_cache' => self::GRANT_CACHE,
-                    'rich_text' => ['block_prefixes' => $drafts['rich_text'] ?? true ? ['text_format'] : []],
-                ],
-                'updates' => [
-                    'enabled' => (bool) ($updates['enabled'] ?? true),
-                    // Drupal's administration, and the entity forms its themes show to editors.
-                    'path_pattern' => '#^/(?:admin|node|user|taxonomy|media|block)(?:/|$)#',
-                ],
-                'notifications' => [
-                    'enabled' => (bool) ($notifications['enabled'] ?? false),
-                    'role' => 'receive collaborate notifications',
-                    'bus' => self::BUS,
-                    'locales' => self::LOCALES,
-                    // Their pages' body, which the module places in the administration theme's page.
-                    'layout' => '@collaborate/collaborate-notifications-layout.html.twig',
-                    'web_push' => ['enabled' => (bool) ($notifications['web_push'] ?? false)],
-                ],
-            ],
-            static fn(mixed $value): bool => null !== $value,
-        ));
+                static fn(mixed $value): bool => null !== $value,
+            ),
+        );
         // settings.php: the hub and its secrets, and anything a site keeps out of its exported configuration.
         $options = array_replace_recursive($options, $settings);
 
@@ -112,6 +130,37 @@ final class Options
         }
 
         return $options;
+    }
+
+    /**
+     * The {@see IGNORED} options the site sets, in its `advanced` tree or settings.php.
+     *
+     * @param array<string, mixed>|null $config   `collaborate.settings`, read from the active storage when null
+     * @param array<string, mixed>|null $settings `$settings['collaborate']`, read from settings.php when null
+     *
+     * @return list<string>
+     */
+    public static function ignored(?array $config = null, ?array $settings = null): array
+    {
+        $config ??= self::stored();
+        $sources = [\is_array($config['advanced'] ?? null) ? $config['advanced'] : [], $settings ?? self::settings()];
+
+        return array_values(array_filter(self::IGNORED, static function (string $path) use ($sources): bool {
+            foreach ($sources as $source) {
+                $value = $source;
+                foreach (explode('.', $path) as $key) {
+                    if (!\is_array($value) || !\array_key_exists($key, $value)) {
+                        continue 2;
+                    }
+                    // @mago-expect analysis:mixed-assignment an option's value: the next key narrows it
+                    $value = $value[$key];
+                }
+
+                return true;
+            }
+
+            return false;
+        }));
     }
 
     /** The secret grants are signed with: derived from the site's hash salt, never stored as is. */

@@ -56,12 +56,62 @@ final class OptionsTest extends UnitTestCase
         self::assertSame('use collaborate', $options['role']);
     }
 
+    public function testTheAdvancedTreeOverridesTheModulesDefaultsButNotTheFormsChoices(): void
+    {
+        $defaults = Options::bundle([], []);
+        self::assertSame(Options::GRANT_CACHE, self::at($defaults, 'drafts', 'grant_cache'));
+        self::assertSame('@collaborate/collaborate-notifications-layout.html.twig', self::at(
+            $defaults,
+            'notifications',
+            'layout',
+        ));
+        // The bundle's change collector reads it, and the module removes the collector.
+        self::assertNull(self::at($defaults, 'updates', 'path_pattern'));
+
+        $options = Options::bundle([
+            'drafts' => ['enabled' => false],
+            'advanced' => [
+                'drafts' => ['enabled' => true, 'grant_cache' => 'cache.other'],
+                'notifications' => ['layout' => 'site.html.twig'],
+            ],
+        ], []);
+        self::assertSame('cache.other', self::at($options, 'drafts', 'grant_cache'));
+        self::assertSame('site.html.twig', self::at($options, 'notifications', 'layout'));
+        self::assertFalse(self::at($options, 'drafts', 'enabled'));
+    }
+
+    public function testTheOptionsTheModuleReadsNothingOfAreNamed(): void
+    {
+        self::assertSame([], Options::ignored(['drafts' => ['position_field' => 'rank']], ['hub' => []]));
+        self::assertSame(
+            ['updates.path_pattern', 'drafts.rich_text.ckeditor_version'],
+            Options::ignored([
+                'advanced' => ['updates' => ['path_pattern' => '#^/#'], 'drafts' => ['rich_text' => 'none']],
+            ], ['drafts' => ['rich_text' => ['ckeditor_version' => '47.0.0']]]),
+        );
+    }
+
     public function testASentencesPlaceholdersAreNoContainerParameters(): void
     {
         $options = Options::bundle([
             'advanced' => ['notifications' => ['types' => ['saved' => ['sentence' => '%name% saved']]]],
         ], []);
 
-        self::assertSame('%%name%% saved', $options['notifications']['types']['saved']['sentence']);
+        self::assertSame('%%name%% saved', self::at($options, 'notifications', 'types', 'saved', 'sentence'));
+    }
+
+    /** @param array<array-key, mixed> $options */
+    private static function at(array $options, string ...$keys): mixed
+    {
+        $value = $options;
+        foreach ($keys as $key) {
+            if (!\is_array($value) || !\array_key_exists($key, $value)) {
+                return null;
+            }
+            // @mago-expect analysis:mixed-assignment an option's value: the next key narrows it
+            $value = $value[$key];
+        }
+
+        return $value;
     }
 }

@@ -42,7 +42,10 @@ final class DrupalTranslatorTest extends UnitTestCase
             self::assertSame('pt_BR', $translator->trans(self::SYNCING));
             self::assertSame('pt', $translator->trans(self::SYNCING, locale: 'pt-pt'));
         } finally {
-            array_map(unlink(...), glob($directory . '/*') ?: []);
+            $files = glob($directory . '/*');
+            foreach (false === $files ? [] : $files as $file) {
+                unlink($file);
+            }
             rmdir($directory);
         }
     }

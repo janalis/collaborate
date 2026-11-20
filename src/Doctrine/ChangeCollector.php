@@ -9,13 +9,14 @@ use Doctrine\ORM\Event\OnFlushEventArgs;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\RecordId;
+use Janalis\Collaborate\Updates\SavedChanges;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 
 /**
  * The `onFlush` half of the saved-view updates: which entity classes an admin write can alter, and the
- * drafts of the records it changed. It stores them on the main request, under `_collaborate_data_changed`
- * (class names) and `_collaborate_records_changed` (draft ids), for the response to announce.
+ * drafts of the records it changed. It records them as {@see SavedChanges} for the response to announce, each class
+ * by its short name: EasyAdmin's entity name (`EntityDto::getName()`), which its pages carry.
  */
 final class ChangeCollector
 {
@@ -125,14 +126,13 @@ final class ChangeCollector
         if ([] === $changed) {
             return;
         }
-        $request->attributes->set('_collaborate_data_changed', [
-            ...$request->attributes->all('_collaborate_data_changed'),
-            ...$this->affected($em, $changed),
-        ]);
-        $request->attributes->set('_collaborate_records_changed', [
-            ...$request->attributes->all('_collaborate_records_changed'),
-            ...array_keys($records),
-        ]);
+        SavedChanges::data($request, ...array_map(
+            static fn(string $class): string => basename(str_replace('\\', '/', $class)),
+            $this->affected($em, $changed),
+        ));
+        // A numeric key is an int: the draft id is its string.
+        // @infection-ignore-all: a draft id is a hash; no test can make one PHP reads as an integer key.
+        SavedChanges::records($request, ...array_map(strval(...), array_keys($records)));
     }
 
     /** Admin pages, and the other routes configured to write through the admin (e.g. a sort endpoint). */
@@ -236,6 +236,7 @@ final class ChangeCollector
             }
         }
 
+        // @infection-ignore-all: each class is keyed by itself; the values are the same names.
         return array_keys($classes);
     }
 }

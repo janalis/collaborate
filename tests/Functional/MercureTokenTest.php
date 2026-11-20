@@ -45,6 +45,7 @@ use Janalis\Collaborate\Security\SymfonyCurrentUser;
 use Janalis\Collaborate\Tests\Fixtures\Arrays;
 use Janalis\Collaborate\Tests\Fixtures\TestKernel;
 use Janalis\Collaborate\Twig\CollaborateExtension;
+use Janalis\Collaborate\Updates\SavedChanges;
 use Janalis\Collaborate\Updates\UpdatesSubscriber;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -95,6 +96,7 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 #[UsesClass(JournalStore::class)]
 #[UsesClass(FieldNames::class)]
 #[UsesClass(Collaborator::class)]
+#[UsesClass(SavedChanges::class)]
 final class MercureTokenTest extends CollaborateWebTestCase
 {
     public function testTheSessionTokenIsAnAccessTokenForTheHubCarryingItsConfiguredClaims(): void

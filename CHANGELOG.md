@@ -17,6 +17,9 @@ versions follow [Semantic Versioning](https://semver.org/).
   `InvalidDraftEventException` (400). Each extends the Symfony HTTP exception
   thrown before, so code catching `ConflictHttpException` and the like keeps
   working; `RecordAlreadyCreatedException` is now a `DraftConflictException`.
+- `Updates\SavedChanges`: how a bridge records what a save changed, for the
+  response to announce, instead of writing the bundle's request attributes.
+  `DraftSave::begin()` takes the form's snapshot as its fifth argument.
 - `Notification\Preferences::subscribers()`: which of several users are
   subscribed to a topic, a thousand per query.
 

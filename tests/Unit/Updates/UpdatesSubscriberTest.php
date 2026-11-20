@@ -22,6 +22,7 @@ use Janalis\Collaborate\Hub\Transport\Mercure\MercureTransport;
 use Janalis\Collaborate\Hub\Transport\PublishFailedException;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Tag;
+use Janalis\Collaborate\Updates\SavedChanges;
 use Janalis\Collaborate\Updates\UpdatesSubscriber;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -46,6 +47,7 @@ use Symfony\Component\Mercure\Update;
 #[UsesClass(PublishFailedException::class)]
 #[UsesClass(Topics::class)]
 #[UsesClass(RecordId::class)]
+#[CoversClass(SavedChanges::class)]
 final class UpdatesSubscriberTest extends TestCase
 {
     private function access(bool $enabled = true): DraftAccess
@@ -139,8 +141,8 @@ final class UpdatesSubscriberTest extends TestCase
         $collector->onFlush($this->flush(new Tag(), ['name' => ['old', 'new']]));
         // A second flush in the same request names its entities once.
         $collector->onFlush($this->flush(new Tag(), ['name' => ['new', 'newer']]));
-        self::assertSame([Tag::class, Tag::class], $request->attributes->all('_collaborate_data_changed'));
-        $request->attributes->set('_collaborate_committed', 'draft');
+        self::assertSame(['Tag'], $request->attributes->all('_collaborate_data_changed'));
+        SavedChanges::committed($request, 'draft');
         $this->subscriber($publisher)->publish($this->response($request, 302));
         $terminated = true;
         $publisher->publish();
@@ -169,10 +171,7 @@ final class UpdatesSubscriberTest extends TestCase
         $collector->onFlush(new OnFlushEventArgs($em));
         $collector->onFlush(new OnFlushEventArgs($em));
 
-        self::assertSame(
-            [Tag::class, Tag::class],
-            $requests->getMainRequest()?->attributes->all('_collaborate_data_changed'),
-        );
+        self::assertSame(['Tag'], $requests->getMainRequest()?->attributes->all('_collaborate_data_changed'));
     }
 
     public function testIgnoresSessionNoisePublicRequestsAndFailedResponses(): void
@@ -192,7 +191,7 @@ final class UpdatesSubscriberTest extends TestCase
         $requests->push($request);
         $collector->onFlush($this->flush(new Tag(), ['lastLogin' => [null, 'now'], 'updatedAt' => [null, 'now']]));
         self::assertFalse($request->attributes->has('_collaborate_data_changed'));
-        $request->attributes->set('_collaborate_data_changed', [Tag::class]);
+        $request->attributes->set('_collaborate_data_changed', ['Tag']);
         $subscriber = $this->subscriber($publisher);
         $subscriber->publish($this->response($request, 500));
         $subscriber->publish($this->response($request, 200, HttpKernelInterface::SUB_REQUEST));
@@ -207,7 +206,7 @@ final class UpdatesSubscriberTest extends TestCase
         new ChangeCollector($this->access(), $draftRequests, ['enabled' => false], null, true)->onFlush($this->flush(
             new Tag(),
         ));
-        self::assertContains(Tag::class, $other->attributes->all('_collaborate_data_changed'));
+        self::assertContains('Tag', $other->attributes->all('_collaborate_data_changed'));
         $this->subscriber($publisher, false)->publish($this->response($request));
         $publisher->publish();
     }
@@ -224,7 +223,7 @@ final class UpdatesSubscriberTest extends TestCase
         $requests->push($other);
         $collector->onFlush($this->flush(new Tag()));
 
-        self::assertSame([Tag::class], $configured->attributes->all('_collaborate_data_changed'));
+        self::assertSame(['Tag'], $configured->attributes->all('_collaborate_data_changed'));
         self::assertFalse($other->attributes->has('_collaborate_data_changed'));
     }
 
@@ -255,7 +254,7 @@ final class UpdatesSubscriberTest extends TestCase
         $this->collector($requests)->onFlush(new OnFlushEventArgs($em));
         $this->subscriber($publisher)->publish($this->response($request));
         $publisher->publish();
-        self::assertSame([Tag::class], $request->attributes->get('_collaborate_data_changed'));
+        self::assertSame(['Tag'], $request->attributes->get('_collaborate_data_changed'));
     }
 
     public function testConfiguredRoutesInvalidateAndHubFailuresDoNotFailTheSavedResponse(): void
@@ -273,7 +272,7 @@ final class UpdatesSubscriberTest extends TestCase
         $logger->expects($this->once())->method('warning');
         $publisher = new HubPublisher(new MercureTransport($hub), $logger);
         $this->collector($requests, ['routes' => ['sort_entries']])->onFlush($this->flush(new Tag()));
-        self::assertSame([Tag::class], $request->attributes->get('_collaborate_data_changed'));
+        self::assertSame(['Tag'], $request->attributes->get('_collaborate_data_changed'));
         $this->subscriber($publisher)->publish($this->response($request));
         $publisher->publish();
     }
@@ -293,7 +292,7 @@ final class UpdatesSubscriberTest extends TestCase
         $records = array_map(static fn(int $id): string => $access->draftId(Tag::class, (string) $id), range(1, 6));
         // A value that names no draft is skipped, wherever it stands.
         $request->attributes->set('_collaborate_records_changed', [42, ...$records, $records[0], 42]);
-        $request->attributes->set('_collaborate_committed', $records[0]);
+        SavedChanges::committed($request, $records[0]);
 
         new UpdatesSubscriber($access, new Topics(), $publisher, true, 3)->publish($this->response($request, 302));
         $publisher->publish();
@@ -350,8 +349,8 @@ final class UpdatesSubscriberTest extends TestCase
             });
             $publisher = new HubPublisher(new MercureTransport($hub), $this->createStub(LoggerInterface::class));
             $request = Request::create('/admin/tag/1/edit');
-            $request->attributes->set('_collaborate_data_changed', [Tag::class]);
-            $request->attributes->set('_collaborate_committed', $draft);
+            $request->attributes->set('_collaborate_data_changed', ['Tag']);
+            SavedChanges::committed($request, $draft);
 
             new UpdatesSubscriber($access, new Topics(), $publisher, $updates, 100, $drafts)->publish($this->response(
                 $request,
@@ -368,13 +367,13 @@ final class UpdatesSubscriberTest extends TestCase
         $access = $this->access();
         $request = Request::create('/admin/article/1/edit', 'POST');
         $request->attributes->set('_collaborate_data_changed', [
-            'App\Entity\Tag',
-            'App\Entity\Article',
-            'App\Entity\Tag',
+            'Tag',
+            'Article',
+            'Tag',
         ]);
         $records = array_map(static fn(int $id): string => 'record-' . $id, range(1, 101));
         $request->attributes->set('_collaborate_records_changed', [...$records, 'record-1', 'own']);
-        $request->attributes->set('_collaborate_committed', 'own');
+        SavedChanges::committed($request, 'own');
         /** @var \ArrayObject<int, Update> $log */
         $log = new \ArrayObject();
         $hub = $this->createStub(HubInterface::class);

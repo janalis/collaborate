@@ -38,6 +38,7 @@ use Janalis\Collaborate\Tests\Fixtures\Draft\JsonAssertions;
 use Janalis\Collaborate\Tests\Fixtures\Draft\StatementRecordingConnection;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Tag;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Tagging;
+use Janalis\Collaborate\Updates\SavedChanges;
 use Pdo\Mysql;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -87,6 +88,7 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 #[CoversClass(DraftView::class)]
 #[CoversClass(JournalStore::class)]
 #[UsesClass(FieldNames::class)]
+#[UsesClass(SavedChanges::class)]
 final class DraftJournalTest extends TestCase
 {
     use JsonAssertions;
@@ -1745,10 +1747,9 @@ final class DraftJournalTest extends TestCase
         $scope = $this->scope(true);
         $request = new Request(request: ['_collaborate_generation' => '1', '_collaborate_revision' => '0']);
         $requests->push($request);
-        $guard->begin($request, $scope, ['body' => 'abcd'], 'Alice');
+        $guard->begin($request, $scope, ['body' => 'abcd'], 'Alice', static fn(): array => ['body' => 'saved']);
         self::assertFalse($this->db->isTransactionActive(), 'The editorial flush must commit on its own.');
         self::assertTrue($this->locked('record'));
-        $request->attributes->set('_collaborate_snapshot', static fn(): array => ['body' => 'saved']);
         $guard->completed($this->article(42));
         $kernel = $this->createStub(KernelInterface::class);
         $redirect = new Response(status: 302, headers: ['Location' => '/admin/article?draft=nonce&query=kept']);

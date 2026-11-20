@@ -1033,8 +1033,15 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         $this->save
             ->expects($this->once())
             ->method('begin')
-            ->willReturnCallback(static function (Request $request): void {
-                $request->attributes->set('_collaborate_save', true);
+            ->willReturnCallback(static function (
+                Request $request,
+                array $scope,
+                array $current,
+                string $actor,
+                ?\Closure $snapshot = null,
+            ): void {
+                // As DraftSave::begin() keeps it for completed().
+                $request->attributes->set('_collaborate_snapshot', $snapshot);
             });
         $form->submit(['tag' => ['autocomplete' => '42']]);
         $tag->id = 84;
@@ -1054,8 +1061,15 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         $this->request->request->set('_collaborate_grant', $configuration['grant']);
         $this->save
             ->method('begin')
-            ->willReturnCallback(static function (Request $request): void {
-                $request->attributes->set('_collaborate_save', true);
+            ->willReturnCallback(static function (
+                Request $request,
+                array $scope,
+                array $current,
+                string $actor,
+                ?\Closure $snapshot = null,
+            ): void {
+                // As DraftSave::begin() keeps it for completed().
+                $request->attributes->set('_collaborate_snapshot', $snapshot);
             });
         $form->submit([
             'when' => [
@@ -1077,8 +1091,15 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         $this->save
             ->expects($this->once())
             ->method('begin')
-            ->willReturnCallback(static function (Request $request): void {
-                $request->attributes->set('_collaborate_save', true);
+            ->willReturnCallback(static function (
+                Request $request,
+                array $scope,
+                array $current,
+                string $actor,
+                ?\Closure $snapshot = null,
+            ): void {
+                // As DraftSave::begin() keeps it for completed().
+                $request->attributes->set('_collaborate_snapshot', $snapshot);
             });
         $form->submit(['title' => 'Changed', 'body' => 'Body']);
         // The values are read once the record is persisted, never at submission.
@@ -1154,8 +1175,15 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         $this->request->request->set('_collaborate_grant', $configuration['grant']);
         $this->save
             ->method('begin')
-            ->willReturnCallback(static function (Request $request): void {
-                $request->attributes->set('_collaborate_save', true);
+            ->willReturnCallback(static function (
+                Request $request,
+                array $scope,
+                array $current,
+                string $actor,
+                ?\Closure $snapshot = null,
+            ): void {
+                // As DraftSave::begin() keeps it for completed().
+                $request->attributes->set('_collaborate_snapshot', $snapshot);
             });
         $form->submit(['roles' => ['p1' => 'ROLE_ADMIN', 'p0' => 'ROLE_EDITOR']]);
         /** @var callable(): array<string, mixed> $snapshot */
@@ -1185,8 +1213,15 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         $this->request->request->set('_collaborate_grant', $configuration['grant']);
         $this->save
             ->method('begin')
-            ->willReturnCallback(static function (Request $request): void {
-                $request->attributes->set('_collaborate_save', true);
+            ->willReturnCallback(static function (
+                Request $request,
+                array $scope,
+                array $current,
+                string $actor,
+                ?\Closure $snapshot = null,
+            ): void {
+                // As DraftSave::begin() keeps it for completed().
+                $request->attributes->set('_collaborate_snapshot', $snapshot);
             });
         $form->submit(['year' => '2026', 'ratio' => '1.5']);
         /** @var callable(): array<string, mixed> $snapshot */
@@ -1311,8 +1346,15 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         $this->save
             ->expects($this->once())
             ->method('begin')
-            ->willReturnCallback(static function (Request $request): void {
-                $request->attributes->set('_collaborate_save', true);
+            ->willReturnCallback(static function (
+                Request $request,
+                array $scope,
+                array $current,
+                string $actor,
+                ?\Closure $snapshot = null,
+            ): void {
+                // As DraftSave::begin() keeps it for completed().
+                $request->attributes->set('_collaborate_snapshot', $snapshot);
             });
         $form->submit(['title' => 'EDITOR']);
         $this->article->title = 'persisted';
@@ -1330,8 +1372,15 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         $this->request->request->set('_collaborate_grant', $configuration['grant']);
         $this->save
             ->method('begin')
-            ->willReturnCallback(static function (Request $request): void {
-                $request->attributes->set('_collaborate_save', true);
+            ->willReturnCallback(static function (
+                Request $request,
+                array $scope,
+                array $current,
+                string $actor,
+                ?\Closure $snapshot = null,
+            ): void {
+                // As DraftSave::begin() keeps it for completed().
+                $request->attributes->set('_collaborate_snapshot', $snapshot);
             });
         $form->submit(['title' => 'Titre traduit']);
         // The save stores a value of its own (a listener deriving it, say): Gedmo leaves on the property what it
@@ -1598,8 +1647,15 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         $this->request->request->set('_collaborate_grant', $configuration['grant']);
         $this->save
             ->method('begin')
-            ->willReturnCallback(static function (Request $request): void {
-                $request->attributes->set('_collaborate_save', true);
+            ->willReturnCallback(static function (
+                Request $request,
+                array $scope,
+                array $current,
+                string $actor,
+                ?\Closure $snapshot = null,
+            ): void {
+                // As DraftSave::begin() keeps it for completed().
+                $request->attributes->set('_collaborate_snapshot', $snapshot);
             });
         $submit($configuration['grant']);
         /** @var callable(): array<string, mixed> $snapshot */

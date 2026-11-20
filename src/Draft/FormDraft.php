@@ -235,11 +235,8 @@ final readonly class FormDraft
             throw new AccessDeniedHttpException('Collaborate grant belongs to another form.');
         }
         $values = array_map(static fn(array $field): mixed => $field['initial'], $scope['fields']);
-        $this->save->begin($request, $authorized, $values, $this->collaborators->label($user));
-        if ($request->attributes->has('_collaborate_save')) {
-            // Read once the admin has persisted the record (DraftSave::completed()).
-            $request->attributes->set('_collaborate_snapshot', $snapshot);
-        }
+        // The snapshot is read once the admin has persisted the record (DraftSave::completed()).
+        $this->save->begin($request, $authorized, $values, $this->collaborators->label($user), $snapshot);
     }
 
     /** When the page's request started: a grant's conflicts compare the draft with the record it read then. */

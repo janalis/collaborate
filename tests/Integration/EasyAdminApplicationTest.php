@@ -68,6 +68,7 @@ use Janalis\Collaborate\Tests\Application\Shared\Entity\Article;
 use Janalis\Collaborate\Tests\Application\Shared\Entity\Category;
 use Janalis\Collaborate\Tests\Application\Shared\Entity\Tag;
 use Janalis\Collaborate\Twig\CollaborateExtension;
+use Janalis\Collaborate\Updates\SavedChanges;
 use Janalis\Collaborate\Updates\UpdatesSubscriber;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -133,6 +134,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(DraftTooLargeException::class)]
 #[UsesClass(FieldNames::class)]
 #[UsesClass(Collaborator::class)]
+#[UsesClass(SavedChanges::class)]
 final class EasyAdminApplicationTest extends CollaborationTestCase
 {
     protected static function kernel(): string

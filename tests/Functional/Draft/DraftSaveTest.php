@@ -22,6 +22,7 @@ use Janalis\Collaborate\Draft\FieldNames;
 use Janalis\Collaborate\Draft\JournalStore;
 use Janalis\Collaborate\Draft\RecordId;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Article;
+use Janalis\Collaborate\Updates\SavedChanges;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -58,6 +59,7 @@ use Symfony\Component\Translation\IdentityTranslator;
 #[UsesClass(DraftView::class)]
 #[UsesClass(JournalStore::class)]
 #[UsesClass(FieldNames::class)]
+#[UsesClass(SavedChanges::class)]
 final class DraftSaveTest extends TestCase
 {
     /** @var array<string, array{type: string, initial: mixed}> */
@@ -119,8 +121,9 @@ final class DraftSaveTest extends TestCase
     /** Begins a Save of the record, which the admin then persists. */
     private function persisted(DraftSave $guard): void
     {
-        $guard->begin($this->request, $this->scope(), ['choice' => 'a'], 'Alice');
-        $this->request->attributes->set('_collaborate_snapshot', static fn(): array => ['choice' => 'b']);
+        $guard->begin($this->request, $this->scope(), ['choice' => 'a'], 'Alice', static fn(): array => [
+            'choice' => 'b',
+        ]);
         $guard->completed(new Article());
     }
 

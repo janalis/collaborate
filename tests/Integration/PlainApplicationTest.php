@@ -71,6 +71,7 @@ use Janalis\Collaborate\Tests\Application\Shared\Form\ArticleType;
 use Janalis\Collaborate\Tests\Application\Shared\Form\TagType;
 use Janalis\Collaborate\Tests\Fixtures\TestUserProvider;
 use Janalis\Collaborate\Twig\CollaborateExtension;
+use Janalis\Collaborate\Updates\SavedChanges;
 use Janalis\Collaborate\Updates\UpdatesSubscriber;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -143,6 +144,7 @@ use Twig\Environment;
 #[CoversClass(DraftTooLargeException::class)]
 #[UsesClass(FieldNames::class)]
 #[UsesClass(Collaborator::class)]
+#[UsesClass(SavedChanges::class)]
 final class PlainApplicationTest extends CollaborationTestCase
 {
     protected static function kernel(): string

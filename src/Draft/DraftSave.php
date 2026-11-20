@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Janalis\Collaborate\Draft;
 
+use Janalis\Collaborate\Updates\SavedChanges;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -51,11 +52,18 @@ class DraftSave implements EventSubscriberInterface
     }
 
     /** @param SignedScope $scope
-     * @param array<string, mixed> $current
-     * @param string               $actor   the saving editor's name, shown to the others
+     * @param array<string, mixed>                       $current
+     * @param string                                     $actor    the saving editor's name, shown to the others
+     * @param (\Closure(): array<string, mixed>)|null $snapshot the form's values as the admin persisted them, read
+     *     by {@see completed()}; without it, the draft keeps its own values
      */
-    public function begin(Request $request, array $scope, array $current, string $actor): void
-    {
+    public function begin(
+        Request $request,
+        array $scope,
+        array $current,
+        string $actor,
+        ?\Closure $snapshot = null,
+    ): void {
         $generation = $request->request->get('_collaborate_generation');
         $revision = $request->request->get('_collaborate_revision');
         if (
@@ -93,6 +101,9 @@ class DraftSave implements EventSubscriberInterface
             'completed' => false,
             'actor' => ['userId' => $scope['userId'], 'label' => $actor],
         ]);
+        if (null !== $snapshot) {
+            $request->attributes->set('_collaborate_snapshot', $snapshot);
+        }
     }
 
     /** The admin has persisted `$entity`: the checkpoint waits for the response, which tells whether the save held. */
@@ -142,7 +153,7 @@ class DraftSave implements EventSubscriberInterface
         $values = $request->attributes->get('_collaborate_values', []);
         try {
             $this->journal->saved($state['scope']['id'], $values, $state['actor']);
-            $request->attributes->set('_collaborate_committed', $state['scope']['id']);
+            SavedChanges::committed($request, $state['scope']['id']);
         } catch (\Throwable $error) {
             $this->logger->error('Shared draft checkpoint failed after the record was saved.', [
                 'draft' => $state['scope']['id'],

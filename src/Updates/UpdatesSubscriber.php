@@ -15,8 +15,8 @@ use Symfony\Component\HttpKernel\KernelEvents;
 
 /**
  * Announces a successful admin write, as the Doctrine change collector recorded it, once its response
- * is ready: the saved views it can alter, by EasyAdmin entity name (`EntityDto::getName()`), the draft its own
- * form saved, and the drafts of the other records it changed. Notices name no content.
+ * is ready: the saved views it can alter, by the names the bridge gave them, the draft its own form saved, and the
+ * drafts of the other records it changed ({@see SavedChanges}). Notices name no content.
  */
 final readonly class UpdatesSubscriber implements EventSubscriberInterface
 {
@@ -44,14 +44,8 @@ final readonly class UpdatesSubscriber implements EventSubscriberInterface
         }
         $request = $event->getRequest();
         $updates = [];
-        if ($this->enabled && $request->attributes->has('_collaborate_data_changed')) {
-            // EntityDto::getName(): the short class name.
-            $entities = array_unique(array_map(static fn(string $class): string => basename(str_replace(
-                '\\',
-                '/',
-                $class,
-            )), $this->strings($request->attributes->all('_collaborate_data_changed'))));
-            // sort() lists them again.
+        if ($this->enabled && SavedChanges::hasData($request)) {
+            $entities = SavedChanges::dataNames($request);
             sort($entities);
             $updates[] = Notice::updates($this->topics->updates(), $entities);
         }
@@ -67,45 +61,18 @@ final readonly class UpdatesSubscriber implements EventSubscriberInterface
     private function drafts(Request $request): array
     {
         $updates = [];
-        $draft = self::stringOrNull($request->attributes->get('_collaborate_committed'));
+        $draft = SavedChanges::committedDraft($request);
         if (null !== $draft) {
             $updates[] = Notice::draft($this->access->topic($draft), $draft, 'saved');
         }
         // Edit pages of the other changed records compare their form with the saved record again;
         // the draft saved through its own form has just recorded it.
-        $records = array_diff(
-            array_unique($this->strings($request->attributes->all('_collaborate_records_changed'))),
-            null !== $draft ? [$draft] : [],
-        );
+        $records = array_diff(SavedChanges::recordDrafts($request), null !== $draft ? [$draft] : []);
         // array_chunk() lists each chunk again.
         foreach (array_chunk($records, max(1, $this->chunk)) as $chunk) {
             $updates[] = Notice::records(array_map($this->access->topic(...), $chunk));
         }
 
         return $updates;
-    }
-
-    /**
-     * @param array<array-key, mixed> $values
-     *
-     * @return list<string>
-     */
-    private function strings(array $values): array
-    {
-        $strings = [];
-        foreach (array_keys($values) as $key) {
-            if (!\is_string($values[$key])) {
-                continue;
-            }
-
-            $strings[] = $values[$key];
-        }
-
-        return $strings;
-    }
-
-    private static function stringOrNull(mixed $value): ?string
-    {
-        return \is_string($value) ? $value : null;
     }
 }

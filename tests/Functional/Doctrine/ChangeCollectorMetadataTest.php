@@ -31,6 +31,7 @@ use Janalis\Collaborate\Tests\Fixtures\Draft\Setting;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Tag;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Tagging;
 use Janalis\Collaborate\Tests\Fixtures\RecordKey;
+use Janalis\Collaborate\Updates\SavedChanges;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -43,6 +44,7 @@ use Symfony\Component\HttpFoundation\RequestStack;
 #[UsesClass(TranslationMapper::class)]
 #[UsesClass(Topics::class)]
 #[UsesClass(RecordId::class)]
+#[CoversClass(SavedChanges::class)]
 final class ChangeCollectorMetadataTest extends TestCase
 {
     private static ?EntityManagerInterface $em = null;
@@ -171,7 +173,7 @@ final class ChangeCollectorMetadataTest extends TestCase
      */
     private function affected(array $updates, int $depth = 2): array
     {
-        return $this->strings($this->flush($updates, depth: $depth)->attributes->all('_collaborate_data_changed'));
+        return self::data($this->flush($updates, depth: $depth));
     }
 
     /**
@@ -190,29 +192,35 @@ final class ChangeCollectorMetadataTest extends TestCase
         array $changes = [],
         array $deletions = [],
     ): array {
-        return array_values(array_unique($this->strings($this->flush(
-            $updates,
-            $collections,
-            $ids,
-            $changes,
-            $deletions,
-        )->attributes->all('_collaborate_records_changed'))));
+        return SavedChanges::recordDrafts($this->flush($updates, $collections, $ids, $changes, $deletions));
     }
 
     /**
-     * @param array<array-key, mixed> $values
+     * The classes a flush recorded, each from the short name the pages carry: the fixtures' short names are distinct.
      *
      * @return list<string>
      */
-    private function strings(array $values): array
+    private static function data(Request $request): array
     {
-        $strings = [];
-        foreach (array_keys($values) as $key) {
-            self::assertIsString($values[$key]);
-            $strings[] = $values[$key];
+        $classes = [];
+        foreach ([
+            Folder::class,
+            Article::class,
+            ArticleTranslation::class,
+            Category::class,
+            Publication::class,
+            Section::class,
+            Setting::class,
+            Tag::class,
+            Tagging::class,
+        ] as $class) {
+            $classes[basename(str_replace('\\', '/', $class))] = $class;
         }
 
-        return $strings;
+        return array_map(
+            static fn(string $name): string => $classes[$name] ?? $name,
+            SavedChanges::dataNames($request),
+        );
     }
 
     /** @return list<string> */
@@ -272,13 +280,13 @@ final class ChangeCollectorMetadataTest extends TestCase
 
     public function testACollectionChangeConcernsItsOwnerAndItsElements(): void
     {
-        $affected = $this->flush([], [$this->collection(
+        $affected = self::data($this->flush([], [$this->collection(
             Article::class,
             'taggings',
             Tagging::class,
             new Article(),
             [],
-        )])->attributes->all('_collaborate_data_changed');
+        )]));
 
         self::assertContains(Article::class, $affected);
         self::assertContains(Tagging::class, $affected);
@@ -402,15 +410,15 @@ final class ChangeCollectorMetadataTest extends TestCase
         $requests->push($request);
         new ChangeCollector($this->access(), $requests)->onFlush($this->event(updates: [new Tag()]));
 
-        self::assertFalse($request->attributes->has('_collaborate_data_changed'));
-        self::assertFalse($request->attributes->has('_collaborate_records_changed'));
+        self::assertFalse(SavedChanges::hasData($request));
+        self::assertSame([], SavedChanges::recordDrafts($request));
     }
 
     public function testByDefaultAChangeReachesTwoAssociationsAwayAndAnUpdatedAtAloneIsNoise(): void
     {
         [$collector, $request] = $this->collector();
         $collector->onFlush($this->event(updates: [new Tag()]));
-        $affected = $request->attributes->all('_collaborate_data_changed');
+        $affected = self::data($request);
 
         self::assertContains(Article::class, $affected);
         // Three associations away: tag, tagging, article, category.
@@ -421,7 +429,7 @@ final class ChangeCollectorMetadataTest extends TestCase
         $tag = new Tag();
         $stamped[$tag] = ['updatedAt' => [null, 'now']];
         $collector->onFlush($this->event(updates: [$tag], changeSets: $stamped));
-        self::assertFalse($request->attributes->has('_collaborate_data_changed'));
+        self::assertFalse(SavedChanges::hasData($request));
     }
 
     public function testInsertedEntitiesAreCollected(): void
@@ -429,7 +437,7 @@ final class ChangeCollectorMetadataTest extends TestCase
         [$collector, $request] = $this->collector();
         $collector->onFlush($this->event(insertions: [new Setting()]));
 
-        self::assertContains(Setting::class, $request->attributes->all('_collaborate_data_changed'));
+        self::assertContains(Setting::class, self::data($request));
     }
 
     public function testEveryEntityOfAFlushIsCollectedAfterNoiseAndTranslations(): void
@@ -455,10 +463,7 @@ final class ChangeCollectorMetadataTest extends TestCase
 
         self::assertSame(
             [Tag::class, Article::class, Setting::class],
-            array_values(array_intersect(
-                [Tag::class, Article::class, Setting::class],
-                $request->attributes->all('_collaborate_data_changed'),
-            )),
+            array_values(array_intersect([Tag::class, Article::class, Setting::class], self::data($request))),
         );
         self::assertEqualsCanonicalizing(
             [
@@ -466,7 +471,7 @@ final class ChangeCollectorMetadataTest extends TestCase
                 ...$this->drafts('5', Article::class, Publication::class),
                 ...$this->drafts('9', Setting::class),
             ],
-            $request->attributes->all('_collaborate_records_changed'),
+            SavedChanges::recordDrafts($request),
         );
     }
 
@@ -510,7 +515,7 @@ final class ChangeCollectorMetadataTest extends TestCase
 
         self::assertSame(
             [...$this->drafts('1', Tag::class), ...$this->drafts('2', Tag::class)],
-            $request->attributes->all('_collaborate_records_changed'),
+            SavedChanges::recordDrafts($request),
         );
     }
 

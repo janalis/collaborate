@@ -131,7 +131,6 @@ final class FormDraftTest extends TestCase
         $scope = $this->draft()->scope($this->record(new: false), 'update', $request, self::FIELDS);
 
         $this->draft(save: $save)->begin($request, new TestUser(7), $scope, static fn(): array => []);
-        self::assertFalse($request->attributes->has('_collaborate_snapshot'));
     }
 
     public function testASignedSubmissionBeginsTheLockedSaveWithTheRecordsValues(): void
@@ -149,29 +148,17 @@ final class FormDraftTest extends TestCase
                 array $authorized,
                 array $current,
                 string $actor,
-            ) use ($scope): void {
+                ?\Closure $given,
+            ) use ($scope, &$snapshot): void {
                 self::assertSame($scope['id'], $authorized['id']);
                 self::assertSame(['title' => 'Saved'], $current);
                 self::assertSame(new SecurityCollaboratorProvider()->label(new TestUser(7)), $actor);
-                $request->attributes->set('_collaborate_save', true);
+                // The snapshot goes to the save, read once the admin has persisted the record.
+                self::assertSame($snapshot, $given);
             });
         $snapshot = static fn(): array => ['title' => 'Saved again'];
 
         $this->draft(save: $save)->begin($request, new TestUser(7), $scope, $snapshot);
-        self::assertSame($snapshot, $request->attributes->get('_collaborate_snapshot'));
-    }
-
-    public function testASaveTheJournalDidNotLockLeavesNoSnapshot(): void
-    {
-        $request = Request::create('/node/5/edit', 'POST');
-        $scope = $this->draft()->scope($this->record(new: false), 'update', $request, self::FIELDS);
-        $request->request->set(
-            '_collaborate_grant',
-            $this->draft()->configuration($scope, new TestUser(7), $request, '')['grant'] ?? '',
-        );
-
-        $this->draft()->begin($request, new TestUser(7), $scope, static fn(): array => []);
-        self::assertFalse($request->attributes->has('_collaborate_snapshot'));
     }
 
     public function testAGrantOfAnotherFormIsRefused(): void

@@ -13,6 +13,7 @@
 
 import { backgroundFetch, isAccepted, postJson } from '../http.js';
 import { hubFor } from '../hub.js';
+import { popoverMenu } from '../popover-menu.js';
 import { fetchFragment, formatDates, leaves, parseFragment, postChange, settingsOf } from './shared.js';
 
 // The page and the topics list read these from shared.js: importing bell.js starts the bells.
@@ -227,39 +228,12 @@ export function initBell(
     ask();
   }
 
-  // The keys go from one item of the menu to the next.
-  const items = () => [...menu.querySelectorAll('[role^="menuitem"]:not([hidden])')];
-
-  function keydown(event) {
-    const list = items();
-    if (!list.length) return;
-    const index = list.indexOf(document.activeElement);
-    const next = {
-      ArrowDown: (index + 1) % list.length,
-      ArrowUp: (index - 1 + list.length) % list.length,
-      Home: 0,
-      End: list.length - 1,
-    }[event.key];
-    if (next === undefined) return;
-    event.preventDefault();
-    list[next].focus();
-  }
-
-  // Opened under the bell, at its end; the first item takes the focus.
-  function toggled(event) {
-    const open = event.newState === 'open';
-    toggle.setAttribute('aria-expanded', String(open));
-    if (!open) {
-      if (owed) {
-        owed = false;
-        ask();
-      }
-      return;
+  // Once the menu closes, a list a notice asked for while it was open is asked for.
+  function closed() {
+    if (owed) {
+      owed = false;
+      ask();
     }
-    const box = toggle.getBoundingClientRect();
-    menu.style.top = `${box.bottom + 4}px`;
-    menu.style.left = `${Math.max(8, box.right - menu.offsetWidth)}px`;
-    items()[0]?.focus();
   }
 
   function click(event) {
@@ -446,8 +420,7 @@ export function initBell(
     leave?.();
     leave = null;
     menu.removeEventListener('click', click);
-    menu.removeEventListener('keydown', keydown);
-    menu.removeEventListener('toggle', toggled);
+    unbindMenu();
     document.removeEventListener('collaborate:notifications-changed', pageChanged);
     serviceWorker?.removeEventListener('message', pushed);
     window.removeEventListener('pagehide', hide);
@@ -455,8 +428,7 @@ export function initBell(
   }
 
   menu.addEventListener('click', click);
-  menu.addEventListener('keydown', keydown);
-  menu.addEventListener('toggle', toggled);
+  const unbindMenu = popoverMenu(toggle, menu, { closed });
   document.addEventListener('collaborate:notifications-changed', pageChanged);
   serviceWorker?.addEventListener('message', pushed);
   window.addEventListener('pagehide', hide);

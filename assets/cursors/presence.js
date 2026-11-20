@@ -1,5 +1,7 @@
 // @ts-check
 // Other editors on the page, drawn beside the header's own avatar. Fed by `cursors.js`.
+import { popoverMenu } from '../popover-menu.js';
+
 export const MAX_SHOWN = 5;
 // On a narrow window the menu's button shows one peer, the others counted (the stylesheet tells which is which).
 export const NARROW_SHOWN = 1;
@@ -120,24 +122,6 @@ export function createPresence(
     if (hidden.length) container.appendChild(counted(hidden, 'collaborate-presence__more'));
   }
 
-  // The menu's items: the peers, then the pointers' switch. The arrows go from one to the next.
-  const items = (menu) => [...menu.querySelectorAll('[role^="menuitem"]')];
-
-  function keydown(event) {
-    const menu = event.currentTarget;
-    const list = items(menu);
-    const index = list.indexOf(document.activeElement);
-    const next = {
-      ArrowDown: (index + 1) % list.length,
-      ArrowUp: (index - 1 + list.length) % list.length,
-      Home: 0,
-      End: list.length - 1,
-    }[event.key];
-    if (next === undefined) return;
-    event.preventDefault();
-    list[next].focus();
-  }
-
   /** The button, the menu, and what they do, made once: an open menu stays open as peers come and go. */
   function frame(container) {
     let toggle = container.querySelector(':scope > .collaborate-presence__toggle');
@@ -182,23 +166,12 @@ export function createPresence(
         if (menu.matches?.(':popover-open')) menu.hidePopover();
         toggle.focus();
       };
-      // Opened under its button, at its end; the first item takes the focus.
-      const opened = (event) => {
-        const open = event.newState === 'open';
-        toggle.setAttribute('aria-expanded', String(open));
-        if (!open) return;
-        const box = toggle.getBoundingClientRect();
-        menu.style.top = `${box.bottom + 4}px`;
-        menu.style.left = `${Math.max(8, box.right - menu.offsetWidth)}px`;
-        items(menu)[0]?.focus();
-      };
       container.addEventListener('click', click);
-      menu.addEventListener('keydown', keydown);
-      menu.addEventListener('toggle', opened);
+      // The menu's items: the peers, then the pointers' switch.
+      const unbind = popoverMenu(toggle, menu);
       bound.set(container, () => {
         container.removeEventListener('click', click);
-        menu.removeEventListener('keydown', keydown);
-        menu.removeEventListener('toggle', opened);
+        unbind();
       });
     }
     return { toggle, menu };

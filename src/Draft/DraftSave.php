@@ -13,8 +13,6 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
-use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
-use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
@@ -68,18 +66,18 @@ class DraftSave implements EventSubscriberInterface
         ) {
             // A form posted without the revision it was synchronized at: the client's Save sends it.
             $request->attributes->set('_collaborate_conflict', self::SYNC);
-            throw new ConflictHttpException(self::SYNC);
+            throw new DraftConflictException(self::SYNC);
         }
         try {
             $this->journal->lock($scope['id']);
-        } catch (ServiceUnavailableHttpException $busy) {
+        } catch (DraftBusyException $busy) {
             // The client flushed its edits before submitting; they are in the draft.
             $request->attributes->set('_collaborate_conflict', self::BUSY);
             throw $busy;
         }
         try {
             $this->journal->lockSave($scope['id'], (int) $generation, (int) $revision, $current, $scope['new']);
-        } catch (ConflictHttpException $conflict) {
+        } catch (DraftConflictException $conflict) {
             $this->journal->unlock($scope['id']);
             $request->attributes->set(
                 '_collaborate_conflict',

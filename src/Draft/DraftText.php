@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Janalis\Collaborate\Draft;
 
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
-
 /** The plain-input adapter has one paragraph; its offsets, like CKEditor's, are UTF-16 units. */
 final class DraftText
 {
@@ -24,13 +22,13 @@ final class DraftText
                 $removed = '$graveyard' === ($operation['position']['root'] ?? null);
                 $offset = $this->position($operation['position'] ?? null, $removed ? '$graveyard' : 'main', !$removed);
                 if ($removed && $offset > $graveyard) {
-                    throw new BadRequestHttpException('Invalid plain-text position.');
+                    throw new InvalidDraftEventException('Invalid plain-text position.');
                 }
                 if (!$removed) {
                     $this->boundary($text, $offset);
                 }
                 if (!\is_array($operation['nodes'] ?? null) || !array_is_list($operation['nodes'])) {
-                    throw new BadRequestHttpException('Invalid plain-text insertion.');
+                    throw new InvalidDraftEventException('Invalid plain-text insertion.');
                 }
                 $inserted = implode('', array_map(self::node(...), $operation['nodes']));
                 $units = $this->convert($inserted, 'UTF-16LE', 'UTF-8');
@@ -43,14 +41,14 @@ final class DraftText
                 $offset = $this->position($operation['sourcePosition'] ?? null, 'main', true);
                 $target = $this->position($operation['targetPosition'] ?? null, '$graveyard', false);
                 if (!\is_int($operation['howMany'] ?? null) || $operation['howMany'] < 1 || $target > $graveyard) {
-                    throw new BadRequestHttpException('Invalid plain-text removal.');
+                    throw new InvalidDraftEventException('Invalid plain-text removal.');
                 }
                 $this->boundary($text, $offset);
                 $this->boundary($text, $offset + $operation['howMany']);
                 $text = substr_replace($text, '', $offset * 2, $operation['howMany'] * 2);
                 $graveyard += $operation['howMany'];
             } else {
-                throw new BadRequestHttpException('Unsupported plain-text operation.');
+                throw new InvalidDraftEventException('Unsupported plain-text operation.');
             }
         }
 
@@ -124,12 +122,12 @@ final class DraftText
             || \count($value['path']) !== ($paragraph ? 2 : 1)
             || $paragraph && 0 !== $value['path'][0]
         ) {
-            throw new BadRequestHttpException('Invalid plain-text position.');
+            throw new InvalidDraftEventException('Invalid plain-text position.');
         }
 
         $index = $paragraph ? 1 : 0;
         if (!\is_int($value['path'][$index]) || $value['path'][$index] < 0) {
-            throw new BadRequestHttpException('Invalid plain-text offset.');
+            throw new InvalidDraftEventException('Invalid plain-text offset.');
         }
 
         return $value['path'][$index];
@@ -144,7 +142,7 @@ final class DraftText
             || [] !== array_diff(array_keys($node), ['data', 'attributes'])
             || [] !== ($node['attributes'] ?? [])
         ) {
-            throw new BadRequestHttpException('Plain text cannot contain model elements or attributes.');
+            throw new InvalidDraftEventException('Plain text cannot contain model elements or attributes.');
         }
 
         return $node['data'];
@@ -153,7 +151,7 @@ final class DraftText
     private function boundary(string $text, int $offset): void
     {
         if (($offset * 2) > \strlen($text) || $this->splits($text, $offset)) {
-            throw new BadRequestHttpException('Invalid UTF-16 text boundary.');
+            throw new InvalidDraftEventException('Invalid UTF-16 text boundary.');
         }
     }
 

@@ -6,7 +6,6 @@ namespace Janalis\Collaborate\Draft;
 
 use Doctrine\DBAL\Connection;
 use Janalis\Collaborate\Draft\Dialect\JournalDialect;
-use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
 
 /**
  * The named locks of the drafts {@see DraftJournal} serializes its writers by, a save included: re-entrant within a
@@ -33,11 +32,11 @@ final class DraftLocks
         private readonly int $seconds,
     ) {}
 
-    /** @throws ServiceUnavailableHttpException past the wait: another process holds it */
+    /** @throws DraftBusyException past the wait: another process holds it */
     public function lock(string $id, ?int $seconds = null): void
     {
         if (!($this->dialect)()->lock($this->connection, $this->name($id), $seconds ?? $this->seconds)) {
-            throw new ServiceUnavailableHttpException(1, 'Collaborate draft is busy.');
+            throw new DraftBusyException();
         }
         $this->held[$id] = ($this->held[$id] ?? 0) + 1;
     }
@@ -71,7 +70,7 @@ final class DraftLocks
         try {
             $this->lock($id);
             $this->unlock($id);
-        } catch (ServiceUnavailableHttpException) {
+        } catch (DraftBusyException) {
             // Past the wait: the draft as it is.
         }
     }

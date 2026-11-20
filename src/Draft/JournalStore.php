@@ -7,7 +7,6 @@ namespace Janalis\Collaborate\Draft;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Janalis\Collaborate\Draft\Dialect\JournalDialect;
-use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 /**
  * The rows of the drafts {@see DraftJournal} keeps: one per draft, one per field state, one per batch. Every query of
@@ -85,7 +84,7 @@ final class JournalStore
             [$id],
         );
         if (false === $row) {
-            throw new ConflictHttpException('Collaborate draft does not exist. Join it first.');
+            throw new DraftConflictException('Collaborate draft does not exist. Join it first.');
         }
         // Drivers return the string columns as strings, the integer ones as integers or numeric strings.
         /** @var array{generation: int|string, revision: int|string, saved_revision: int|string, bytes: int|string, record_id: string|null, saved_by: int|string|null, saved_by_label: string|null, updated_at: string} $row */

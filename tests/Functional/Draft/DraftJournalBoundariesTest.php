@@ -9,9 +9,11 @@ use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Exception\LockWaitTimeoutException;
 use Janalis\Collaborate\Draft\Dialect\JournalDialect;
 use Janalis\Collaborate\Draft\Dialect\MySqlDialect;
+use Janalis\Collaborate\Draft\DraftBusyException;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftLocks;
 use Janalis\Collaborate\Draft\DraftText;
+use Janalis\Collaborate\Draft\DraftTooLargeException;
 use Janalis\Collaborate\Draft\DraftValues;
 use Janalis\Collaborate\Draft\DraftView;
 use Janalis\Collaborate\Draft\EventValidator;
@@ -45,6 +47,8 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 #[CoversClass(DraftLocks::class)]
 #[CoversClass(DraftView::class)]
 #[CoversClass(JournalStore::class)]
+#[CoversClass(DraftBusyException::class)]
+#[CoversClass(DraftTooLargeException::class)]
 #[UsesClass(FieldNames::class)]
 final class DraftJournalBoundariesTest extends TestCase
 {

@@ -26,10 +26,12 @@ use Janalis\Collaborate\Doctrine\RecordIdentifier;
 use Janalis\Collaborate\Draft\Dialect\JournalDialect;
 use Janalis\Collaborate\Draft\Dialect\MySqlDialect;
 use Janalis\Collaborate\Draft\DraftAccess;
+use Janalis\Collaborate\Draft\DraftBusyException;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftLocks;
 use Janalis\Collaborate\Draft\DraftSave;
 use Janalis\Collaborate\Draft\DraftText;
+use Janalis\Collaborate\Draft\DraftTooLargeException;
 use Janalis\Collaborate\Draft\DraftValues;
 use Janalis\Collaborate\Draft\DraftView;
 use Janalis\Collaborate\Draft\EventValidator;
@@ -126,6 +128,8 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(DraftLocks::class)]
 #[CoversClass(DraftView::class)]
 #[CoversClass(JournalStore::class)]
+#[CoversClass(DraftBusyException::class)]
+#[CoversClass(DraftTooLargeException::class)]
 #[UsesClass(FieldNames::class)]
 final class EasyAdminApplicationTest extends CollaborationTestCase
 {

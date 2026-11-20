@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Janalis\Collaborate\Draft;
 
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
-
 /**
  * What an appended event brings into a field's state, checked before any of it is applied: the journal
  * stores operations, values and labels as the page sent them, and replays them to every peer.
@@ -35,7 +33,7 @@ final class EventValidator
             || \count($operations) > 2048
             || !array_is_list($operations)
         ) {
-            throw new BadRequestHttpException('Invalid Collaborate operations.');
+            throw new InvalidDraftEventException('Invalid Collaborate operations.');
         }
         if (!array_all(
             $operations,
@@ -45,7 +43,7 @@ final class EventValidator
                 && \is_string($operation['__className'] ?? null)
             ),
         )) {
-            throw new BadRequestHttpException('Invalid Collaborate operation version.');
+            throw new InvalidDraftEventException('Invalid Collaborate operation version.');
         }
         /** @var list<array<string, mixed>> $operations */
 
@@ -64,13 +62,13 @@ final class EventValidator
             !\is_scalar($event['value']) && null !== $event['value'] && !\is_array($event['value'])
             || !$this->shallow($event['value'])
         ) {
-            throw new BadRequestHttpException('Invalid Collaborate value.');
+            throw new InvalidDraftEventException('Invalid Collaborate value.');
         }
         $payload = ['value' => $event['value']];
         // A choice names what its value shows: a peer's autocomplete holds no option for it.
         if (\array_key_exists('labels', $event)) {
             if ('value' !== $type || !$this->labels($event['labels'], $event['value'])) {
-                throw new BadRequestHttpException('Invalid Collaborate labels.');
+                throw new InvalidDraftEventException('Invalid Collaborate labels.');
             }
             $payload['labels'] = $event['labels'];
         }
@@ -80,7 +78,7 @@ final class EventValidator
                 || !\is_bool($event['value']['alive'] ?? null)
                 || !\is_int($event['value']['order'] ?? null) && !\is_float($event['value']['order'] ?? null)
             ) {
-                throw new BadRequestHttpException('Invalid collection membership.');
+                throw new InvalidDraftEventException('Invalid collection membership.');
             }
         }
 

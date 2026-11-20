@@ -5,10 +5,6 @@ declare(strict_types=1);
 namespace Janalis\Collaborate\Draft;
 
 use Doctrine\DBAL\Connection;
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
-use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
-use Symfony\Component\HttpKernel\Exception\HttpException;
-use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
 use Symfony\Contracts\Service\ResetInterface;
 
 /**
@@ -157,7 +153,7 @@ class DraftJournal implements ResetInterface
                 $definition = $definitions->definition($name);
                 if (null !== $definition && ($state['schema'] ?? null) !== ($definition['schema'] ?? null)) {
                     if (DraftView::unsaved($state)) {
-                        throw new ConflictHttpException(
+                        throw new DraftConflictException(
                             'Collaborate schema changed. Save or discard with a compatible editor before upgrading this draft.',
                         );
                     }
@@ -250,15 +246,15 @@ class DraftJournal implements ResetInterface
         // Limits count stored UTF-8 bytes, not \uXXXX escapes.
         $size = \strlen(JournalStore::encode($event));
         if ($size > $this->maxUpdateBytes) {
-            throw new HttpException(413, 'Collaborate update is too large.');
+            throw new DraftTooLargeException('Collaborate update is too large.');
         }
         $field = self::stringOrNull($event['field'] ?? null);
         if (null === $field) {
-            throw new BadRequestHttpException('Invalid Collaborate event.');
+            throw new InvalidDraftEventException('Invalid Collaborate event.');
         }
         $definition = FieldDefinitions::prototype($field) ? null : new FieldDefinitions($allowed)->definition($field);
         if (null === $definition) {
-            throw new BadRequestHttpException(\sprintf('Collaborate field "%s" is not in this form.', $field));
+            throw new InvalidDraftEventException(\sprintf('Collaborate field "%s" is not in this form.', $field));
         }
         if (
             !\is_string($event['id'] ?? null)
@@ -267,7 +263,7 @@ class DraftJournal implements ResetInterface
             || !\is_int($event['seen'] ?? null)
             || !preg_match('/^[a-zA-Z0-9-]{16,64}$/D', $event['id'])
         ) {
-            throw new BadRequestHttpException('Invalid Collaborate event.');
+            throw new InvalidDraftEventException('Invalid Collaborate event.');
         }
 
         return $this->exclusive($id, function () use ($id, $event, $field, $size, $userId, $label, $definition): array {
@@ -279,47 +275,47 @@ class DraftJournal implements ResetInterface
             $accepted = $this->store->batch($id, $event['id']);
             if (null !== $accepted) {
                 if ($accepted['userId'] !== $userId || $accepted['field'] !== $field) {
-                    throw new ConflictHttpException('Collaborate batch identifier is already used.');
+                    throw new DraftConflictException('Collaborate batch identifier is already used.');
                 }
 
                 return $accepted;
             }
             if (null !== $draft['recordId']) {
-                throw new ConflictHttpException(
+                throw new DraftConflictException(
                     'This new-record draft is already saved. Continue on the saved record.',
                 );
             }
             if ($event['generation'] !== $draft['generation']) {
-                throw new ConflictHttpException('Collaborate draft was discarded.');
+                throw new DraftConflictException('Collaborate draft was discarded.');
             }
             if (DraftView::removed(DraftView::removedEntries($draft), $definition['formName'] ?? $field)) {
-                throw new ConflictHttpException('The collection entry was removed.');
+                throw new DraftConflictException('The collection entry was removed.');
             }
             if (!isset($draft['fields'][$field])) {
                 // Only an entry added to a collection brings a new field here: Join stored every other one.
                 if ($this->store->fieldCount($id) >= $this->maxFields) {
-                    throw new HttpException(413, 'Collaborate draft is full. Save or discard before continuing.');
+                    throw new DraftTooLargeException('Collaborate draft is full. Save or discard before continuing.');
                 }
                 $draft['fields'][$field] = $this->fresh($definition);
             }
             $state = &$draft['fields'][$field];
             // The page edited the field as it stood before a Discard it has not replayed yet.
             if (($state['discardedAt'] ?? 0) > $event['seen']) {
-                throw new ConflictHttpException('Collaborate field was discarded.');
+                throw new DraftConflictException('Collaborate field was discarded.');
             }
             if (($state['schema'] ?? null) !== ($definition['schema'] ?? null)) {
-                throw new ConflictHttpException('Collaborate schema changed.');
+                throw new DraftConflictException('Collaborate schema changed.');
             }
             $version = $state['version'];
             if (null === $version) {
                 $version = $event['version'];
                 if ($version < 0 || $version > 100_000) {
-                    throw new BadRequestHttpException('Invalid initial model version.');
+                    throw new InvalidDraftEventException('Invalid initial model version.');
                 }
                 $state['initialVersion'] = $version;
             }
             if ($event['version'] !== $version) {
-                throw new ConflictHttpException('Collaborate model revision changed.');
+                throw new DraftConflictException('Collaborate model revision changed.');
             }
             if ('operations' === ($event['kind'] ?? null) && \in_array($state['type'], ['text', 'rich'], true)) {
                 $operations = $this->validator->operations($event['operations'] ?? null, $version);
@@ -349,7 +345,7 @@ class DraftJournal implements ResetInterface
                 $state['value'] = $payload['value'];
                 $state['version'] = $version + 1;
             } else {
-                throw new BadRequestHttpException('Unknown Collaborate event kind.');
+                throw new InvalidDraftEventException('Unknown Collaborate event kind.');
             }
             $clean = $draft['savedRevision'] === $draft['revision'];
             /** @var Batch $accepted */
@@ -366,7 +362,7 @@ class DraftJournal implements ResetInterface
             // The journal grows by the batch it stores, with its revision and author: not by what the page sent.
             $stored = JournalStore::encode($accepted);
             if (($draft['bytes'] + \strlen($stored)) > $this->maxDraftBytes) {
-                throw new HttpException(413, 'Collaborate draft is full. Save or discard before continuing.');
+                throw new DraftTooLargeException('Collaborate draft is full. Save or discard before continuing.');
             }
             // Source mode is shared UI state, not a persisted form value: switching it leaves the draft saved.
             if (FieldNames::isMode($field)) {
@@ -393,11 +389,11 @@ class DraftJournal implements ResetInterface
             throw new RecordAlreadyCreatedException();
         }
         if ($generation !== $draft['generation'] || $revision !== $draft['revision']) {
-            throw new ConflictHttpException('The shared draft changed. Synchronize before saving.');
+            throw new DraftConflictException('The shared draft changed. Synchronize before saving.');
         }
         foreach (array_keys($current) as $name) {
             if (isset($draft['fields'][$name]) && DraftValues::differs($draft['fields'][$name], $current[$name])) {
-                throw new ConflictHttpException(
+                throw new DraftConflictException(
                     'The saved record changed outside this draft. Reconcile before saving.',
                 );
             }
@@ -523,7 +519,7 @@ class DraftJournal implements ResetInterface
         ): array {
             $draft = $this->store->read($id, true);
             if ($generation !== $draft['generation'] || $revision !== $draft['revision']) {
-                throw new ConflictHttpException('The shared draft changed. Review it before reconciling.');
+                throw new DraftConflictException('The shared draft changed. Review it before reconciling.');
             }
             $definitions = new FieldDefinitions($allowed);
             $conflicts = DraftView::conflicts(
@@ -616,7 +612,7 @@ class DraftJournal implements ResetInterface
         return $this->exclusive($id, function () use ($id, $generation, $revision, $allowed, $userId, $label): array {
             $draft = $this->store->read($id, true);
             if ($generation !== $draft['generation'] || $revision !== $draft['revision']) {
-                throw new ConflictHttpException('The shared draft changed. Synchronize before discarding.');
+                throw new DraftConflictException('The shared draft changed. Synchronize before discarding.');
             }
             $definitions = new FieldDefinitions($allowed);
             // One entry per field, not per event: a long journal holds thousands of batches. A field kept
@@ -674,7 +670,7 @@ class DraftJournal implements ResetInterface
         foreach ($this->store->stale($clean, $unsaved) as $id) {
             try {
                 $this->lock($id, 0);
-            } catch (ServiceUnavailableHttpException) {
+            } catch (DraftBusyException) {
                 continue;
             }
             try {
@@ -689,7 +685,7 @@ class DraftJournal implements ResetInterface
 
     /** Serializes the writers of one draft, a save included ({@see DraftLocks}).
      *
-     * @throws ServiceUnavailableHttpException past the wait: another process holds it
+     * @throws DraftBusyException past the wait: another process holds it
      */
     public function lock(string $id, ?int $seconds = null): void
     {

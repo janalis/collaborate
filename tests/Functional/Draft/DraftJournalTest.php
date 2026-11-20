@@ -15,15 +15,20 @@ use Janalis\Collaborate\Doctrine\RecordIdentifier;
 use Janalis\Collaborate\Draft\Dialect\JournalDialect;
 use Janalis\Collaborate\Draft\Dialect\MySqlDialect;
 use Janalis\Collaborate\Draft\DraftAccess;
+use Janalis\Collaborate\Draft\DraftBusyException;
+use Janalis\Collaborate\Draft\DraftConflictException;
+use Janalis\Collaborate\Draft\DraftExceptionInterface;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftLocks;
 use Janalis\Collaborate\Draft\DraftSave;
 use Janalis\Collaborate\Draft\DraftText;
+use Janalis\Collaborate\Draft\DraftTooLargeException;
 use Janalis\Collaborate\Draft\DraftValues;
 use Janalis\Collaborate\Draft\DraftView;
 use Janalis\Collaborate\Draft\EventValidator;
 use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\Draft\FieldNames;
+use Janalis\Collaborate\Draft\InvalidDraftEventException;
 use Janalis\Collaborate\Draft\JournalStore;
 use Janalis\Collaborate\Draft\RecordAlreadyCreatedException;
 use Janalis\Collaborate\Draft\RecordId;
@@ -65,6 +70,10 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 /** @phpstan-import-type SignedScope from DraftAccess */
 #[CoversClass(DraftJournal::class)]
 #[CoversClass(RecordAlreadyCreatedException::class)]
+#[CoversClass(DraftBusyException::class)]
+#[CoversClass(DraftConflictException::class)]
+#[CoversClass(DraftTooLargeException::class)]
+#[CoversClass(InvalidDraftEventException::class)]
 #[CoversClass(DraftValues::class)]
 #[CoversClass(EventValidator::class)]
 #[CoversClass(FieldDefinitions::class)]
@@ -250,6 +259,8 @@ final class DraftJournalTest extends TestCase
             $journal->append('record', $this->fields, $this->event(['padding' => str_repeat('x', 4096)]), 1, 'Alice');
             self::fail('An update over the configured limit was accepted.');
         } catch (HttpException $error) {
+            // A host that catches the HTTP exception still catches the journal's own.
+            self::assertInstanceOf(DraftTooLargeException::class, $error);
             self::assertSame(413, $error->getStatusCode());
         }
     }
@@ -417,7 +428,7 @@ final class DraftJournalTest extends TestCase
             ['places[@b]', 'places[__collection__]'],
             array_keys($this->journal->join('order', $removed, microtime(true) + 1)['conflicts']),
         );
-        $this->expectException(ConflictHttpException::class);
+        $this->expectException(DraftConflictException::class);
         $this->journal->lockSave('order', 1, 0, ['places[__collection__]' => ['a']]);
     }
 
@@ -1305,7 +1316,7 @@ final class DraftJournalTest extends TestCase
         $this->journal->saved('collection', ['items[@n123]' => ['alive' => true, 'order' => 1, 'recordId' => '42']]);
         self::assertSame(['items' => [42 => 'n123']], $this->journal->aliases('collection'));
         self::assertSame([], $this->journal->aliases('missing'));
-        $this->expectException(BadRequestHttpException::class);
+        $this->expectException(InvalidDraftEventException::class);
         $this->journal->append('collection', $fields, $this->event(['field' => 'items[n123][password]']), 1, 'Alice');
     }
 
@@ -1851,6 +1862,8 @@ final class DraftJournalTest extends TestCase
             $guard->begin($request, $this->scope(), ['body' => 'abcd'], 'Alice');
             self::fail('A save entered while another save held the draft.');
         } catch (ServiceUnavailableHttpException $busy) {
+            self::assertInstanceOf(DraftBusyException::class, $busy);
+            self::assertInstanceOf(DraftExceptionInterface::class, $busy);
             $event = new ExceptionEvent(
                 $this->createStub(KernelInterface::class),
                 $request,

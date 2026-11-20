@@ -11,6 +11,12 @@ versions follow [Semantic Versioning](https://semver.org/).
   entries' memberships, an entry added later and a rich-text field's source
   mode, which the form extension, the journal and the Drupal module now all
   build through it instead of spelling them each.
+- `Draft\DraftExceptionInterface` and its exceptions: the journal and
+  `DraftSave` refuse with `DraftConflictException` (409),
+  `DraftBusyException` (503), `DraftTooLargeException` (413) and
+  `InvalidDraftEventException` (400). Each extends the Symfony HTTP exception
+  thrown before, so code catching `ConflictHttpException` and the like keeps
+  working; `RecordAlreadyCreatedException` is now a `DraftConflictException`.
 - `Notification\Preferences::subscribers()`: which of several users are
   subscribed to a topic, a thousand per query.
 

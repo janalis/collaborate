@@ -6,6 +6,8 @@ namespace Drupal\collaborate\Storage;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Schema\AbstractAsset;
+use Doctrine\DBAL\Schema\Name\OptionallyQualifiedName;
+use Doctrine\DBAL\Schema\NamedObject;
 use Doctrine\ORM\Tools\SchemaTool;
 use Symfony\Component\Cache\Adapter\DoctrineDbalAdapter;
 
@@ -52,7 +54,7 @@ final readonly class Schema
     /** Whether an asset of the database is one of the bundle's tables, whatever the prefix: Drupal's are not. */
     public static function mapped(mixed $asset): bool
     {
-        $name = $asset instanceof AbstractAsset ? $asset->getName() : $asset;
+        $name = $asset instanceof AbstractAsset ? self::assetName($asset) : $asset;
         $name = \is_string($name) ? strtolower(trim($name, '`"')) : '';
 
         return (
@@ -64,6 +66,25 @@ final readonly class Schema
                 ),
             )
         );
+    }
+
+    /**
+     * An asset's name as DBAL's introspection hands it to the filter, `qualifier.name`: through its object name since
+     * DBAL 4.4, its deprecated string before, as Doctrine ORM's schema tool reads it.
+     */
+    private static function assetName(AbstractAsset $asset): string
+    {
+        if (!$asset instanceof NamedObject) {
+            // @infection-ignore-all: DBAL before 4.4 alone, which the test site does not install.
+            return $asset->getName();
+        }
+        $name = $asset->getObjectName();
+        if (!$name instanceof OptionallyQualifiedName) {
+            return $name->toString();
+        }
+        $qualifier = $name->getQualifier();
+
+        return (null === $qualifier ? '' : $qualifier->getValue() . '.') . $name->getUnqualifiedName()->getValue();
     }
 
     public function uninstall(): void

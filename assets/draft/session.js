@@ -9,7 +9,7 @@ import { initializeText, initializeValue, valueAdapter } from './fields.js';
 
 const sessions = new WeakMap();
 
-/** A request the server answered with an error: its status tells a refusal from a busy server. */
+/** What a grant signs, its first part: the draft, the user and the field schema, as base64 JSON. */
 const grantScope = (grant) =>
   JSON.parse(
     new TextDecoder().decode(Uint8Array.from(atob(grant.split('.')[0]), (character) => character.charCodeAt(0)))

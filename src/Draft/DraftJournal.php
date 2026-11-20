@@ -22,6 +22,18 @@ class DraftJournal implements ResetInterface
     /** The conflict a second creation answers, also the key of the warning its form shows. */
     public const string ALREADY_CREATED = 'This draft has already created its record. Open the saved record instead.';
 
+    /** The `collaborate.drafts` defaults the journal reads, which the configuration tree declares from here. */
+    public const array DEFAULTS = [
+        'max_update_bytes' => 262_144,
+        'max_draft_bytes' => 10_485_760,
+        'max_fields' => 10_000,
+        'max_value_depth' => 8,
+        'label_length' => 255,
+        'compact' => ['bytes' => 1_048_576, 'fields' => 5_000, 'idle' => 60],
+        'locks' => ['save' => 10, 'writer' => 1],
+        'purge' => ['clean_days' => 7, 'unsaved_days' => 90],
+    ];
+
     /** The largest update, in stored UTF-8 bytes. */
     private int $maxUpdateBytes;
 
@@ -73,18 +85,22 @@ class DraftJournal implements ResetInterface
         array $limits = [],
         private readonly ?int $firstGeneration = null,
     ) {
-        $this->maxUpdateBytes = $limits['max_update_bytes'] ?? 262_144;
-        $this->maxDraftBytes = $limits['max_draft_bytes'] ?? 10_485_760;
-        $this->maxFields = $limits['max_fields'] ?? 10_000;
-        $this->labelLength = $limits['label_length'] ?? 255;
-        $this->validator = new EventValidator($limits['max_value_depth'] ?? 8, $this->labelLength);
-        $this->compactBytes = $limits['compact']['bytes'] ?? 1_048_576;
-        $this->compactFields = $limits['compact']['fields'] ?? 5_000;
-        $this->compactIdle = $limits['compact']['idle'] ?? 60;
-        $this->lockSeconds = $limits['locks']['save'] ?? 10;
-        $this->writerLockSeconds = $limits['locks']['writer'] ?? 1;
-        $this->cleanDays = $limits['purge']['clean_days'] ?? 7;
-        $this->unsavedDays = $limits['purge']['unsaved_days'] ?? 90;
+        $defaults = self::DEFAULTS;
+        $this->maxUpdateBytes = $limits['max_update_bytes'] ?? $defaults['max_update_bytes'];
+        $this->maxDraftBytes = $limits['max_draft_bytes'] ?? $defaults['max_draft_bytes'];
+        $this->maxFields = $limits['max_fields'] ?? $defaults['max_fields'];
+        $this->labelLength = $limits['label_length'] ?? $defaults['label_length'];
+        $this->validator = new EventValidator(
+            $limits['max_value_depth'] ?? $defaults['max_value_depth'],
+            $this->labelLength,
+        );
+        $this->compactBytes = $limits['compact']['bytes'] ?? $defaults['compact']['bytes'];
+        $this->compactFields = $limits['compact']['fields'] ?? $defaults['compact']['fields'];
+        $this->compactIdle = $limits['compact']['idle'] ?? $defaults['compact']['idle'];
+        $this->lockSeconds = $limits['locks']['save'] ?? $defaults['locks']['save'];
+        $this->writerLockSeconds = $limits['locks']['writer'] ?? $defaults['locks']['writer'];
+        $this->cleanDays = $limits['purge']['clean_days'] ?? $defaults['purge']['clean_days'];
+        $this->unsavedDays = $limits['purge']['unsaved_days'] ?? $defaults['purge']['unsaved_days'];
         $this->store = new JournalStore($connection);
         $this->locks = new DraftLocks($connection, $this->store->dialect(...), $this->lockSeconds);
     }

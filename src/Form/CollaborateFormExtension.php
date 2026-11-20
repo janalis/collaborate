@@ -75,6 +75,9 @@ final class CollaborateFormExtension extends AbstractTypeExtension
     /** @var list<string> */
     private array $sensitive;
 
+    /** The default `collaborate.drafts.position_field`: the child that marks an ordered collection entry. */
+    public const string POSITION_FIELD = 'position';
+
     /**
      * @param FormDraft $drafts the draft of the root form, whatever builds it: its scope, its configuration, its locked save
      * @param Options $options the `collaborate.drafts` configuration
@@ -101,7 +104,7 @@ final class CollaborateFormExtension extends AbstractTypeExtension
         $this->richText = $options['rich_text']['block_prefixes'] ?? [];
         $this->schemaOption = $options['rich_text']['schema_option'] ?? null;
         $this->editorVersion = $options['rich_text']['ckeditor_version'] ?? null;
-        $this->positionField = $options['position_field'] ?? 'position';
+        $this->positionField = $options['position_field'] ?? self::POSITION_FIELD;
         $this->sensitive = array_map(static fn(string $name): string => strtolower(str_replace(
             ['_', '-'],
             '',

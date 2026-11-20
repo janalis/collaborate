@@ -27,6 +27,14 @@ final class ChangeCollector
 
     private string $pathPattern;
 
+    /** The `collaborate.updates` defaults the collector reads, which the configuration tree declares from here. */
+    public const array DEFAULTS = [
+        'path_pattern' => '#^/admin(?:/|$)#',
+        'routes' => [],
+        'association_depth' => 2,
+        'ignored_fields' => ['updatedAt'],
+    ];
+
     /** @var list<string> */
     private array $routes;
 
@@ -49,10 +57,10 @@ final class ChangeCollector
     ) {
         // Saved views need the changed classes, open drafts the changed records: collect for either.
         $this->enabled = true === ($options['enabled'] ?? false) || $drafts;
-        $this->pathPattern = $options['path_pattern'] ?? '#^/admin(?:/|$)#';
-        $this->routes = $options['routes'] ?? [];
-        $this->associationDepth = $options['association_depth'] ?? 2;
-        $this->ignoredFields = $options['ignored_fields'] ?? ['updatedAt'];
+        $this->pathPattern = $options['path_pattern'] ?? self::DEFAULTS['path_pattern'];
+        $this->routes = $options['routes'] ?? self::DEFAULTS['routes'];
+        $this->associationDepth = $options['association_depth'] ?? self::DEFAULTS['association_depth'];
+        $this->ignoredFields = $options['ignored_fields'] ?? self::DEFAULTS['ignored_fields'];
     }
 
     public function onFlush(OnFlushEventArgs $event): void

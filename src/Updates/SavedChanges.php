@@ -77,9 +77,10 @@ final class SavedChanges
         $strings = [];
         // @mago-expect analysis:mixed-assignment an attribute holds anything: the next line narrows it
         foreach ($values as $value) {
-            if (\is_string($value)) {
-                $strings[$value] = $value;
+            if (!\is_string($value)) {
+                continue;
             }
+            $strings[$value] = $value;
         }
 
         return array_values($strings);

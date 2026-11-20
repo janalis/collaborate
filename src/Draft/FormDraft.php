@@ -88,6 +88,9 @@ final readonly class FormDraft
     /** @var Client */
     private array $client;
 
+    /** The `collaborate.drafts.replay` defaults, seconds, which the configuration tree declares from here. */
+    public const array REPLAY = ['connected' => 30, 'disconnected' => 5, 'join_retry' => 12];
+
     /** @param Options $options the `collaborate.drafts` configuration */
     public function __construct(
         private DraftAccess $access,
@@ -100,12 +103,12 @@ final readonly class FormDraft
         array $options = [],
         private ClockInterface $clock = new NativeClock(),
     ) {
-        $this->maxUpdateBytes = $options['max_update_bytes'] ?? 262_144;
+        $this->maxUpdateBytes = $options['max_update_bytes'] ?? DraftJournal::DEFAULTS['max_update_bytes'];
         $this->client = [
-            'replayConnected' => ($options['replay']['connected'] ?? 30) * 1000,
-            'replayDisconnected' => ($options['replay']['disconnected'] ?? 5) * 1000,
-            'joinRetry' => ($options['replay']['join_retry'] ?? 12) * 1000,
-            'labelLength' => $options['label_length'] ?? 255,
+            'replayConnected' => ($options['replay']['connected'] ?? self::REPLAY['connected']) * 1000,
+            'replayDisconnected' => ($options['replay']['disconnected'] ?? self::REPLAY['disconnected']) * 1000,
+            'joinRetry' => ($options['replay']['join_retry'] ?? self::REPLAY['join_retry']) * 1000,
+            'labelLength' => $options['label_length'] ?? DraftJournal::DEFAULTS['label_length'],
         ];
     }
 

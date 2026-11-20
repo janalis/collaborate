@@ -22,8 +22,8 @@ use Symfony\Component\Security\Csrf\CsrfToken;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 
 /**
- * The checks every hub request passes: the role, a bounded JSON body, a remembered session, the CSRF
- * token, the page grant of the signed-in user, the place it names, and the rate limit.
+ * The checks every hub request passes, in order: the role, a bounded body, a remembered session, the CSRF
+ * token, a JSON body, the page grant of the signed-in user, the place it names, and the rate limit.
  *
  * @internal
  */
@@ -57,13 +57,14 @@ final readonly class HubGuard
         if (\strlen($request->getContent()) > $maxBytes) {
             throw new BadRequestHttpException('Hub request is too large.');
         }
-        $data = $request->toArray();
         if (!$this->security->isGranted('IS_AUTHENTICATED_REMEMBERED')) {
             throw new AccessDeniedException('Collaboration requires an authenticated session.');
         }
+        // The token before the body: a forged request costs no JSON decoding.
         if (!$this->csrf->isTokenValid(new CsrfToken(self::CSRF_TOKEN_ID, $request->headers->get('X-CSRF-Token')))) {
             throw new AccessDeniedException('Invalid hub CSRF token.');
         }
+        $data = $request->toArray();
         $page = $this->pages->verify(
             \is_string($data['grant'] ?? null) ? $data['grant'] : '',
             $userId,

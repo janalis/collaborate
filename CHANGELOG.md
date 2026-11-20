@@ -22,6 +22,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The draft endpoint and the hub check the CSRF token, and the draft
+  endpoint its rate limit, before reading the JSON body: a forged request
+  with a malformed body is refused with 403 instead of 400.
 - An append reads its own field and the members of the entries it sits in,
   not every collection member of the draft: about 20 times faster on a
   draft of 2000 entries (7 ms to 0.35 ms, `tests/bench/journal-append.php`),

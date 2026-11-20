@@ -57,8 +57,7 @@ final readonly class DraftController
         if (\strlen($request->getContent()) > $this->access->maxRequestBytes) {
             throw new BadRequestHttpException('Collaborate request is too large.');
         }
-        /** @var array<string, mixed> $data */
-        $data = $request->toArray();
+        // The token and the rate limit before the body: a forged or flooding request costs no JSON decoding.
         $token = $request->headers->get('X-CSRF-Token');
         if (!\is_string($token) || !$this->csrf->isTokenValid(new CsrfToken('collaborate-draft', $token))) {
             throw new AccessDeniedException('Invalid Collaborate CSRF token.');
@@ -69,6 +68,8 @@ final readonly class DraftController
                 'Cache-Control' => 'no-store',
             ]);
         }
+        /** @var array<string, mixed> $data */
+        $data = $request->toArray();
         $scope = $this->access->verify(
             \is_string($data['grant'] ?? null) ? $data['grant'] : '',
             $user,

@@ -24,6 +24,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\HttpFoundation\Exception\JsonException;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Session\Session;
@@ -98,9 +99,16 @@ final class DraftControllerTest extends TestCase
         ], new InMemoryStorage());
     }
 
-    /** @param array<string, mixed> $body */
-    private function handle(string $action, array $body = [], bool $terminate = true, ?string $csrf = 'csrf'): Response
-    {
+    /** @param array<string, mixed> $body
+     * @param string|null $content the raw body instead of `$body`'s JSON
+     */
+    private function handle(
+        string $action,
+        array $body = [],
+        bool $terminate = true,
+        ?string $csrf = 'csrf',
+        ?string $content = null,
+    ): Response {
         $publisher = new HubPublisher(new MercureTransport($this->hub), $this->logger);
         $security = $this->createStub(CurrentUserInterface::class);
         $security->method('getUser')->willReturnCallback(fn(): ?UserInterface => $this->signedIn);
@@ -128,7 +136,9 @@ final class DraftControllerTest extends TestCase
             $this->limiter,
             $this->logger,
         );
-        $request = new Request(content: json_encode($body + ['grant' => $this->grant], \JSON_THROW_ON_ERROR));
+        $request = new Request(
+            content: $content ?? json_encode($body + ['grant' => $this->grant], \JSON_THROW_ON_ERROR),
+        );
         if (null !== $csrf) {
             $request->headers->set('X-CSRF-Token', $csrf);
         }
@@ -438,6 +448,15 @@ final class DraftControllerTest extends TestCase
                 self::assertSame('Invalid Collaborate CSRF token.', $denied->getMessage());
             }
         }
+        // A forged request is refused before its body is read; a page's own malformed one, after.
+        try {
+            $this->handle('join', csrf: null, content: 'not json');
+            self::fail('Read the body of a request without a CSRF token.');
+        } catch (AccessDeniedException $denied) {
+            self::assertSame('Invalid Collaborate CSRF token.', $denied->getMessage());
+        }
+        $this->expectException(JsonException::class);
+        $this->handle('join', content: 'not json');
     }
 
     /** @return iterable<string, array{?UserInterface, bool}> */

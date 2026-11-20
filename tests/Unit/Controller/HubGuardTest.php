@@ -130,6 +130,14 @@ final class HubGuardTest extends HubTestCase
         }
         $request = $this->request('/cursors/events');
         $request->initialize(content: 'not json');
+        try {
+            // A forged request, whatever its body, is refused before the body is read.
+            $this->guard()->admit($request, 4096);
+            self::fail('Read the body of a request without a CSRF token.');
+        } catch (AccessDeniedException $error) {
+            self::assertSame('Invalid hub CSRF token.', $error->getMessage());
+        }
+        $request->headers->set('X-CSRF-Token', self::CSRF);
         // The kernel answers a request exception with 400.
         $this->expectException(JsonException::class);
         $this->guard()->admit($request, 4096);

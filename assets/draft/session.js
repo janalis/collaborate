@@ -167,6 +167,8 @@ export class DraftSession {
     this.scanCollections = null;
     /** @type {Record<string, unknown> | undefined} */
     this.conflicts = undefined;
+    // Join answers it before anything reads it: start() waits for the join.
+    this.state = /** @type {DraftState} */ (/** @type {unknown} */ (undefined));
     // When the last replay answered: none yet.
     this.pulled = 0;
     /** @type {Map<string, EditorWaiter>} */

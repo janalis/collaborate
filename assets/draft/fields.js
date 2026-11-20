@@ -9,14 +9,14 @@ const LABEL_LENGTH = 255;
 
 export function initializeText(session, control, name, state) {
   const model = new Model();
-  model.document.createRoot();
+  const root = model.document.createRoot();
   model.schema.register('paragraph', { inheritAllFrom: '$block' });
   model.change((writer) => {
     const paragraph = writer.createElement('paragraph');
-    writer.append(paragraph, model.document.getRoot());
+    writer.append(paragraph, root);
     if (state.initial) writer.insertText(state.initial, paragraph, 0);
   });
-  const paragraph = /** @type {any} */ (model.document.getRoot().getChild(0));
+  const paragraph = /** @type {any} */ (root.getChild(0));
   const value = () => Array.from(paragraph.getChildren(), (node) => node.data).join('');
   const buffer = new OperationBuffer(model, () => session.schedule());
   const receive = buffer.receive.bind(buffer);

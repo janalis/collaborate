@@ -5,11 +5,13 @@
     "checkJs": true,
     "noEmit": true,
     "strict": false,
-    // strict's flags, one at a time: noImplicitAny, strictNullChecks and strictPropertyInitialization are next.
+    // strict's flags, one at a time: noImplicitAny is the one left.
     "alwaysStrict": true,
     "noImplicitThis": true,
     "strictBindCallApply": true,
     "strictFunctionTypes": true,
+    "strictNullChecks": true,
+    "strictPropertyInitialization": true,
     "useUnknownInCatchVariables": true,
     "target": "es2024",
     "module": "esnext",

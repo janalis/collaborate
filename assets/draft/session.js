@@ -73,6 +73,8 @@ export class DraftSession {
     this.scanCollections = null;
     /** @type {Record<string, unknown> | undefined} */
     this.conflicts = undefined;
+    // When the last replay answered: none yet.
+    this.pulled = 0;
     this.editorWaiters = new Map();
     this.schema = grantScope(configuration.grant).fields;
     // Lock existing content, not the live status/recovery controls added below.
@@ -231,7 +233,8 @@ export class DraftSession {
           await this.refreshRecord();
           await this.flush();
           if (this.stopped || this.suspended || this.resuming || this.composing) return;
-          if (Object.keys(this.conflicts).length) {
+          // A form that can save has joined: its conflicts are known.
+          if (Object.keys(/** @type {Record<string, unknown>} */ (this.conflicts)).length) {
             this.setStatus('conflict');
             this.conflictPanel.scrollIntoView?.({ block: 'nearest' });
             this.conflictPanel.querySelector('h2')?.focus();
@@ -306,13 +309,15 @@ export class DraftSession {
   editorWaiter(name) {
     if (!this.editorWaiters.has(name)) {
       const waiter = { ready: false };
-      const promise = new Promise((done) => {
-        waiter.resolve = () => {
-          waiter.ready = true;
-          done();
-          this.unlockControls();
-        };
-      });
+      const promise = /** @type {Promise<void>} */ (
+        new Promise((done) => {
+          waiter.resolve = () => {
+            waiter.ready = true;
+            done();
+            this.unlockControls();
+          };
+        })
+      );
       waiter.promise = promise;
       this.editorWaiters.set(name, waiter);
     }
@@ -379,6 +384,11 @@ export class DraftSession {
   /**
    * Tells the server why this page stopped following the draft as incompatible, once per cause and field: nothing
    * else records a halt the page decides itself, and the bar only asks the editor to reload.
+   *
+   * @param {string} cause
+   * @param {string | null} [field]
+   * @param {unknown} [detail]
+   * @param {number | null} [status]
    */
   report(cause, field = null, detail = null, status = null) {
     const key = `${cause}:${field}`;
@@ -661,6 +671,7 @@ export class DraftSession {
   // EasyAdmin's DirtyForm prompts for any form edited since it loaded, a peer's edits included; the draft or
   // the editor's explicit choice holds what this reload keeps, and a page left halted would be stuck.
   // `notice` says, once the page is back, why it reloaded.
+  /** @param {{ key: string, name?: string } | null} [notice] */
   rejoin(notice = null) {
     if (notice) {
       try {
@@ -716,6 +727,9 @@ export class DraftSession {
    * The draft no longer holds what this page shows: compacted, purged, or a field of it discarded.
    * `discard` is the Discard event that reset a field, naming who discarded it; `rebased` says a compaction
    * replaced this page's generation.
+   *
+   * @param {any} [discard]
+   * @param {boolean} [rebased]
    */
   superseded(discard = null, rebased = false) {
     const name = this.peerName(discard);
@@ -815,7 +829,7 @@ export class DraftSession {
       if (keep) {
         // A field without draft edits has nothing to keep: it takes the saved record value,
         // as an ordinary edit, so peers converge and Save does not revert the external change.
-        for (const [name, value] of Object.entries(this.conflicts)) {
+        for (const [name, value] of Object.entries(/** @type {Record<string, unknown>} */ (this.conflicts))) {
           const state = this.state.fields[name];
           const adapter = this.adapters.get(name);
           if (state && state.version === (state.savedVersion ?? null) && !adapter?.next()) adapter?.adopt?.(value);

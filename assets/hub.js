@@ -84,7 +84,7 @@ export class CollaborateHub {
      *
      * @type {{
      *   attempt: Attempt,
-     *   transport: string,
+     *   transport: string | undefined,
      *   url: string,
      *   renew: (token: string, signal?: AbortSignal) => Promise<void>,
      *   send?: (message: object) => boolean,
@@ -249,7 +249,7 @@ export class CollaborateHub {
       if (this.live?.attempt === attempt) this.live = null;
       const streamed = this.streaming === controller;
       if (streamed) this.streaming = null;
-      this.#hint(transport, opened, error);
+      this.#hint(transport, opened, /** @type {any} */ (error));
       // A newer connection is under way: it reports for the members, this stream's loss included. Only a
       // stream that was open is left running for a newer connection; any other was aborted by it.
       if (this.controller !== controller) {
@@ -261,7 +261,7 @@ export class CollaborateHub {
         this.lost = false;
         for (const member of attempt.members) if (this.members.has(member)) member.closed?.();
       }
-      this.retryTimer = setTimeout(() => this.connect(), this.#backoff(transport, error));
+      this.retryTimer = setTimeout(() => this.connect(), this.#backoff(transport, /** @type {any} */ (error)));
     }
   }
 

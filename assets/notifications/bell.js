@@ -137,17 +137,19 @@ export function initBell(
   }
 
   /** Shows what is left unread: as the server counted it when it answered, as the list tells it otherwise. */
+  /** @param {{ unread?: number, total?: number } | null} [answer] */
   function settle(answer = null) {
-    const known = Number.isInteger(answer?.unread);
+    const counts = answer && Number.isInteger(answer.unread) ? answer : null;
     const head = header();
-    if (head && known) {
-      head.dataset.unreadCount = String(answer.unread);
-      if (Number.isInteger(answer.total)) head.dataset.totalCount = String(answer.total);
+    if (head && counts) {
+      head.dataset.unreadCount = String(counts.unread);
+      if (Number.isInteger(counts.total)) head.dataset.totalCount = String(counts.total);
     }
-    const count = known ? answer.unread : counted();
+    const count = counts ? counts.unread : counted();
     if (count === 0) menu.querySelector('.collaborate-notifications__read-all')?.remove();
     showCount(count);
-    return { unread: count, total: Number.isInteger(answer?.total) ? answer.total : total() };
+    const reported = answer?.total;
+    return { unread: count, total: Number.isInteger(reported) ? reported : total() };
   }
 
   function changed(counts, wasHeard = false) {
@@ -323,9 +325,11 @@ export function initBell(
 
   // Subscribed through the worker once it is active: a worker just registered is still installing the first time,
   // and a push service refuses a subscription without an active one.
+  // Push starts only where the browser has service workers.
   const register = async () => {
-    await serviceWorker.register(push.worker, { scope: '/' });
-    return serviceWorker.ready;
+    const workers = /** @type {ServiceWorkerContainer} */ (serviceWorker);
+    await workers.register(push.worker, { scope: '/' });
+    return workers.ready;
   };
 
   async function startPush() {

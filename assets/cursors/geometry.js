@@ -173,9 +173,10 @@ export function anchorPath(target) {
   const root = first?.contains(target) ? first : target.closest(settings.regions[region]);
   const { keyAttribute } = settings;
   const segments = [];
+  /** @type {Element | null} */
   let element = target;
   let record = null;
-  while (element !== root && !record && segments.join(' > ').length < 1000) {
+  while (element && element !== root && !record && segments.join(' > ').length < 1000) {
     segments.unshift(segment(element));
     if (keyAttribute && element.hasAttribute(keyAttribute)) record = element;
     element = element.parentElement;
@@ -363,7 +364,7 @@ function overGlyph(x, y) {
   const range = position ? null : document.caretRangeFromPoint?.(x, y);
   const node = position ? position.offsetNode : range?.startContainer;
   const offset = position ? position.offset : range?.startOffset;
-  if (node?.nodeType !== Node.TEXT_NODE) return false;
+  if (node?.nodeType !== Node.TEXT_NODE || offset === undefined) return false;
   const { data } = /** @type {Text} */ (node);
   const glyph = document.createRange();
   for (const start of [offset - 1, offset]) {
@@ -380,7 +381,8 @@ function overGlyph(x, y) {
 export function pointerShape(target, x, y) {
   if (!(target instanceof Element)) return 'default';
   const style = getComputedStyle(target);
-  const keyword = style.cursor.split(',').pop().trim();
+  const keywords = style.cursor.split(',');
+  const keyword = keywords[keywords.length - 1].trim();
   const shape = CURSOR_ALIASES[keyword] || keyword;
   if (CURSOR_SHAPE_NAMES.includes(shape)) return shape;
   if (keyword && keyword !== 'auto') return 'default';

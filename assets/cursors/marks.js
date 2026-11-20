@@ -141,7 +141,8 @@ export function createMarks(layer, presence, { markers = false, edges = null, po
    */
   function drawPopupLine(active) {
     const mine = active ? capturePopup(kinds) : null;
-    const open = mine && document.querySelector(`[data-collaborate-popup="${CSS.escape(mine.kind)}"]`);
+    const open =
+      mine && document.querySelector(`[data-collaborate-popup="${CSS.escape(/** @type {string} */ (mine.kind))}"]`);
     const container = open?.closest('dialog, .modal') ?? open;
     for (const line of /** @type {NodeListOf<HTMLElement>} */ (
       document.querySelectorAll('[data-collaborate-popup-line]')
@@ -163,7 +164,8 @@ export function createMarks(layer, presence, { markers = false, edges = null, po
       if (!line) {
         line = document.createElement('p');
         line.className = 'collaborate-popup-presence';
-        open.prepend(line);
+        // The container is the popup or holds it.
+        /** @type {Element} */ (open).prepend(line);
       }
       line.setAttribute('role', 'status');
       line.setAttribute('data-collaborate-popup-line', '');
@@ -171,7 +173,9 @@ export function createMarks(layer, presence, { markers = false, edges = null, po
     }
     const others = [...presence.users].filter(([, user]) => samePopup(user.popup, mine)).sort(([a], [b]) => a - b);
     const said = others.length
-      ? format(popups[mine.kind]?.line ?? messages.line, { names: others.map(([, user]) => user.label).join(', ') })
+      ? format(popups[/** @type {string} */ (mine.kind)]?.line ?? messages.line, {
+          names: others.map(([, user]) => user.label).join(', '),
+        })
       : '';
     // Emptied rather than hidden, for the same reason: one shown with its text is not read either.
     if ((line.dataset.said ?? '') === said) return false;

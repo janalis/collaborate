@@ -64,17 +64,19 @@ export function cursorsFor(layer = document.querySelector('[data-collaborate-lay
 }
 
 export function initCursors(
-  layer = /** @type {HTMLElement | null} */ (document.querySelector('[data-collaborate-layer]')),
+  root = /** @type {HTMLElement | null} */ (document.querySelector('[data-collaborate-layer]')),
   fetcher = backgroundFetch,
-  hub = hubFor(layer, fetcher),
-  presence = createPresence(undefined, layerConfig(layer).maxAvatars, layerConfig(layer)),
+  hub = hubFor(root, fetcher),
+  presence = createPresence(undefined, layerConfig(root).maxAvatars, layerConfig(root)),
   turn = createTurn()
 ) {
   // A layer without an event URL serves the other modules only: cursors are disabled.
-  if (!layer?.dataset.eventUrl || layer.dataset.initialized) return null;
+  if (!root?.dataset.eventUrl || root.dataset.initialized) return null;
   // A page served over plain HTTP outside localhost has no secure context, and no client ids to tell its tabs
   // apart: it shares nothing, and never stands in the way of the page.
   if (typeof crypto?.randomUUID !== 'function') return null;
+  // Narrowed for the functions below, which close over it.
+  const layer = root;
   layer.dataset.initialized = 'true';
   const { eventUrl } = layer.dataset;
   const config = layerConfig(layer);

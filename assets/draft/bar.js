@@ -35,6 +35,11 @@ const element = (tag, className = '', text = '') => {
 
 /** The form's collaboration bar: its state on the left, its actions on the right. */
 export class CollaborateBar {
+  /**
+   * @param {Record<string, string>} messages
+   * @param {() => void} onDiscard
+   * @param {(() => void) | null} [onSave]
+   */
   constructor(messages, onDiscard, onSave = null) {
     this.messages = messages;
     this.element = element('div', 'collaborate-bar alert d-flex flex-wrap align-items-center gap-2 py-2 mb-3');

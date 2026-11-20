@@ -7,15 +7,17 @@ const stateKey = () => `collaborate-update:${location.pathname}${location.search
 
 /**
  * @param {HTMLElement | null} [layer]
- * @param {ReturnType<typeof hubFor>} [hub]
+ * @param {ReturnType<typeof hubFor>} [given]
  * @param {() => void} [reload]
  */
 export function initUpdates(
   layer = /** @type {HTMLElement | null} */ (document.querySelector('[data-collaborate-layer]')),
-  hub = hubFor(layer),
+  given = hubFor(layer),
   reload = () => location.reload()
 ) {
-  if (!layer?.dataset.updates || !hub) return null;
+  if (!layer?.dataset.updates || !given) return null;
+  // Narrowed for the functions below, which close over it.
+  const hub = given;
   const { lists, selection, overlays } = bridge();
   // The list's selection checkboxes, as the page shows them now.
   const inputs = () => /** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll(selection));
@@ -107,7 +109,8 @@ export function initUpdates(
       return;
     }
     reloadingLists.set(list, Date.now());
-    lists.reload(list);
+    // Lists reload only where the bridge has lists.
+    /** @type {NonNullable<typeof lists>} */ (lists).reload(list);
   }
 
   function listLoaded(event) {
@@ -121,8 +124,9 @@ export function initUpdates(
   // A link or form the bridge binds inside a list loads its page in place.
   function listNavigated(event) {
     const control = event.type === 'submit' ? event.target : event.target.closest?.('a');
-    const list = control?.closest(lists.selector);
-    if (list && lists.bound(control)) reloadingLists.set(list, Date.now());
+    const bound = /** @type {NonNullable<typeof lists>} */ (lists);
+    const list = control?.closest(bound.selector);
+    if (list && bound.bound(control)) reloadingLists.set(list, Date.now());
   }
 
   // Saved events name the entities they can affect; a page that cannot tell refreshes for all of them.

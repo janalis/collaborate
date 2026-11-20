@@ -9,7 +9,7 @@ export function isMultiplexed() {
   const navigation = /** @type {PerformanceNavigationTiming | undefined} */ (
     performance.getEntriesByType?.('navigation')[0]
   );
-  return ['h2', 'h3'].includes(navigation?.nextHopProtocol);
+  return ['h2', 'h3'].includes(navigation?.nextHopProtocol ?? '');
 }
 
 /**

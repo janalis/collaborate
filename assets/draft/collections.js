@@ -116,7 +116,9 @@ export function initializeCollections(session) {
      */
     function create(key) {
       if (creating.has(key) || failed.has(key)) return null;
-      const made = bridge().collections.create(container, key, (node, from) => rekey(node, path, from, key));
+      // Only called for a bridge whose collections add their entries themselves.
+      const { create: build } = /** @type {any} */ (bridge().collections);
+      const made = build(container, key, (node, from) => rekey(node, path, from, key));
       if (!(made instanceof Promise)) {
         if (!made) unrenderable(key);
         return made;

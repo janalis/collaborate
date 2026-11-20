@@ -73,6 +73,10 @@ export function initPage(
   }
 
   /** Gives the focus to a row: to its button of an action when it shows one, to the first thing it offers otherwise -- or to the title. */
+  /**
+   * @param {Element | null | undefined} row
+   * @param {string | null} [action]
+   */
   function focusRow(row, action = null) {
     const control =
       (action ? row?.querySelector(`[data-action="${action}"]:not([hidden])`) : null) ??

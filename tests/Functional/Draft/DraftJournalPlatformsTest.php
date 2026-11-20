@@ -21,9 +21,11 @@ use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftLocks;
 use Janalis\Collaborate\Draft\DraftText;
 use Janalis\Collaborate\Draft\DraftValues;
+use Janalis\Collaborate\Draft\DraftView;
 use Janalis\Collaborate\Draft\EventValidator;
 use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\Draft\FieldNames;
+use Janalis\Collaborate\Draft\JournalStore;
 use Janalis\Collaborate\Entity\Draft;
 use Janalis\Collaborate\Tests\Fixtures\Draft\JsonAssertions;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -48,6 +50,8 @@ use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
 #[UsesClass(EventValidator::class)]
 #[UsesClass(FieldDefinitions::class)]
 #[UsesClass(DraftLocks::class)]
+#[CoversClass(DraftView::class)]
+#[CoversClass(JournalStore::class)]
 #[UsesClass(FieldNames::class)]
 final class DraftJournalPlatformsTest extends TestCase
 {

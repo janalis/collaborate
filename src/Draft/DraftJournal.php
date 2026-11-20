@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Janalis\Collaborate\Draft;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
-use Janalis\Collaborate\Draft\Dialect\JournalDialect;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -27,9 +25,6 @@ class DraftJournal implements ResetInterface
 {
     /** The conflict a second creation answers, also the key of the warning its form shows. */
     public const string ALREADY_CREATED = 'This draft has already created its record. Open the saved record instead.';
-
-    /** The batch id of the event row naming the generations a compaction replaced; no batch reads it. */
-    private const string REBASE = 'rebase';
 
     /** The largest update, in stored UTF-8 bytes. */
     private int $maxUpdateBytes;
@@ -65,7 +60,7 @@ class DraftJournal implements ResetInterface
 
     private int $unsavedDays;
 
-    private ?JournalDialect $dialect = null;
+    private JournalStore $store;
 
     private DraftLocks $locks;
 
@@ -76,7 +71,7 @@ class DraftJournal implements ResetInterface
      * @param int|null $firstGeneration the generation of every new draft instead of a random one
      */
     public function __construct(
-        private readonly Connection $connection,
+        Connection $connection,
         private readonly DraftText $text = new DraftText(),
         private readonly string $systemLabel = 'System',
         array $limits = [],
@@ -94,7 +89,8 @@ class DraftJournal implements ResetInterface
         $this->writerLockSeconds = $limits['locks']['writer'] ?? 1;
         $this->cleanDays = $limits['purge']['clean_days'] ?? 7;
         $this->unsavedDays = $limits['purge']['unsaved_days'] ?? 90;
-        $this->locks = new DraftLocks($connection, $this->dialect(...), $this->lockSeconds);
+        $this->store = new JournalStore($connection);
+        $this->locks = new DraftLocks($connection, $this->store->dialect(...), $this->lockSeconds);
     }
 
     /** @param array<string, SchemaField> $fields
@@ -106,12 +102,8 @@ class DraftJournal implements ResetInterface
         $this->exclusive($id, function () use ($id, $fields, $definitions): void {
             // A draft recreated after purge() must not reuse a generation a page left open still holds:
             // that page would take the new revisions for ones it has seen. Half the INT range leaves room for ++.
-            $this->db()->executeStatement($this->dialect()->createDraft(), [
-                $id,
-                $this->firstGeneration ?? $this->randomGeneration(),
-                $this->now(),
-            ]);
-            $draft = $this->read($id, true);
+            $this->store->create($id, $this->firstGeneration ?? $this->randomGeneration());
+            $draft = $this->store->read($id, true);
             $compacted = false;
             // Rebasing breaks every open editor's model-version chain: peers on the old
             // generation stop, and a page without unsent edits reloads. Only an idle draft
@@ -119,40 +111,32 @@ class DraftJournal implements ResetInterface
             // page loses one it had not sent yet (the saver's own reload follows its save).
             // A draft past COMPACT_FIELDS is compacted only to drop rows: Discard and Save keep them.
             $large = $draft['bytes'] > $this->compactBytes;
-            $quietSince = $this->now('-' . $this->compactIdle . ' seconds');
+            $quietSince = JournalStore::now('-' . $this->compactIdle . ' seconds');
             // @infection-ignore-all: < and <= differ only when the last write falls on this very microsecond.
             $idle = $draft['updatedAt'] < $quietSince;
             if (
                 ($large || \count($draft['fields']) > $this->compactFields)
                 && $idle
                 && null === $draft['recordId']
-                && [] === array_filter($draft['fields'], $this->unsaved(...))
+                && [] === array_filter($draft['fields'], DraftView::unsaved(...))
             ) {
                 $rebased = array_map($this->rebase(...), $draft['fields']);
-                $removed = $this->removedEntries(['fields' => $rebased] + $draft);
+                $removed = DraftView::removedEntries(['fields' => $rebased] + $draft);
                 // The old generation can no longer address a removed collection entry: drop it.
                 $kept = array_filter(
                     $rebased,
-                    fn(array $field, string $name): bool => (
-                        !$this->removed($removed, $field['formName'] ?? $name)
+                    static fn(array $field, string $name): bool => (
+                        !DraftView::removed($removed, $field['formName'] ?? $name)
                         && !('member' === $field['type'] && false === ($field['value']['alive'] ?? null))
                     ),
                     \ARRAY_FILTER_USE_BOTH,
                 );
                 if ($large || \count($kept) < \count($draft['fields'])) {
-                    // A page still on a replaced generation finds it here: with nothing unsent, it lost nothing.
-                    $rebasedFrom = [...$this->rebasedFrom($id), $draft['generation']];
+                    // A page still on a replaced generation finds it in the journal: with nothing unsent, it lost nothing.
+                    $this->store->rebase($id, $draft['revision'] + 1, $draft['generation']);
                     ++$draft['generation'];
                     ++$draft['revision'];
                     $draft['savedRevision'] = $draft['revision'];
-                    $this->db()->delete('collaborate_draft_event', ['draft_id' => $id]);
-                    $this->db()->insert('collaborate_draft_event', [
-                        'draft_id' => $id,
-                        'revision' => $draft['revision'],
-                        'batch_id' => self::REBASE,
-                        'field' => '',
-                        'payload' => json_encode($rebasedFrom, \JSON_THROW_ON_ERROR),
-                    ]);
                     $draft['bytes'] = 0;
                     $draft['fields'] = $kept;
                     $compacted = true;
@@ -172,7 +156,7 @@ class DraftJournal implements ResetInterface
             foreach ($draft['fields'] as $name => &$state) {
                 $definition = $definitions->definition($name);
                 if (null !== $definition && ($state['schema'] ?? null) !== ($definition['schema'] ?? null)) {
-                    if ($this->unsaved($state)) {
+                    if (DraftView::unsaved($state)) {
                         throw new ConflictHttpException(
                             'Collaborate schema changed. Save or discard with a compatible editor before upgrading this draft.',
                         );
@@ -197,24 +181,20 @@ class DraftJournal implements ResetInterface
             unset($state);
             // The adopted value already contains the old schema's operations.
             if ([] !== $adopted) {
-                $this->db()->executeStatement(
-                    'DELETE FROM collaborate_draft_event WHERE draft_id = ? AND field IN (?)',
-                    [$id, $adopted],
-                    [1 => ArrayParameterType::STRING],
-                );
-                $draft['bytes'] = $this->size($id);
+                $this->store->deleteEvents($id, $adopted);
+                $draft['bytes'] = $this->store->size($id);
             }
             // Opening a page writes nothing: open peers keep their replay stamp, and a merely viewed draft still idles.
             if ($compacted || [] !== $added || [] !== $adopted) {
-                $this->write($id, $draft, $compacted ? null : [...$added, ...$adopted]);
+                $this->store->write($id, $draft, $compacted ? null : [...$added, ...$adopted]);
             }
         });
 
         // The view is read after the lock is released: decoding a long journal must not hold appends off past
         // their wait. One snapshot, as in replay(), so that no event is newer than the revision it carries.
         // @infection-ignore-all: revisions start at 1, so the events after revision 0 and after -1 are the same.
-        return $this->db()->transactional(fn(): array => $this->visible(
-            $this->read($id),
+        return $this->store->db()->transactional(fn(): array => $this->visible(
+            $this->store->read($id),
             $definitions,
             0,
             $requestedAt,
@@ -227,13 +207,9 @@ class DraftJournal implements ResetInterface
      */
     public function unchanged(string $id, int $since, string $stamp): bool
     {
-        $row = $this->db()->fetchAssociative('SELECT revision, updated_at FROM collaborate_draft WHERE id = ?', [$id]);
-        if (false === $row) {
-            return false;
-        }
-        /** @var array{revision: int|string, updated_at: string} $row */
+        $row = $this->store->stamp($id);
 
-        return $stamp === $row['updated_at'] && $since === (int) $row['revision'];
+        return null !== $row && $stamp === $row['stamp'] && $since === $row['revision'];
     }
 
     /** Field states the client already holds, named by `$digest`, are not sent again.
@@ -251,8 +227,8 @@ class DraftJournal implements ResetInterface
     ): array {
         // One transaction, one snapshot: an append committed between the two reads would
         // otherwise return events newer than the revision, and the client would replay them twice.
-        $view = $this->db()->transactional(fn(): array => $this->visible(
-            $this->read($id),
+        $view = $this->store->db()->transactional(fn(): array => $this->visible(
+            $this->store->read($id),
             new FieldDefinitions($allowed),
             $since,
             $requestedAt,
@@ -272,7 +248,7 @@ class DraftJournal implements ResetInterface
     public function append(string $id, array $allowed, array $event, int $userId, string $label): array
     {
         // Limits count stored UTF-8 bytes, not \uXXXX escapes.
-        $size = \strlen($this->encode($event));
+        $size = \strlen(JournalStore::encode($event));
         if ($size > $this->maxUpdateBytes) {
             throw new HttpException(413, 'Collaborate update is too large.');
         }
@@ -295,9 +271,12 @@ class DraftJournal implements ResetInterface
         }
 
         return $this->exclusive($id, function () use ($id, $event, $field, $size, $userId, $label, $definition): array {
-            $draft = $this->read($id, true, [$field, ...FieldNames::membersAround($definition['formName'] ?? $field)]);
+            $draft = $this->store->read($id, true, [
+                $field,
+                ...FieldNames::membersAround($definition['formName'] ?? $field),
+            ]);
             // A retried batch whose response was lost gets its stored result, whatever happened to the draft since.
-            $accepted = $this->batch($id, $event['id']);
+            $accepted = $this->store->batch($id, $event['id']);
             if (null !== $accepted) {
                 if ($accepted['userId'] !== $userId || $accepted['field'] !== $field) {
                     throw new ConflictHttpException('Collaborate batch identifier is already used.');
@@ -313,16 +292,12 @@ class DraftJournal implements ResetInterface
             if ($event['generation'] !== $draft['generation']) {
                 throw new ConflictHttpException('Collaborate draft was discarded.');
             }
-            if ($this->removed($this->removedEntries($draft), $definition['formName'] ?? $field)) {
+            if (DraftView::removed(DraftView::removedEntries($draft), $definition['formName'] ?? $field)) {
                 throw new ConflictHttpException('The collection entry was removed.');
             }
             if (!isset($draft['fields'][$field])) {
                 // Only an entry added to a collection brings a new field here: Join stored every other one.
-                /** @var int|numeric-string $rows a count */
-                $rows = $this->db()->fetchOne('SELECT COUNT(*) FROM collaborate_draft_field WHERE draft_id = ?', [
-                    $id,
-                ]);
-                if ($rows >= $this->maxFields) {
+                if ($this->store->fieldCount($id) >= $this->maxFields) {
                     throw new HttpException(413, 'Collaborate draft is full. Save or discard before continuing.');
                 }
                 $draft['fields'][$field] = $this->fresh($definition);
@@ -389,7 +364,7 @@ class DraftJournal implements ResetInterface
                 'label' => $label,
             ];
             // The journal grows by the batch it stores, with its revision and author: not by what the page sent.
-            $stored = $this->encode($accepted);
+            $stored = JournalStore::encode($accepted);
             if (($draft['bytes'] + \strlen($stored)) > $this->maxDraftBytes) {
                 throw new HttpException(413, 'Collaborate draft is full. Save or discard before continuing.');
             }
@@ -400,9 +375,9 @@ class DraftJournal implements ResetInterface
                     $draft['savedRevision'] = $draft['revision'];
                 }
             }
-            $this->insert($id, $accepted, $stored);
+            $this->store->insert($id, $accepted, $stored);
             $draft['bytes'] += \strlen($stored);
-            $this->write($id, $draft, [$field]);
+            $this->store->write($id, $draft, [$field]);
 
             return $accepted;
         });
@@ -413,7 +388,7 @@ class DraftJournal implements ResetInterface
      */
     public function lockSave(string $id, int $generation, int $revision, array $current, bool $new = false): void
     {
-        $draft = $this->read($id);
+        $draft = $this->store->read($id);
         if ($new && null !== $draft['recordId']) {
             throw new RecordAlreadyCreatedException();
         }
@@ -442,7 +417,7 @@ class DraftJournal implements ResetInterface
      */
     private function checkpoint(string $id, array $values, ?array $actor): void
     {
-        $draft = $this->read($id, true);
+        $draft = $this->store->read($id, true);
         $draft['savedBy'] = null === $actor
             ? null
             : ['userId' => $actor['userId'], 'label' => mb_substr($actor['label'], 0, $this->labelLength)];
@@ -460,7 +435,7 @@ class DraftJournal implements ResetInterface
                 $field['version'] = $version + \count($operations);
                 $field['value'] = $result['text'];
                 $field['graveyardLength'] = $result['graveyard'];
-                $draft['bytes'] += $this->record($id, [
+                $draft['bytes'] += $this->store->record($id, [
                     'id' => $this->batchId(),
                     'field' => $name,
                     'kind' => 'operations',
@@ -478,7 +453,7 @@ class DraftJournal implements ResetInterface
                 $version = $field['version'] ?? 0;
                 $field['value'] = $values[$name];
                 $field['version'] = $version + 1;
-                $draft['bytes'] += $this->record($id, [
+                $draft['bytes'] += $this->store->record($id, [
                     'id' => $this->batchId(),
                     'field' => $name,
                     'kind' => 'value',
@@ -494,7 +469,7 @@ class DraftJournal implements ResetInterface
             $draft['fields'][$name]['savedVersion'] = $draft['fields'][$name]['version'];
             $draft['fields'][$name]['savedAt'] = microtime(true);
         }
-        $removed = $this->removedEntries($draft);
+        $removed = DraftView::removedEntries($draft);
         foreach ($draft['fields'] as $name => &$state) {
             if ('member' === $state['type'] && !\array_key_exists($name, $values)) {
                 $member = FieldNames::parseMember($name);
@@ -503,21 +478,21 @@ class DraftJournal implements ResetInterface
                     $state['savedVersion'] = $state['version'];
                 }
             }
-            if ($this->removed($removed, $state['formName'] ?? $name)) {
+            if (DraftView::removed($removed, $state['formName'] ?? $name)) {
                 $state['savedVersion'] = $state['version'];
             }
         }
         unset($state);
         $this->settle($draft);
-        $this->write($id, $draft);
+        $this->store->write($id, $draft);
     }
 
     public function created(string $id, string $recordId): void
     {
         $this->guarded($id, function () use ($id, $recordId): void {
-            $draft = $this->read($id, true);
+            $draft = $this->store->read($id, true);
             $draft['recordId'] = $recordId;
-            $this->write($id, $draft, []);
+            $this->store->write($id, $draft, []);
         });
     }
 
@@ -546,14 +521,14 @@ class DraftJournal implements ResetInterface
             $userId,
             $label,
         ): array {
-            $draft = $this->read($id, true);
+            $draft = $this->store->read($id, true);
             if ($generation !== $draft['generation'] || $revision !== $draft['revision']) {
                 throw new ConflictHttpException('The shared draft changed. Review it before reconciling.');
             }
             $definitions = new FieldDefinitions($allowed);
-            $conflicts = $this->conflicts(
+            $conflicts = DraftView::conflicts(
                 $draft,
-                $this->allowedFields($draft, $definitions),
+                DraftView::allowedFields($draft, $definitions),
                 $definitions,
                 $requestedAt,
             );
@@ -570,7 +545,7 @@ class DraftJournal implements ResetInterface
                 $draft['savedRevision'] = -1;
                 $draft['savedBy'] = null;
             }
-            $this->write($id, $draft, array_keys($conflicts));
+            $this->store->write($id, $draft, array_keys($conflicts));
 
             if (!$keep) {
                 return $this->discard($id, $generation, $revision, $allowed, $userId, $label);
@@ -588,9 +563,7 @@ class DraftJournal implements ResetInterface
     public function listKeys(string $id): array
     {
         $keys = [];
-        foreach ($this->decodeFields($this->db()->fetchAllAssociative("SELECT name, state FROM collaborate_draft_field WHERE draft_id = ? AND type = 'collection' ORDER BY name", [
-            $id,
-        ])) as $name => $field) {
+        foreach ($this->store->fieldsOfType($id, 'collection') as $name => $field) {
             $path = FieldNames::collectionPath($name);
             if (null === $path || !\is_array($field['saved']) || !array_is_list($field['saved'])) {
                 continue;
@@ -611,7 +584,7 @@ class DraftJournal implements ResetInterface
         // record, beside the draft's own key for it, and show it twice.
         $this->locks->waitForSave($id);
         $aliases = [];
-        foreach ($this->members($id) as $name => $field) {
+        foreach ($this->store->fieldsOfType($id, 'member') as $name => $field) {
             if (!\is_array($field['saved']) || !\is_scalar($field['saved']['recordId'] ?? null)) {
                 continue;
             }
@@ -641,21 +614,18 @@ class DraftJournal implements ResetInterface
         ?string $label = null,
     ): array {
         return $this->exclusive($id, function () use ($id, $generation, $revision, $allowed, $userId, $label): array {
-            $draft = $this->read($id, true);
+            $draft = $this->store->read($id, true);
             if ($generation !== $draft['generation'] || $revision !== $draft['revision']) {
                 throw new ConflictHttpException('The shared draft changed. Synchronize before discarding.');
             }
             $definitions = new FieldDefinitions($allowed);
             // One entry per field, not per event: a long journal holds thousands of batches. A field kept
             // against a saved record holds no edit yet differs from it.
-            /** @var list<string> $journalled a text column */
-            $journalled = $this->db()->fetchFirstColumn("SELECT DISTINCT field FROM collaborate_draft_event WHERE draft_id = ? AND field <> ''", [
-                $id,
-            ]);
+            $journalled = $this->store->journalledFields($id);
             $discarded = array_values(array_filter(
                 array_unique([
                     ...$journalled,
-                    ...array_keys(array_filter($draft['fields'], $this->unsaved(...))),
+                    ...array_keys(array_filter($draft['fields'], DraftView::unsaved(...))),
                 ]),
                 // Every journalled field has its state row: append and checkpoint write it first.
                 static fn(string $field): bool => (
@@ -667,17 +637,13 @@ class DraftJournal implements ResetInterface
                 // @infection-ignore-all: revisions start at 1, so the events after revision 0 and after -1 are the same.
                 return $this->visible($draft, $definitions, 0);
             }
-            $this->db()->executeStatement(
-                'DELETE FROM collaborate_draft_event WHERE draft_id = ? AND field IN (?)',
-                [$id, $discarded],
-                [1 => ArrayParameterType::STRING],
-            );
+            $this->store->deleteEvents($id, $discarded);
             ++$draft['revision'];
             foreach ($discarded as $name) {
                 $draft['fields'][$name] =
                     ['discardedAt' => $draft['revision']] + $this->rebase($draft['fields'][$name]);
             }
-            $this->record($id, [
+            $this->store->record($id, [
                 'id' => $this->batchId(),
                 'field' => '',
                 'kind' => 'discard',
@@ -687,9 +653,9 @@ class DraftJournal implements ResetInterface
                 'label' => $label ?? $this->systemLabel,
                 'fields' => $discarded,
             ]);
-            $draft['bytes'] = $this->size($id);
+            $draft['bytes'] = $this->store->size($id);
             $this->settle($draft);
-            $this->write($id, $draft, $discarded);
+            $this->store->write($id, $draft, $discarded);
 
             // @infection-ignore-all: revisions start at 1, so the events after revision 0 and after -1 are the same.
             return $this->visible($draft, $definitions, 0);
@@ -702,34 +668,17 @@ class DraftJournal implements ResetInterface
      */
     public function purge(\DateTimeImmutable $now): int
     {
-        $condition = '(updated_at < ? AND (saved_revision = revision OR record_id IS NOT NULL)) OR updated_at < ?';
-        $parameters = [
-            $now->modify('-' . $this->cleanDays . ' days')->format('Y-m-d H:i:s.u'),
-            $now->modify('-' . $this->unsavedDays . ' days')->format('Y-m-d H:i:s.u'),
-        ];
+        $clean = $now->modify('-' . $this->cleanDays . ' days')->format('Y-m-d H:i:s.u');
+        $unsaved = $now->modify('-' . $this->unsavedDays . ' days')->format('Y-m-d H:i:s.u');
         $purged = 0;
-        /** @var list<string> $ids a text column */
-        $ids = $this->db()->fetchFirstColumn('SELECT id FROM collaborate_draft WHERE ' . $condition, $parameters);
-        foreach ($ids as $id) {
+        foreach ($this->store->stale($clean, $unsaved) as $id) {
             try {
                 $this->lock($id, 0);
             } catch (ServiceUnavailableHttpException) {
                 continue;
             }
             try {
-                $purged += $this->db()->transactional(function () use ($id, $condition, $parameters): int {
-                    if (
-                        0 === $this->db()->executeStatement('DELETE FROM collaborate_draft WHERE id = ? AND ('
-                        . $condition
-                        . ')', [$id, ...$parameters])
-                    ) {
-                        return 0;
-                    }
-                    $this->db()->delete('collaborate_draft_field', ['draft_id' => $id]);
-                    $this->db()->delete('collaborate_draft_event', ['draft_id' => $id]);
-
-                    return 1;
-                });
+                $purged += (int) $this->store->delete($id, $clean, $unsaved);
             } finally {
                 $this->unlock($id);
             }
@@ -767,7 +716,7 @@ class DraftJournal implements ResetInterface
     {
         $this->lock($id, min($this->lockSeconds, $this->writerLockSeconds));
         try {
-            return $this->db()->transactional($work);
+            return $this->store->db()->transactional($work);
         } finally {
             $this->unlock($id);
         }
@@ -783,39 +732,7 @@ class DraftJournal implements ResetInterface
      */
     private function guarded(string $id, \Closure $work): mixed
     {
-        return $this->locks->holds($id) ? $this->db()->transactional($work) : $this->exclusive($id, $work);
-    }
-
-    /** The connection, once its platform is one the journal speaks ({@see JournalDialect}). */
-    private function db(): Connection
-    {
-        $this->dialect();
-
-        return $this->connection;
-    }
-
-    /** The SQL of the connection's platform for what standard SQL leaves out: upserts, row and named locks. */
-    private function dialect(): JournalDialect
-    {
-        return $this->dialect ??= JournalDialect::for($this->connection);
-    }
-
-    /** @param Field $field */
-    private function unsaved(array $field): bool
-    {
-        return $field['version'] !== ($field['savedVersion'] ?? null);
-    }
-
-    /** One form saves or discards its own fields: another locale's unsaved edits keep the draft unsaved,
-     * so purge() holds it for UNSAVED_DAYS.
-     *
-     * @param Draft $draft
-     */
-    private function settle(array &$draft): void
-    {
-        if ([] === array_filter($draft['fields'], $this->unsaved(...))) {
-            $draft['savedRevision'] = $draft['revision'];
-        }
+        return $this->locks->holds($id) ? $this->store->db()->transactional($work) : $this->exclusive($id, $work);
     }
 
     /** A field no edit has reached yet: its record value, saved.
@@ -835,6 +752,18 @@ class DraftJournal implements ResetInterface
         ];
     }
 
+    /** One form saves or discards its own fields: another locale's unsaved edits keep the draft unsaved,
+     * so purge() holds it for UNSAVED_DAYS.
+     *
+     * @param Draft $draft
+     */
+    private function settle(array &$draft): void
+    {
+        if ([] === array_filter($draft['fields'], DraftView::unsaved(...))) {
+            $draft['savedRevision'] = $draft['revision'];
+        }
+    }
+
     /** @param Field $field
      * @return Field
      */
@@ -849,112 +778,13 @@ class DraftJournal implements ResetInterface
         return $field;
     }
 
-    /** An append reads its own field and the collection members that may have removed it, not the whole draft.
-     *
-     * @param list<string>|null $names the fields to read, null for every one
-     *
-     * @return Draft
-     */
-    private function read(string $id, bool $lock = false, ?array $names = null): array
-    {
-        $row = $this->db()->fetchAssociative(
-            'SELECT generation, revision, saved_revision, bytes, record_id, saved_by, saved_by_label, updated_at FROM collaborate_draft WHERE id = ?'
-            . ($lock ? $this->dialect()->forUpdate() : ''),
-            [$id],
-        );
-        if (false === $row) {
-            throw new ConflictHttpException('Collaborate draft does not exist. Join it first.');
-        }
-        // Drivers return the string columns as strings, the integer ones as integers or numeric strings.
-        /** @var array{generation: int|string, revision: int|string, saved_revision: int|string, bytes: int|string, record_id: string|null, saved_by: int|string|null, saved_by_label: string|null, updated_at: string} $row */
-        $states = null === $names
-            ? $this->db()->fetchAllAssociative('SELECT name, state FROM collaborate_draft_field WHERE draft_id = ? ORDER BY name', [
-                $id,
-            ])
-            : $this->db()->fetchAllAssociative(
-                'SELECT name, state FROM collaborate_draft_field WHERE draft_id = ? AND name IN (?) ORDER BY name',
-                [$id, $names],
-                [1 => ArrayParameterType::STRING],
-            );
-
-        return [
-            'id' => $id,
-            'generation' => (int) $row['generation'],
-            'revision' => (int) $row['revision'],
-            'savedRevision' => (int) $row['saved_revision'],
-            // @infection-ignore-all: a numeric string adds and compares as its integer; the cast only types it.
-            'bytes' => (int) $row['bytes'],
-            'recordId' => $row['record_id'],
-            'savedBy' => null === $row['saved_by']
-                ? null
-                : ['userId' => (int) $row['saved_by'], 'label' => $row['saved_by_label'] ?? ''],
-            'updatedAt' => $row['updated_at'],
-            'fields' => $this->decodeFields($states),
-        ];
-    }
-
-    /** @return array<string, Field> */
-    private function members(string $id): array
-    {
-        return $this->decodeFields($this->db()->fetchAllAssociative("SELECT name, state FROM collaborate_draft_field WHERE draft_id = ? AND type = 'member' ORDER BY name", [
-            $id,
-        ]));
-    }
-
-    /** @param list<array<string, mixed>> $rows `name` and JSON `state` columns
-     * @return array<string, Field>
-     */
-    private function decodeFields(array $rows): array
-    {
-        $fields = [];
-        foreach ($rows as $row) {
-            /** @var Field $decoded */
-            $decoded = json_decode((string) $row['state'], true, flags: \JSON_THROW_ON_ERROR);
-            /** @var string $name a text column */
-            $name = $row['name'];
-            $fields[$name] = $decoded;
-        }
-
-        return $fields;
-    }
-
     /** @param Draft $draft
-     * @param list<array-key>|null $names the field states to store; null replaces them all
+     *
+     * @return View
      */
-    private function write(string $id, array &$draft, ?array $names = null): void
+    private function visible(array $draft, FieldDefinitions $allowed, int $since, float $requestedAt = 0.0): array
     {
-        $draft['updatedAt'] = $this->now();
-        $this->db()->update(
-            'collaborate_draft',
-            [
-                'generation' => $draft['generation'],
-                'revision' => $draft['revision'],
-                'saved_revision' => $draft['savedRevision'],
-                'bytes' => $draft['bytes'],
-                'record_id' => $draft['recordId'],
-                'saved_by' => $draft['savedBy']['userId'] ?? null,
-                'saved_by_label' => $draft['savedBy']['label'] ?? null,
-                'updated_at' => $draft['updatedAt'],
-            ],
-            ['id' => $id],
-        );
-        if (null === $names) {
-            $this->db()->delete('collaborate_draft_field', ['draft_id' => $id]);
-            $names = array_keys($draft['fields']);
-        }
-        foreach (array_chunk($names, 100) as $chunk) {
-            $parameters = [];
-            foreach ($chunk as $name) {
-                $field = $draft['fields'][$name];
-                array_push($parameters, $id, (string) $name, $field['type'], json_encode($field, \JSON_THROW_ON_ERROR));
-            }
-            $this->db()->executeStatement($this->dialect()->writeFields(\count($chunk)), $parameters);
-        }
-    }
-
-    private function now(string $modifier = 'now'): string
-    {
-        return new \DateTimeImmutable($modifier)->format('Y-m-d H:i:s.u');
+        return DraftView::of($draft, $allowed, $this->store->events($draft['id'], $since), $requestedAt);
     }
 
     /** The identifier of a batch the journal writes itself. */
@@ -971,247 +801,8 @@ class DraftJournal implements ResetInterface
         return random_int(1, 2 ** 30);
     }
 
-    /**
-     * @param Batch $batch
-     *
-     * @return int the bytes the journal grew by
-     */
-    private function record(string $id, array $batch): int
-    {
-        $payload = $this->encode($batch);
-        $this->insert($id, $batch, $payload);
-
-        return \strlen($payload);
-    }
-
-    /** @param Batch $batch */
-    private function insert(string $id, array $batch, string $payload): void
-    {
-        $this->db()->insert('collaborate_draft_event', [
-            'draft_id' => $id,
-            'revision' => $batch['revision'],
-            'batch_id' => $batch['id'],
-            'field' => $batch['field'],
-            'payload' => $payload,
-        ]);
-    }
-
     private static function stringOrNull(mixed $value): ?string
     {
         return \is_string($value) ? $value : null;
-    }
-
-    /** A batch as the journal stores it, and counts it: UTF-8 bytes, not \uXXXX escapes. */
-    private function encode(mixed $batch): string
-    {
-        return json_encode($batch, \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
-    }
-
-    /** @return Batch|null */
-    private function batch(string $id, string $batchId): ?array
-    {
-        $payload = $this->db()->fetchOne('SELECT payload FROM collaborate_draft_event WHERE draft_id = ? AND batch_id = ?', [
-            $id,
-            $batchId,
-        ]);
-        if (false === $payload) {
-            return null;
-        }
-        /** @var Batch */
-        return json_decode((string) $payload, true, flags: \JSON_THROW_ON_ERROR);
-    }
-
-    /** The batches after `since`, and the generations compactions replaced when the last one falls after `since`
-     * too: a page still on one of those generations replays from a revision before it.
-     *
-     * @return array{list<Batch>, list<int>}
-     */
-    private function events(string $id, int $since): array
-    {
-        $events = [];
-        $rebasedFrom = [];
-        /** @var list<string> $payloads a JSON column */
-        $payloads = $this->db()->fetchFirstColumn('SELECT payload FROM collaborate_draft_event WHERE draft_id = ? AND revision > ? ORDER BY revision', [
-            $id,
-            $since,
-        ]);
-        foreach ($payloads as $payload) {
-            /** @var array<mixed> $row */
-            $row = json_decode($payload, true, flags: \JSON_THROW_ON_ERROR);
-            // A batch is an object; the row a compaction leaves, the list of the generations it replaced.
-            if (array_is_list($row)) {
-                /** @var list<int> $row */
-                $rebasedFrom = $row;
-            } else {
-                /** @var Batch $row */
-                $events[] = $row;
-            }
-        }
-
-        return [$events, $rebasedFrom];
-    }
-
-    /** @return list<int> the generations compactions replaced, oldest first, since the draft was created */
-    private function rebasedFrom(string $id): array
-    {
-        $payload = $this->db()->fetchOne('SELECT payload FROM collaborate_draft_event WHERE draft_id = ? AND batch_id = ?', [
-            $id,
-            self::REBASE,
-        ]);
-        if (false === $payload) {
-            return [];
-        }
-        /** @var list<int> */
-        return json_decode((string) $payload, true, flags: \JSON_THROW_ON_ERROR);
-    }
-
-    private function size(string $id): int
-    {
-        // Counted as {@see record()} wrote each batch: MySQL returns a JSON column reformatted, with its
-        // own spacing and key order, so LENGTH() would count another text on each server.
-        $bytes = 0;
-        /** @var \Traversable<int, string> $payloads the payload column, strings on every driver */
-        $payloads = $this->db()->iterateColumn('SELECT payload FROM collaborate_draft_event WHERE draft_id = ? AND batch_id <> ?', [
-            $id,
-            self::REBASE,
-        ]);
-        foreach ($payloads as $payload) {
-            $bytes += \strlen($this->encode(json_decode($payload, flags: \JSON_THROW_ON_ERROR)));
-        }
-
-        return $bytes;
-    }
-
-    /** @param Draft $draft
-     *
-     * @return View
-     */
-    private function visible(array $draft, FieldDefinitions $allowed, int $since, float $requestedAt = 0.0): array
-    {
-        $fields = $this->allowedFields($draft, $allowed);
-        $clean = [] === array_filter($fields, $this->unsaved(...));
-        [$events, $rebasedFrom] = $this->events($draft['id'], $since);
-
-        return [
-            'generation' => $draft['generation'],
-            'revision' => $draft['revision'],
-            'savedRevision' => $clean ? $draft['revision'] : -1,
-            'recordId' => $draft['recordId'],
-            'savedBy' => $draft['savedBy'] ?? null,
-            'conflicts' => $this->conflicts($draft, $fields, $allowed, $requestedAt),
-            'fields' => $fields,
-            'digest' => hash('xxh128', json_encode(DraftValues::canonical($fields), \JSON_THROW_ON_ERROR)),
-            'stamp' => $draft['updatedAt'],
-            'events' => $this->readable($events, $allowed),
-            'rebasedFrom' => $rebasedFrom,
-        ];
-    }
-
-    /** The events a form may read: its own fields' batches, and the Discards that reset one of its fields,
-     * naming those only.
-     *
-     * @param list<Batch> $events
-     *
-     * @return list<Batch>
-     */
-    private function readable(array $events, FieldDefinitions $allowed): array
-    {
-        $readable = [];
-        foreach ($events as $event) {
-            if ('discard' === $event['kind']) {
-                $event['fields'] = array_values(array_filter(
-                    $event['fields'] ?? [],
-                    static fn(string $field): bool => null !== $allowed->definition($field),
-                ));
-                if ([] === $event['fields']) {
-                    continue;
-                }
-            } elseif (null === $allowed->definition($event['field'])) {
-                continue;
-            }
-            $readable[] = $event;
-        }
-
-        return $readable;
-    }
-
-    /** @param Draft $draft
-     * @return array<string, Field>
-     */
-    private function allowedFields(array $draft, FieldDefinitions $allowed): array
-    {
-        return array_filter(
-            $draft['fields'],
-            static fn(string $name): bool => null !== $allowed->definition($name),
-            \ARRAY_FILTER_USE_KEY,
-        );
-    }
-
-    /** The fields whose record, as the grant issued at `$requestedAt` read it, differs from their saved baseline.
-     * A removed collection entry's fields describe nothing the record holds.
-     *
-     * @param Draft                $draft
-     * @param array<string, Field> $fields
-     *
-     * @return array<string, mixed>
-     */
-    private function conflicts(array $draft, array $fields, FieldDefinitions $allowed, float $requestedAt): array
-    {
-        $conflicts = [];
-        $removed = $this->removedEntries($draft);
-        foreach ($fields as $name => $field) {
-            $definition = $allowed->definition($name);
-            if (
-                null !== $definition
-                && $requestedAt > ($field['savedAt'] ?? 0.0)
-                && DraftValues::differs($field, $definition['initial'])
-                && !$this->removed($removed, $field['formName'] ?? $name)
-            ) {
-                $conflicts[$name] = $definition['initial'];
-            }
-        }
-
-        return $conflicts;
-    }
-
-    /**
-     * The collection entries a removed member stands for, as a set: rows grow with a draft, so a name is
-     * looked up by its own prefixes instead of every row being scanned for each name.
-     *
-     * @param Draft $draft
-     *
-     * @return array<string, string> entry => the member that removed it
-     */
-    private function removedEntries(array $draft): array
-    {
-        $entries = [];
-        foreach ($draft['fields'] as $memberName => $member) {
-            if (
-                'member' !== $member['type']
-                || !\is_array($member['value'])
-                || true === ($member['value']['alive'] ?? false)
-            ) {
-                continue;
-            }
-            $entry = FieldNames::entryOf($memberName);
-            if (null === $entry) {
-                continue;
-            }
-            $entries[$entry] = $memberName;
-        }
-
-        return $entries;
-    }
-
-    /** @param array<string, string> $entries */
-    private function removed(array $entries, string $name): bool
-    {
-        foreach (FieldNames::entryPrefixes($name) as $entry) {
-            if (isset($entries[$entry])) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

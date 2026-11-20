@@ -20,9 +20,11 @@ use Janalis\Collaborate\Draft\DraftLocks;
 use Janalis\Collaborate\Draft\DraftSave;
 use Janalis\Collaborate\Draft\DraftText;
 use Janalis\Collaborate\Draft\DraftValues;
+use Janalis\Collaborate\Draft\DraftView;
 use Janalis\Collaborate\Draft\EventValidator;
 use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\Draft\FieldNames;
+use Janalis\Collaborate\Draft\JournalStore;
 use Janalis\Collaborate\Draft\RecordAlreadyCreatedException;
 use Janalis\Collaborate\Draft\RecordId;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Article;
@@ -73,6 +75,8 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 #[CoversClass(MySqlDialect::class)]
 #[UsesClass(RecordId::class)]
 #[CoversClass(DraftLocks::class)]
+#[CoversClass(DraftView::class)]
+#[CoversClass(JournalStore::class)]
 #[UsesClass(FieldNames::class)]
 final class DraftJournalTest extends TestCase
 {

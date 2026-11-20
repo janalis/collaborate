@@ -15,10 +15,12 @@ use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftLocks;
 use Janalis\Collaborate\Draft\DraftSave;
 use Janalis\Collaborate\Draft\DraftValues;
+use Janalis\Collaborate\Draft\DraftView;
 use Janalis\Collaborate\Draft\EventValidator;
 use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\Draft\FieldNames;
 use Janalis\Collaborate\Draft\FormDraft;
+use Janalis\Collaborate\Draft\JournalStore;
 use Janalis\Collaborate\Draft\RecordId;
 use Janalis\Collaborate\Form\CollaborateFormExtension;
 use Janalis\Collaborate\Grant;
@@ -72,6 +74,8 @@ use Symfony\Component\HttpFoundation\Session\SessionFactoryInterface;
 #[UsesClass(FormDraft::class)]
 #[UsesClass(RecordId::class)]
 #[UsesClass(DraftLocks::class)]
+#[UsesClass(DraftView::class)]
+#[UsesClass(JournalStore::class)]
 #[UsesClass(FieldNames::class)]
 final class RenewTest extends CollaborateWebTestCase
 {

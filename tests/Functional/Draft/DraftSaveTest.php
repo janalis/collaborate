@@ -15,9 +15,11 @@ use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftLocks;
 use Janalis\Collaborate\Draft\DraftSave;
 use Janalis\Collaborate\Draft\DraftValues;
+use Janalis\Collaborate\Draft\DraftView;
 use Janalis\Collaborate\Draft\EventValidator;
 use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\Draft\FieldNames;
+use Janalis\Collaborate\Draft\JournalStore;
 use Janalis\Collaborate\Draft\RecordId;
 use Janalis\Collaborate\Tests\Fixtures\Draft\Article;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -53,6 +55,8 @@ use Symfony\Component\Translation\IdentityTranslator;
 #[UsesClass(PortableSchema::class)]
 #[UsesClass(RecordId::class)]
 #[UsesClass(DraftLocks::class)]
+#[UsesClass(DraftView::class)]
+#[UsesClass(JournalStore::class)]
 #[UsesClass(FieldNames::class)]
 final class DraftSaveTest extends TestCase
 {

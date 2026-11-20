@@ -14,8 +14,10 @@ use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftLocks;
 use Janalis\Collaborate\Draft\DraftSave;
+use Janalis\Collaborate\Draft\DraftView;
 use Janalis\Collaborate\Draft\FieldNames;
 use Janalis\Collaborate\Draft\FormDraft;
+use Janalis\Collaborate\Draft\JournalStore;
 use Janalis\Collaborate\Draft\RecordId;
 use Janalis\Collaborate\Form\CollaborateFormExtension;
 use Janalis\Collaborate\Gedmo\TranslatableFieldKeyResolver;
@@ -89,6 +91,8 @@ use Twig\RuntimeLoader\FactoryRuntimeLoader;
 #[AllowMockObjectsWithoutExpectations]
 #[UsesClass(RecordId::class)]
 #[UsesClass(DraftLocks::class)]
+#[UsesClass(DraftView::class)]
+#[UsesClass(JournalStore::class)]
 #[UsesClass(FieldNames::class)]
 final class CollaborateFormExtensionTest extends TypeTestCase
 {

@@ -23,9 +23,11 @@ use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftLocks;
 use Janalis\Collaborate\Draft\DraftSave;
+use Janalis\Collaborate\Draft\DraftView;
 use Janalis\Collaborate\Draft\EventValidator;
 use Janalis\Collaborate\Draft\FieldNames;
 use Janalis\Collaborate\Draft\FormDraft;
+use Janalis\Collaborate\Draft\JournalStore;
 use Janalis\Collaborate\Draft\RecordId;
 use Janalis\Collaborate\Grant;
 use Janalis\Collaborate\Hub\Admission;
@@ -124,6 +126,8 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[UsesClass(PortableSchema::class)]
 #[UsesClass(RecordId::class)]
 #[UsesClass(DraftLocks::class)]
+#[UsesClass(DraftView::class)]
+#[UsesClass(JournalStore::class)]
 #[UsesClass(FieldNames::class)]
 final class NotificationsApplicationTest extends NotificationsTestCase
 {

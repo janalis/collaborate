@@ -7,7 +7,9 @@ namespace Janalis\Collaborate\Tests\Unit\Draft;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftLocks;
 use Janalis\Collaborate\Draft\DraftSave;
+use Janalis\Collaborate\Draft\DraftView;
 use Janalis\Collaborate\Draft\FieldNames;
+use Janalis\Collaborate\Draft\JournalStore;
 use Janalis\Collaborate\Draft\RecordId;
 use Janalis\Collaborate\Draft\RecordIdentifierInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -21,6 +23,8 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 #[CoversClass(DraftSave::class)]
 #[CoversClass(RecordId::class)]
 #[UsesClass(DraftLocks::class)]
+#[UsesClass(DraftView::class)]
+#[UsesClass(JournalStore::class)]
 #[UsesClass(FieldNames::class)]
 final class DraftSaveTest extends TestCase
 {

@@ -8,8 +8,10 @@ use Janalis\Collaborate\Access\RoleDraftAccessChecker;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftLocks;
 use Janalis\Collaborate\Draft\DraftSave;
+use Janalis\Collaborate\Draft\DraftView;
 use Janalis\Collaborate\Draft\FieldNames;
 use Janalis\Collaborate\Draft\FormDraft;
+use Janalis\Collaborate\Draft\JournalStore;
 use Janalis\Collaborate\Grant;
 use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
@@ -33,6 +35,8 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 #[UsesClass(SecurityCollaboratorProvider::class)]
 #[UsesClass(RoleDraftAccessChecker::class)]
 #[UsesClass(DraftLocks::class)]
+#[UsesClass(DraftView::class)]
+#[UsesClass(JournalStore::class)]
 #[UsesClass(FieldNames::class)]
 final class FormDraftTest extends TestCase
 {

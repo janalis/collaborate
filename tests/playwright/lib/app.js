@@ -193,11 +193,14 @@ export class Editor {
   /** Submits the form with the page's main save button (EasyAdmin's sit outside the form) and waits for the page it leads to. */
   async save() {
     const posted = this.page.waitForRequest((request) => request.method() === 'POST' && request.isNavigationRequest());
+    // The page the save answers, a redirect's target included: the page before it counts as loaded already, and
+    // a redirect still under way would interrupt the next navigation.
+    const loaded = this.page.waitForEvent('load');
     await this.saveButton.click();
     // The save checkpoints the draft before it answers: a page opened before the answer would read the draft
     // as it was, and leaving earlier aborts the request while the server still saves.
     await (await posted).response();
-    await this.page.waitForLoadState();
+    await loaded;
   }
 
   /** The draft session of this page's shared form, as a page-side handle (`window.collaborateSession()`). */
@@ -215,12 +218,14 @@ export class Editor {
   /** Saves and stays on the edit page (EasyAdmin's "Save and continue editing"), joined again. */
   async saveAndStay() {
     const posted = this.page.waitForRequest((request) => request.method() === 'POST' && request.isNavigationRequest());
+    // The edit page the save answers: the one before it would pass for joined.
+    const loaded = this.page.waitForEvent('load');
     await this.page
       .getByRole('button', { name: this.easyAdmin ? 'Save and continue editing' : 'Save', exact: true })
       .and(this.page.locator(':not([data-collaborate-save])'))
       .click();
     await (await posted).response();
-    await this.page.waitForLoadState();
+    await loaded;
     await this.joined();
   }
 

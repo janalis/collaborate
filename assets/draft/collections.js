@@ -86,12 +86,8 @@ export function initializeCollections(session) {
     }
 
     function detach(key, node) {
-      for (const [name, adapter] of session.adapters) {
-        if (session.formName(name).startsWith(`${path}[${key}]`)) {
-          adapter.destroy?.();
-          session.adapters.delete(name);
-          session.editorWaiters.get(name)?.resolve();
-        }
+      for (const name of [...session.adapters.keys()]) {
+        if (session.formName(name).startsWith(`${path}[${key}]`)) session.detachField(name);
       }
       for (const root of node.querySelectorAll('.ck-editor__editable')) root.ckeditorInstance?.destroy();
       const { remove } = bridge().collections;

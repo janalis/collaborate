@@ -35,12 +35,7 @@ export default class Collaborate extends Plugin {
         const to = focused ? field.selectionEnd : 0;
         const data = focused ? this.editor.getData() : '';
         // The mirrored source is not a local source edit.
-        session.applying = true;
-        try {
-          receive(event);
-        } finally {
-          session.applying = false;
-        }
+        session.withApplying(() => receive(event));
         // Typed source the processor would re-serialize (`**bo` → `\*\*bo`) stays as typed.
         if (focused) field.value = rebaseText(before, data, this.editor.getData());
         if (focused && before !== field.value) {

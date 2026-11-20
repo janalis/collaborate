@@ -346,6 +346,33 @@ export class DraftSession {
     this.startupControls = [];
   }
 
+  /**
+   * Runs what a peer's edit does to the page (a control set, its events dispatched): the field's listeners tell it
+   * from the editor's own edits.
+   *
+   * @param {() => void} work
+   */
+  withApplying(work) {
+    this.applying = true;
+    try {
+      work();
+    } finally {
+      this.applying = false;
+    }
+  }
+
+  /** @param {() => void} remove what undoes a binding of the form, once the session stops */
+  addRemover(remove) {
+    this.removers.push(remove);
+  }
+
+  /** A field no longer on the page (its collection entry removed): its adapter ends, and nothing waits for its editor. */
+  detachField(name) {
+    this.adapters.get(name)?.destroy?.();
+    this.adapters.delete(name);
+    this.editorWaiters.get(name)?.resolve();
+  }
+
   register(name, buffer) {
     const state = this.state.fields[name];
     if (

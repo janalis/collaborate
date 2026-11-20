@@ -30,14 +30,14 @@ export function initializeText(session, control, name, state) {
     try {
       receive(event);
       // Tagify dispatches change while it reloads the value; that is not a local edit.
-      session.applying = true;
-      control.value = value();
-      control.__tagify?.loadOriginalValues(control.value);
-      if (from && to) control.setSelectionRange(from.offset, to.offset);
-      control.dispatchEvent(new Event('input', { bubbles: true }));
-      control.dispatchEvent(new Event('change', { bubbles: true }));
+      session.withApplying(() => {
+        control.value = value();
+        control.__tagify?.loadOriginalValues(control.value);
+        if (from && to) control.setSelectionRange(from.offset, to.offset);
+        control.dispatchEvent(new Event('input', { bubbles: true }));
+        control.dispatchEvent(new Event('change', { bubbles: true }));
+      });
     } finally {
-      session.applying = false;
       from?.detach();
       to?.detach();
     }
@@ -75,7 +75,7 @@ export function initializeText(session, control, name, state) {
   };
   owner?.addEventListener('input', follow);
   owner?.addEventListener('click', follow);
-  session.removers.push(() => {
+  session.addRemover(() => {
     control.removeEventListener('input', input);
     control.removeEventListener('change', input);
     owner?.removeEventListener('input', follow);
@@ -190,7 +190,7 @@ export function initializeValue(session, control, name, state) {
   for (const element of controls) {
     element.addEventListener('input', changed);
     element.addEventListener('change', changed);
-    session.removers.push(() => {
+    session.addRemover(() => {
       element.removeEventListener('input', changed);
       element.removeEventListener('change', changed);
     });

@@ -3,6 +3,7 @@
 // (`collections.remove`), replacing the whole widget as it does (Drupal's AJAX rebuilds).
 import { registerBridge, resetBridges } from '../../../assets/bridge.js';
 import { initializeCollections } from '../../../assets/draft/collections.js';
+import { DraftSession } from '../../../assets/draft/session.js';
 
 const hooks = { entry: vi.fn(), create: vi.fn(), remove: vi.fn() };
 
@@ -40,6 +41,7 @@ function fixture(rows = [row('p0', 'First'), row('t1')], members = { p0: { alive
     state: { fields },
     adapters: new Map(),
     editorWaiters: new Map(),
+    detachField: DraftSession.prototype.detachField,
     initializeControls: vi.fn(),
     schedule: vi.fn(),
     setStatus: vi.fn(),

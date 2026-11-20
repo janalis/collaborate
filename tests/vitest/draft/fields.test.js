@@ -6,7 +6,23 @@ const sessions = [];
 function setup(html, initial, text = false) {
   document.body.innerHTML = `<form>${html}</form>`;
   const form = document.querySelector('form');
-  const session = { removers: [], schedule: vi.fn(), register: vi.fn() };
+  const session = {
+    removers: [],
+    applying: false,
+    addRemover(remove) {
+      this.removers.push(remove);
+    },
+    withApplying(work) {
+      this.applying = true;
+      try {
+        work();
+      } finally {
+        this.applying = false;
+      }
+    },
+    schedule: vi.fn(),
+    register: vi.fn(),
+  };
   sessions.push(session);
   const control = form.elements.namedItem('field');
   (text ? initializeText : initializeValue)(session, control, 'field', { initial });

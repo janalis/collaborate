@@ -19,6 +19,15 @@ async function peer(initial = '<p>abcd</p>', extraPlugins = []) {
   let buffer;
   const session = {
     adapters: new Map(),
+    applying: false,
+    withApplying(work) {
+      this.applying = true;
+      try {
+        work();
+      } finally {
+        this.applying = false;
+      }
+    },
     schedule: vi.fn(),
     register: vi.fn(function (field, value) {
       this.adapters.set(field, value);

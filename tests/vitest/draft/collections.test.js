@@ -2,6 +2,7 @@
 import '../../../assets/bridges/easyadmin.js';
 import { initializeCollections } from '../../../assets/draft/collections.js';
 import { addRowInitializer } from '../../../assets/draft/hooks.js';
+import { DraftSession } from '../../../assets/draft/session.js';
 
 // EasyAdmin's collection widget, reduced to its delete button: it removes its row and announces it.
 function bindDeleteButtons() {
@@ -38,6 +39,7 @@ function fixture(existing = true) {
     state: { fields },
     adapters: new Map(),
     editorWaiters: new Map(),
+    detachField: DraftSession.prototype.detachField,
     initializeControls: vi.fn(),
     schedule: vi.fn(),
     setStatus: vi.fn(),
@@ -174,6 +176,7 @@ test('without a bridge, projects a peer row into the widget the extension marks 
     state: { fields: {} },
     adapters: new Map(),
     editorWaiters: new Map(),
+    detachField: DraftSession.prototype.detachField,
     initializeControls: vi.fn(),
     schedule: vi.fn(),
     setStatus: vi.fn(),
@@ -438,6 +441,7 @@ function positioned(positions, values = {}) {
     state: { fields },
     adapters: new Map(),
     editorWaiters: new Map(),
+    detachField: DraftSession.prototype.detachField,
     initializeControls: vi.fn(),
     schedule: vi.fn(),
     setStatus: vi.fn(),
@@ -592,6 +596,7 @@ test('projects the memberships a reopened page replays only once every member ha
     state: { fields: { 'Record[items][@a]': member(1), 'Record[items][@b]': member(1) } },
     adapters: new Map(),
     editorWaiters: new Map(),
+    detachField: DraftSession.prototype.detachField,
     initializeControls: vi.fn(),
     schedule: vi.fn(),
     setStatus: vi.fn(),
@@ -633,6 +638,7 @@ function stockSession(form) {
     state: { fields: {} },
     adapters: new Map(),
     editorWaiters: new Map(),
+    detachField: DraftSession.prototype.detachField,
     initializeControls: vi.fn(),
     schedule: vi.fn(),
     setStatus: vi.fn(),

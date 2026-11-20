@@ -1,10 +1,10 @@
 import { backgroundFetch, isDenied, postJson } from '../http.js';
 import { hubFor, layerConfig } from '../hub.js';
 import { rowOf } from '../markup.js';
-import { captureCaret, focusedField, MAX_CARET_OFFSET, resolveCaret, sameCaret } from './carets.js';
+import { captureCaret, focusedField, resolveCaret, sameCaret } from './carets.js';
+import { peerEvent } from './events.js';
 import {
   CURSOR_COLORS,
-  CURSOR_SHAPE_NAMES,
   CURSOR_SHAPES,
   captureAnchor,
   capturePopup,
@@ -12,11 +12,9 @@ import {
   cursorStyle,
   findRecord,
   interpolate,
-  isPopup,
   keyOf,
   measure,
   pointerShape,
-  regionNames,
   resolveAnchor,
   resolvePath,
   sameAnchor,
@@ -38,19 +36,6 @@ export const LABEL_DELAY = 2000;
 export const PULSE = 1200;
 // What the reader chose of the pointers of the others, in every tab (`presence: menu`).
 export const POINTERS = 'collaborate.pointers';
-
-const validField = (field) => field === null || (typeof field === 'string' && field !== '' && field.length <= 512);
-
-function validCaret(caret) {
-  return (
-    caret === null ||
-    (typeof caret === 'object' &&
-      typeof caret.selector === 'string' &&
-      caret.selector.length <= 1024 &&
-      regionNames().includes(caret.region) &&
-      [caret.start, caret.end].every((offset) => Number.isInteger(offset) && offset >= 0 && offset <= MAX_CARET_OFFSET))
-  );
-}
 
 /** The room a grant is to: the same one given again (a page that loaded itself again) keeps its stream. */
 const roomOf = (grant) => grant?.split('.')[3] ?? null;
@@ -405,49 +390,10 @@ export function initCursors(
   // The colour of the peer on this page, which the presence saw as the event came.
   const colorOf = (event) => presence.colorOf(event.userId);
 
-  function validAnchor(anchor) {
-    return (
-      !anchor ||
-      (typeof anchor?.selector === 'string' &&
-        anchor.selector.length <= 1024 &&
-        regionNames().includes(anchor.region) &&
-        Number.isFinite(anchor.x) &&
-        Number.isFinite(anchor.y) &&
-        anchor.x >= 0 &&
-        anchor.x <= 1 &&
-        anchor.y >= 0 &&
-        anchor.y <= 1)
-    );
-  }
-
   function receive(message) {
     if (entering) return;
-    let event;
-    try {
-      event = JSON.parse(message.data);
-    } catch {
-      return;
-    }
-    if (
-      !event ||
-      event.userId === userId ||
-      !Number.isInteger(event.userId) ||
-      typeof event.clientId !== 'string' ||
-      !Number.isInteger(event.sequence) ||
-      !['move', 'hide', 'heartbeat', 'hello', 'leave'].includes(event.kind) ||
-      !colors.includes(event.color) ||
-      typeof event.label !== 'string' ||
-      !(event.avatar == null || typeof event.avatar === 'string') ||
-      !['mac', 'windows', 'ubuntu', 'touch'].includes(event.style) ||
-      !CURSOR_SHAPE_NAMES.includes(event.shape) ||
-      !validCaret(event.caret ?? null) ||
-      !validField(event.field ?? null) ||
-      !(event.popup == null || isPopup(event.popup, kinds)) ||
-      !Number.isFinite(event.timestamp) ||
-      event.timestamp < serverTime - expiry ||
-      !validAnchor(event.anchor)
-    )
-      return;
+    const event = peerEvent(message.data, { colors, kinds, since: serverTime - expiry });
+    if (!event || event.userId === userId) return;
     serverTime = Math.max(serverTime, event.timestamp);
     const versionKey = `${event.userId}:${event.clientId}`;
     if ((versions.get(versionKey)?.sequence ?? -1) >= event.sequence) return;

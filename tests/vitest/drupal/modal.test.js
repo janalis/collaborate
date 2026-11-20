@@ -76,4 +76,10 @@ test('Escape and the backdrop close it unless the options say otherwise', () => 
   fixed.dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
   fixed.dialog.dispatchEvent(new MouseEvent('click', { bubbles: true }));
   expect(fixed.dialog.open).toBe(true);
+
+  // Bootstrap's static backdrop keeps it open too.
+  const stays = new Modal(modal(), { backdrop: 'static' });
+  stays.show();
+  stays.dialog.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  expect(stays.dialog.open).toBe(true);
 });

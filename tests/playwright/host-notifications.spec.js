@@ -11,9 +11,9 @@ const READER = 17;
 const toggle = (page) => page.locator('.collaborate-notifications__toggle');
 const count = (page) => page.locator('.collaborate-notifications__count');
 
-/** The stream of a page is open: the hub answered it (a bare layer runs no cursors, which mark it connected). */
+/** The stream of this very page is open: its bell says so (a bare layer runs no cursors, which would). */
 const streaming = (page) =>
-  page.waitForResponse((response) => response.url().includes('/.well-known/mercure') && response.status() === 200);
+  expect(page.locator('[data-collaborate-notifications]')).toHaveAttribute('data-connected', 'true');
 
 test.describe('notifications', () => {
   // The scenarios of the cursors revoke a folder: the library is whole again for these.
@@ -57,9 +57,8 @@ test.describe('notifications', () => {
   }) => {
     const reader = await signedIn(browser, baseURL, 'reader');
     try {
-      const open = streaming(reader.page);
       await reader.page.goto('/admin/notifications/all');
-      await open;
+      await streaming(reader.page);
       const marker = `Paper ${Date.now()}`;
       await notify(request, READER, marker);
       await expect(reader.page.locator('.toast').filter({ hasText: marker })).toBeVisible();
@@ -82,9 +81,8 @@ test.describe('notifications', () => {
       await expect(reader.page.getByRole('switch', { name: 'Announcements' })).toBeDisabled();
       await shares.uncheck();
       await expect(reader.page.locator('.collaborate-notification-topics__status')).toContainText('Shares');
-      const open = streaming(reader.page);
       await reader.page.goto('/admin/library/music');
-      await open;
+      await streaming(reader.page);
       const left = `Left ${Date.now()}`;
       await notify(request, READER, left);
       const kept = `Kept ${Date.now()}`;

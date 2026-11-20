@@ -19,8 +19,9 @@ final class SavedChanges
     private const string COMMITTED = '_collaborate_committed';
 
     /**
-     * The saved views a save may alter, by the names their pages carry (`data-collaborate-page="<name>:index"`):
-     * EasyAdmin's entity names, Drupal's entity types.
+     * The saved views a save may alter, by the names their pages carry (`data-collaborate-page="<name>:index"`),
+     * Drupal's entity types, or by a class name whose short name is one, EasyAdmin's entity name: Doctrine's change
+     * collector records the class. {@see dataNames()} reads them as the pages' names.
      */
     public static function data(Request $request, string ...$names): void
     {
@@ -86,7 +87,7 @@ final class SavedChanges
         $strings = [];
         // @mago-expect analysis:mixed-assignment an attribute holds anything: the next line narrows it
         foreach ($values as $value) {
-            if (!\is_string($value)) {
+            if (!\is_string($value) || '' === $value) {
                 continue;
             }
             $strings[$value] = $value;

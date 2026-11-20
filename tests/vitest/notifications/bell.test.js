@@ -621,8 +621,11 @@ describe('the hub and the service worker', () => {
     const fetcher = server({ 'GET /notifications': html(list([])) });
     const { hub } = start(root, { fetcher });
     const [member] = hub.members;
+    expect(root.dataset.connected).toBeUndefined();
     member.closed();
+    expect(root.dataset.connected).toBe('false');
     member.opened();
+    expect(root.dataset.connected).toBe('true');
     await vi.advanceTimersByTimeAsync(REFRESH_DELAY);
     expect(fetcher).not.toHaveBeenCalled();
     member.opened();
@@ -661,7 +664,9 @@ describe('the hub and the service worker', () => {
   test('stops following a refused hub, and works without one', async () => {
     const root = render([]);
     const { hub, bell } = start(root);
+    hub.members[0].opened();
     hub.members[0].denied();
+    expect(root.dataset.connected).toBe('false');
     window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
     expect(hub.leaves).toBe(0);
     bell.stop();

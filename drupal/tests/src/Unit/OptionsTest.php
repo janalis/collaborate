@@ -88,12 +88,36 @@ final class OptionsTest extends UnitTestCase
         ], ['hub' => ['transport' => 'websocket']]);
 
         self::assertSame(['red', 'green'], self::at($options, 'colors'));
-
-        // An empty map leaves the one below it as it was.
-        $kept = Options::bundle(['advanced' => ['drafts' => []]], ['notifications' => []]);
-        self::assertSame(Options::GRANT_CACHE, self::at($kept, 'drafts', 'grant_cache'));
-        self::assertSame(Options::BUS, self::at($kept, 'notifications', 'bus'));
         self::assertSame('websocket', self::at($options, 'hub', 'transport'));
+    }
+
+    public function testAnEmptyArrayEmptiesAListAndLeavesAMapAsItWas(): void
+    {
+        $options = Options::bundle(['advanced' => ['colors' => ['blue', 'indigo'], 'drafts' => []]], [
+            'colors' => [],
+            'notifications' => [],
+        ]);
+
+        self::assertSame([], self::at($options, 'colors'));
+        self::assertSame(Options::GRANT_CACHE, self::at($options, 'drafts', 'grant_cache'));
+        self::assertSame(Options::BUS, self::at($options, 'notifications', 'bus'));
+    }
+
+    public function testTheMapsTheBundleReplacesWholeAreReplacedWhole(): void
+    {
+        $comment = ['where' => 'commenting', 'detail' => 'on %name%'];
+        $options = Options::bundle([
+            'cursors' => ['regions' => ['main' => 'main']],
+            'advanced' => [
+                'cursors' => ['regions' => ['legacy' => '.old'], 'popups' => ['comment' => $comment]],
+                'notifications' => ['topics' => ['shares' => ['label' => 'Shares']]],
+            ],
+        ], ['cursors' => ['popups' => []], 'notifications' => ['topics' => ['news' => ['label' => 'News']]]]);
+
+        // The module's regions, the form's here, whatever the layers below say.
+        self::assertSame(['main' => 'main'], self::at($options, 'cursors', 'regions'));
+        self::assertSame([], self::at($options, 'cursors', 'popups'));
+        self::assertSame(['news' => ['label' => 'News']], self::at($options, 'notifications', 'topics'));
     }
 
     public function testTheOptionsTheModuleReadsNothingOfAreNamed(): void

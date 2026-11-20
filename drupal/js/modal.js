@@ -16,12 +16,16 @@ export default class Modal {
       if (this.keyboard) this.hide();
     });
     this.dialog.addEventListener('click', (/** @type {MouseEvent} */ event) => {
-      if (this.backdrop && event.target === this.dialog) this.hide();
+      // Bootstrap's `'static'` backdrop keeps the dialog open.
+      if (this.backdrop === true && event.target === this.dialog) this.hide();
     });
   }
 
-  /** The bar's markup is Bootstrap's `.modal`: a dialog holds it, so that the browser gives it a top layer. */
-  /** @param {HTMLElement} element */
+  /**
+   * The bar's markup is Bootstrap's `.modal`: a dialog holds it, so that the browser gives it a top layer.
+   *
+   * @param {HTMLElement} element
+   */
   static wrap(element) {
     const dialog = document.createElement('dialog');
     dialog.className = 'collaborate-dialog';

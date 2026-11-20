@@ -47,8 +47,8 @@ final class SavedChangesTest extends TestCase
     public function testWhatIsNoNameIsSkipped(): void
     {
         $request = new Request(attributes: [
-            '_collaborate_data_changed' => [7, 'Tag', null, 'Tag'],
-            '_collaborate_records_changed' => [42, 'a'],
+            '_collaborate_data_changed' => [7, 'Tag', null, 'Tag', '', 'App\\Entity\\'],
+            '_collaborate_records_changed' => [42, 'a', ''],
             '_collaborate_committed' => 42,
         ]);
         self::assertSame(['Tag'], SavedChanges::dataNames($request));

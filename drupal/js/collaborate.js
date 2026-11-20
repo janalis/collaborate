@@ -7,6 +7,20 @@ import '@janalis/collaborate/bridges/drupal.js';
 import '@janalis/collaborate/cursors/cursors.js';
 import '@janalis/collaborate/updates.js';
 
+/**
+ * Drupal's globals, which its own scripts define before the module's: its behaviors, its editors, and the
+ * CKEditor 5 build it ships as a DLL.
+ *
+ * @typedef {{
+ *   Drupal?: {
+ *     behaviors: Record<string, { attach(context: Document | Element): void }>,
+ *     editors?: { ckeditor5?: { attach(this: unknown, element: HTMLTextAreaElement, format: any): unknown } },
+ *   },
+ *   CKEditor5: { dll(path: string): any, collaborate?: object },
+ * }} DrupalPage
+ */
+const page = /** @type {DrupalPage} */ (/** @type {unknown} */ (globalThis));
+
 const shared = () => document.querySelector('form[data-collaborate]');
 
 if (document.querySelector('[data-collaborate-notifications]')) {
@@ -23,7 +37,7 @@ const loadDrafts = () => {
     import('@janalis/collaborate/draft/session.js'),
     import('@janalis/collaborate/ckeditor5/collaborate.js'),
   ]).then(([session, plugin]) => {
-    const { Plugin } = globalThis.CKEditor5.dll('./src/core.js');
+    const { Plugin } = page.CKEditor5.dll('./src/core.js');
     // Tells the session its editor is following the draft: the host's part of the contract.
     class CollaborateReady extends Plugin {
       static get pluginName() {
@@ -37,7 +51,7 @@ const loadDrafts = () => {
       }
     }
     // Drupal finds an editor's plugins as `CKEditor5.<package>.<plugin>`.
-    globalThis.CKEditor5.collaborate = { Collaborate: plugin.default, CollaborateReady };
+    page.CKEditor5.collaborate = { Collaborate: plugin.default, CollaborateReady };
     return session;
   });
   return drafts;
@@ -45,7 +59,7 @@ const loadDrafts = () => {
 
 // Drupal attaches its editors once the page is parsed, through `Drupal.editors.ckeditor5`: an editor of a shared
 // field is created once the draft is joined, on its content, with the bundle's plugin.
-const editors = globalThis.Drupal?.editors;
+const editors = page.Drupal?.editors;
 if (editors?.ckeditor5 && shared()) {
   const attach = editors.ckeditor5.attach;
   /**
@@ -70,12 +84,17 @@ if (editors?.ckeditor5 && shared()) {
           },
         });
       })
-      .catch(() => drafts?.then(({ sessionFor }) => sessionFor(element)?.editorFailed()));
+      .catch(async () => {
+        // The draft's modules that never loaded leave the field to Drupal's own editor.
+        const loaded = await drafts?.catch(() => null);
+        if (loaded) loaded.sessionFor(element)?.editorFailed();
+        else attach.call(this, element, format);
+      });
     return true;
   };
 }
 
-if (shared()) loadDrafts();
+if (shared()) loadDrafts().catch(() => {});
 
 // Typing in a multi-value field's empty row makes it an item: the row takes a key of its own and follows the
 // draft from then on. The draft's controls replace what the row shows as they bind: what was typed is put back
@@ -87,51 +106,69 @@ const touch = (event) => {
   const row = /** @type {HTMLElement | null} */ (
     event.target instanceof Element ? event.target.closest('[data-collaborate-pending]') : null
   );
-  const form = row?.closest('form[data-collaborate]');
-  // A pending row is found from a control.
-  const session = form && sessions ? sessions.sessionFor(/** @type {any} */ (event.target)) : null;
+  const form = /** @type {HTMLFormElement | null | undefined} */ (row?.closest('form[data-collaborate]'));
+  const session = form && sessions ? sessions.sessionFor({ form }) : null;
   if (!row || !session?.initialized || !session.scanCollections) return;
-  // Inputs, selects and textareas: each read by what its type has.
-  const controls = /** @type {any[]} */ (Array.from(row.querySelectorAll('input, select, textarea')));
-  const typed = controls.map((control) =>
-    control.type === 'checkbox' || control.type === 'radio'
-      ? control.checked
-      : control.multiple
-        ? Array.from(control.selectedOptions, (option) => option.value)
-        : control.value
+  const controls = Array.from(
+    /** @type {NodeListOf<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>} */ (
+      row.querySelectorAll('input, select, textarea')
+    )
   );
+  // Each control read by what its type has: a box its check, a multiple select its options, any other its value.
+  /** @param {HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement} control */
+  const checks = (control) =>
+    control instanceof HTMLInputElement && (control.type === 'checkbox' || control.type === 'radio') ? control : null;
+  /** @param {HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement} control */
+  const choices = (control) => (control instanceof HTMLSelectElement && control.multiple ? control : null);
+  const typed = controls.map((control) => {
+    const box = checks(control);
+    const select = choices(control);
+    return box ? box.checked : select ? Array.from(select.selectedOptions, (option) => option.value) : control.value;
+  });
   row.dataset.collaborateTouched = '';
   session.scanCollections();
   controls.forEach((control, index) => {
-    if (control.type === 'checkbox' || control.type === 'radio') control.checked = typed[index];
-    else if (control.multiple)
-      for (const option of control.options) option.selected = typed[index].includes(option.value);
-    else control.value = typed[index];
+    const value = typed[index];
+    const box = checks(control);
+    const select = choices(control);
+    if (box) box.checked = value === true;
+    else if (select && Array.isArray(value))
+      for (const option of select.options) option.selected = value.includes(option.value);
+    else if (typeof value === 'string') control.value = value;
   });
 };
 if (shared()) {
-  loadDrafts().then((session) => {
-    sessions = session;
-  });
+  loadDrafts().then(
+    (session) => {
+      sessions = session;
+    },
+    () => {}
+  );
   document.addEventListener('input', touch, true);
   document.addEventListener('change', touch, true);
 }
 
 // Form API's AJAX ("Add another item", a widget's rebuild) replaces part of a shared form: its controls follow the
 // draft again, and its collections are scanned for their entries.
-if (globalThis.Drupal) {
-  globalThis.Drupal.behaviors.collaborate = {
-    /** @param {any} context the part of the page Drupal attached behaviors to */
+if (page.Drupal) {
+  page.Drupal.behaviors.collaborate = {
+    /** @param {Document | Element} context the part of the page Drupal attached behaviors to */
     attach(context) {
-      if (context === document) return;
-      const form = context.closest?.('form[data-collaborate]') ?? context.querySelector?.('form[data-collaborate]');
+      if (!(context instanceof Element)) return;
+      const form = /** @type {HTMLFormElement | null} */ (
+        context.closest('form[data-collaborate]') ?? context.querySelector('form[data-collaborate]')
+      );
       if (!form) return;
-      loadDrafts().then(({ sessionFor }) => {
-        const field = Array.from(form.elements).find((control) => control.name && control.type !== 'hidden');
-        const session = field ? sessionFor(field) : null;
-        if (session?.initialized) session.initializeControls();
-        document.dispatchEvent(new Event('collaborate:rows-changed'));
-      });
+      loadDrafts().then(
+        ({ sessionFor }) => {
+          const controls = /** @type {HTMLInputElement[]} */ (Array.from(form.elements));
+          const field = controls.find((control) => control.name && control.type !== 'hidden');
+          const session = field ? sessionFor(field) : null;
+          if (session?.initialized) session.initializeControls();
+          document.dispatchEvent(new Event('collaborate:rows-changed'));
+        },
+        () => {}
+      );
     },
   };
 }

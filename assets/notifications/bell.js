@@ -78,7 +78,7 @@ export const pushSupported = (settings) =>
  * Counts the notifications of a bell, keeps them told of what the hub and the service worker say, marks them
  * read, and switches web push on this device.
  *
- * @param {Element} root
+ * @param {HTMLElement} root
  * @param {{
  *   hub?: import('../hub.js').CollaborateHub | null,
  *   fetcher?: typeof fetch,
@@ -448,17 +448,21 @@ export function initBell(
       channel: 'notifications',
       receive: () => hear(),
       // The hub keeps no history: what was published while the stream was lost is asked for.
+      // Says on the bell whether its stream is open, as the cursors' layer does.
       opened: () => {
         streamed = true;
+        root.dataset.connected = 'true';
         if (!lost) return;
         lost = false;
         hear();
       },
       closed: () => {
         lost = streamed;
+        root.dataset.connected = 'false';
       },
       denied: () => {
         leave = null;
+        root.dataset.connected = 'false';
       },
     });
   }
@@ -510,7 +514,9 @@ const started = new WeakSet();
 
 /** Starts every bell of the page that has not started yet. */
 export function startBells() {
-  for (const root of document.querySelectorAll('[data-collaborate-notifications]')) {
+  for (const root of /** @type {NodeListOf<HTMLElement>} */ (
+    document.querySelectorAll('[data-collaborate-notifications]')
+  )) {
     if (started.has(root)) continue;
     started.add(root);
     initBell(root);

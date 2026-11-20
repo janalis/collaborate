@@ -38,6 +38,12 @@ final class Options
         'drafts.rich_text.ckeditor_version',
     ];
 
+    /**
+     * The maps the bundle's configuration tree replaces whole from one file to the next (`performNoDeepMerging()`):
+     * a higher layer's replaces the one below, an empty one included.
+     */
+    private const array WHOLE = ['cursors.regions', 'cursors.popups', 'notifications.topics', 'notifications.types'];
+
     /** What the module chooses unless the `advanced` tree says otherwise. */
     private const array DEFAULTS = [
         'drafts' => ['grant_cache' => self::GRANT_CACHE],
@@ -112,9 +118,9 @@ final class Options
     }
 
     /**
-     * Each layer over the ones before: a map is merged key by key, anything else, a list included, replaced whole.
-     * array_replace_recursive() would merge lists index by index, and a lower layer's longer list would show
-     * through a shorter one.
+     * Each layer over the ones before: a map is merged key by key, anything else, a list or a {@see WHOLE} map
+     * included, replaced whole. array_replace_recursive() would merge lists index by index, and a lower layer's
+     * longer list would show through a shorter one.
      *
      * @param array<array-key, mixed> ...$layers
      *
@@ -122,15 +128,31 @@ final class Options
      */
     private static function merge(array ...$layers): array
     {
+        return self::mergeAt('', ...$layers);
+    }
+
+    /**
+     * @param string                  $path      the dotted path of the layers' maps, empty at the root
+     * @param array<array-key, mixed> ...$layers
+     *
+     * @return array<array-key, mixed>
+     */
+    private static function mergeAt(string $path, array ...$layers): array
+    {
         $merged = [];
         foreach ($layers as $layer) {
             // @mago-expect analysis:mixed-assignment an option's value: the next lines narrow it
             foreach ($layer as $key => $value) {
+                $at = '' === $path ? (string) $key : $path . '.' . $key;
                 // @mago-expect analysis:mixed-assignment the layer below's value: the next line narrows it
                 $below = $merged[$key] ?? null;
                 // An empty array changes nothing of a map below it, and empties a list.
-                $merged[$key] = \is_array($value) && \is_array($below) && !self::isList($value) && !self::isList($below)
-                    ? self::merge($below, $value)
+                $merged[$key] = \is_array($value)
+                && \is_array($below)
+                && !self::isList($value)
+                && !self::isList($below)
+                && !\in_array($at, self::WHOLE, true)
+                    ? self::mergeAt($at, $below, $value)
                     : $value;
             }
         }

@@ -6,8 +6,8 @@
 // The status under the list says the outcome when the markup gives the sentences (`data-subscribed`,
 // `data-unsubscribed`, `data-failed` on `.collaborate-notification-topics__status`, `%topic%` standing for
 // the topic's label); without them it says nothing, the switch alone telling.
-import { backgroundFetch } from '../hub.js';
-import { settingsOf } from './bell.js';
+import { backgroundFetch, isAccepted } from '../http.js';
+import { settingsOf } from './shared.js';
 
 /** Starts the switches of a topics list. */
 export function initTopics(root, { fetcher = backgroundFetch } = {}) {
@@ -38,7 +38,7 @@ export function initTopics(root, { fetcher = backgroundFetch } = {}) {
           'X-Requested-With': 'XMLHttpRequest',
         },
       });
-      ok = response.ok && !response.redirected;
+      ok = isAccepted(response);
     } catch {
       ok = false;
     }

@@ -10,10 +10,13 @@
 // `collaborate:notifications-changed`, whose `origin` says who changed something. The page's (`origin:
 // 'page'`) gives the bell the count it was answered; the bell's (`origin: 'bell'`) tells the host the
 // counts after any change, and the page whether the list changed elsewhere (`heard`).
-import { backgroundFetch, hubFor } from '../hub.js';
-import { settingsOf } from '../settings.js';
 
-export { settingsOf };
+import { backgroundFetch, isAccepted, postJson } from '../http.js';
+import { hubFor } from '../hub.js';
+import { fetchFragment, formatDates, leaves, parseFragment, postChange, settingsOf } from './shared.js';
+
+// The page and the topics list read these from shared.js: importing bell.js starts the bells.
+export { fetchFragment, formatDates, leaves, parseFragment, postChange, settingsOf };
 
 // Notices of the hub arriving together ask for the list once.
 export const REFRESH_DELAY = 250;
@@ -27,67 +30,6 @@ const HEADER = '.collaborate-notifications__header';
 
 // The notifications the host was told of, once each whatever told the page (hub, service worker, bells).
 const told = new Set();
-
-/** Writes every date of a notification in the language of the page, as the reader reads dates. */
-export function formatDates(scope, lang = document.documentElement.lang || undefined) {
-  let format;
-  try {
-    format = new Intl.DateTimeFormat(lang, { dateStyle: 'long', timeStyle: 'short' });
-  } catch {
-    // A language the browser does not know.
-    format = new Intl.DateTimeFormat(undefined, { dateStyle: 'long', timeStyle: 'short' });
-  }
-  for (const time of scope.querySelectorAll('time.collaborate-notification__date[datetime]')) {
-    const date = new Date(time.getAttribute('datetime'));
-    if (!Number.isNaN(date.getTime())) time.textContent = format.format(date);
-  }
-}
-
-/** The nodes of an HTML fragment, its scripts inert. */
-export function parseFragment(html) {
-  const template = document.createElement('template');
-  template.innerHTML = html;
-  return [...template.content.childNodes];
-}
-
-/** A fragment the server rendered for a script, or null when it answered anything else (a sign-in page). */
-export async function fetchFragment(url, fetcher = backgroundFetch) {
-  try {
-    const response = await fetcher(url, {
-      credentials: 'same-origin',
-      cache: 'no-store',
-      headers: { 'X-Requested-With': 'XMLHttpRequest' },
-    });
-    if (!response.ok || response.redirected) return null;
-    return await response.text();
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Tells the server what was read, unread or cleared: one notification by its id, all of them without one.
- * Clearing takes the settings' `clearToken`. Answers the counts `{unread, total}`, or null when the server
- * could not be told.
- */
-export async function postChange(url, id = null, fetcher = backgroundFetch, token = null) {
-  const body = new URLSearchParams();
-  if (id) body.set('id', id);
-  const headers = { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
-  if (token) headers['X-CSRF-Token'] = token;
-  try {
-    const response = await fetcher(url, { method: 'POST', credentials: 'same-origin', headers, body });
-    if (!response.ok || response.redirected) return null;
-    const answer = await response.json();
-    return Number.isInteger(answer?.unread) ? answer : null;
-  } catch {
-    return null;
-  }
-}
-
-/** A click that leaves the page for the link, rather than opening it in another tab or window. */
-export const leaves = (event) =>
-  event.button === 0 && !(event.metaKey || event.ctrlKey || event.shiftKey || event.altKey);
 
 /** A web push public key, base64url as the server gives it, as the bytes `pushManager.subscribe()` takes. */
 export function decodeKey(value) {
@@ -387,13 +329,7 @@ export function initBell(
 
   async function postPush(url, data) {
     try {
-      const response = await fetcher(url, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': push.token },
-        body: JSON.stringify(data),
-      });
-      return response.ok && !response.redirected;
+      return isAccepted(await postJson(fetcher, url, push.token, data));
     } catch {
       return false;
     }

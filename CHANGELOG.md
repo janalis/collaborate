@@ -25,6 +25,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `notifications/topics.js` and `notifications/page.js` no longer start the
+  page's bells when imported: their helpers moved to
+  `notifications/shared.js`. A page that shows a bell loads `bell.js`, as the
+  bundle's entry points do.
 - The draft endpoint and the hub check the CSRF token, and the draft
   endpoint its rate limit, before reading the JSON body: a forged request
   with a malformed body is refused with 403 instead of 400.

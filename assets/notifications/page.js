@@ -7,8 +7,8 @@
 // marks read, unread or clears, one row or all of them, and tells the bell (bell.js) through the document
 // (`collaborate:notifications-changed`, `origin: 'page'`), which tells it in return when the hub said the
 // list changed elsewhere (`origin: 'bell'`, `heard`).
-import { backgroundFetch } from '../hub.js';
-import { fetchFragment, formatDates, leaves, parseFragment, postChange, settingsOf } from './bell.js';
+import { backgroundFetch } from '../http.js';
+import { fetchFragment, formatDates, leaves, parseFragment, postChange, settingsOf } from './shared.js';
 
 const ROW = '.collaborate-notification-row';
 const MORE = '.collaborate-notification-more';

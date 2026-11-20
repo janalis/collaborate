@@ -1,4 +1,5 @@
-import { backgroundFetch, hubFor, layerConfig } from '../hub.js';
+import { backgroundFetch, isDenied, postJson } from '../http.js';
+import { hubFor, layerConfig } from '../hub.js';
 import { rowOf } from '../markup.js';
 import { captureCaret, focusedField, MAX_CARET_OFFSET, resolveCaret, sameCaret } from './carets.js';
 import {
@@ -181,15 +182,9 @@ export function initCursors(
 
   async function request(url, body, keepalive = false, grant = layer.dataset.grant) {
     const { csrf } = layer.dataset;
-    const response = await fetcher(url, {
-      method: 'POST',
-      credentials: 'same-origin',
-      keepalive,
-      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
-      body: JSON.stringify({ grant, ...body }),
-    });
+    const response = await postJson(fetcher, url, csrf, { grant, ...body }, { keepalive });
     // The grant of a room already left (its departure) refuses nothing.
-    if (([401, 403].includes(response.status) || response.redirected) && grant === layer.dataset.grant) {
+    if (isDenied(response) && grant === layer.dataset.grant) {
       const credentials = `${grant} ${csrf}`;
       if (!hub || refused === credentials) refuse();
       else if (credentials === `${layer.dataset.grant} ${layer.dataset.csrf}`) {

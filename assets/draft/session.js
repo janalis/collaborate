@@ -1,6 +1,7 @@
 import { bridge } from '../bridge.js';
 import { hasPendingUpload } from '../ckeditor5/source.js';
-import { backgroundFetch, hubFor } from '../hub.js';
+import { backgroundFetch, HttpError, isAccepted, isDenied, postJson } from '../http.js';
+import { hubFor } from '../hub.js';
 import { CollaborateBar, confirmAction } from './bar.js';
 import { initializeCollections } from './collections.js';
 import { renderConflicts } from './conflicts.js';
@@ -9,16 +10,6 @@ import { initializeText, initializeValue, valueAdapter } from './fields.js';
 const sessions = new WeakMap();
 
 /** A request the server answered with an error: its status tells a refusal from a busy server. */
-class HttpError extends Error {
-  /**
-   * @param {string} message
-   * @param {number} status
-   */
-  constructor(message, status) {
-    super(message);
-    this.status = status;
-  }
-}
 const grantScope = (grant) =>
   JSON.parse(
     new TextDecoder().decode(Uint8Array.from(atob(grant.split('.')[0]), (character) => character.charCodeAt(0)))
@@ -173,20 +164,20 @@ export class DraftSession {
     const grant = this.configuration.grant;
     // Once the server has verified this grant, its signature stands for the whole field schema.
     const short = this.acknowledged === grant;
-    const response = await this.fetcher(this.configuration.url.replace('__action__', action), {
-      method: 'POST',
-      credentials: 'same-origin',
-      signal,
-      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': this.configuration.csrf },
-      body: JSON.stringify({ grant: short ? grant.split('.')[1] : grant, ...body }),
-    });
+    const response = await postJson(
+      this.fetcher,
+      this.configuration.url.replace('__action__', action),
+      this.configuration.csrf,
+      { grant: short ? grant.split('.')[1] : grant, ...body },
+      { signal }
+    );
     signal.throwIfAborted();
     if (short && response.status === 412) {
       if (this.acknowledged === grant) this.acknowledged = null;
       return this.request(action, body, renewed);
     }
     if (response.ok) this.acknowledged = grant;
-    if (response.redirected || [401, 403].includes(response.status)) {
+    if (isDenied(response)) {
       // A grant expires after 10 h: the form's action signs another one, unless the editor lost the right to it.
       if (!response.redirected && !renewed && (await this.renewGrant(grant))) return this.request(action, body, true);
       if (!this.stopped) this.halt('denied');
@@ -595,7 +586,7 @@ export class DraftSession {
       throw new HttpError(`Collaborate record refresh: ${response.status}`, response.status);
     }
     // A sign-in page, or a form no longer shared, reads as no configuration.
-    const refreshed = response.ok && !response.redirected ? await response.json().catch(() => null) : null;
+    const refreshed = isAccepted(response) ? await response.json().catch(() => null) : null;
     if (!refreshed?.configuration) {
       this.halt('denied');
       throw new Error('Collaborate record is unavailable.');

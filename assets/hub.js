@@ -1,10 +1,10 @@
 // @ts-check
-// Captured when the module is evaluated, before any module of the bundle that imports it: collaboration traffic
-// is background traffic, and a host that wraps `window.fetch` (a loading indicator, say) must load easyadmin.js
-// before installing its wrapper. Every module sends with this one.
+import { backgroundFetch, isAccepted, isDenied, postJson } from './http.js';
 import { settingsOf } from './settings.js';
 
-export const backgroundFetch = window.fetch.bind(window);
+// Hosts and modules read it here as well as in http.js.
+export { backgroundFetch };
+
 const hubs = new WeakMap();
 
 /** The layer's `data-config` JSON: an absent or malformed one reads as no settings, each module keeping its defaults. */
@@ -161,20 +161,17 @@ export class CollaborateHub {
     for (const name of this.transport ? [this.transport] : Object.keys(this.sources))
       this.#source(name).catch(() => {});
     try {
-      const response = await this.fetcher(this.layer.dataset.sessionUrl, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': this.layer.dataset.csrf },
-        body: JSON.stringify({
-          grant: this.layer.dataset.grant,
-          updates: members.some((member) => member.channel === 'updates'),
-          // The user's own notifications topic is granted to a page that asks for it alone.
-          notifications: members.some((member) => member.channel === 'notifications'),
-          drafts: drafts.map((member) => member.grant(full)),
-        }),
+      // The layer always names its session URL.
+      const url = /** @type {string} */ (this.layer.dataset.sessionUrl);
+      const response = await postJson(this.fetcher, url, this.layer.dataset.csrf, {
+        grant: this.layer.dataset.grant,
+        updates: members.some((member) => member.channel === 'updates'),
+        // The user's own notifications topic is granted to a page that asks for it alone.
+        notifications: members.some((member) => member.channel === 'notifications'),
+        drafts: drafts.map((member) => member.grant(full)),
       });
       if (signal.aborted) return;
-      if ([401, 403, 404].includes(response.status) || response.redirected) {
+      if (isDenied(response) || response.status === 404) {
         // A page grant past its hours, or a CSRF token a new session replaced, renews once from the page.
         if (!this.renewed) {
           const renewed = await this.renew();
@@ -367,7 +364,7 @@ export class CollaborateHub {
         cache: 'no-store',
         headers: { 'X-Collaborate-Renew': '1' },
       });
-      if (!response.ok || response.redirected) return false;
+      if (!isAccepted(response)) return false;
       const fresh = /** @type {HTMLElement | null} */ (
         new DOMParser().parseFromString(await response.text(), 'text/html').querySelector('[data-collaborate-layer]')
       );

@@ -77,8 +77,8 @@ if (editors?.ckeditor5 && shared()) {
   const { attach, detach } = ckeditor5;
   /** @typedef {import('@janalis/collaborate/draft/session.js').EditorHandle} EditorHandle */
   /**
-   * @typedef {{ handle?: EditorHandle, given?: boolean, created?: boolean, ready?: boolean }} Attach an attach, the
-   *   draft's handle of its editor, whether Drupal began creating it and whether it is ready
+   * @typedef {{ handle?: EditorHandle, given?: boolean, created?: boolean }} Attach an attach, the draft's handle of
+   *   its editor, and whether Drupal began creating it
    */
   // Each field's latest attach, until Drupal detaches it: one Drupal replaced meanwhile (a text format switched)
   // creates nothing, and one detached gives its editor's wait back.
@@ -95,10 +95,14 @@ if (editors?.ckeditor5 && shared()) {
     const classic = page.CKEditor5?.editorClassic?.ClassicEditor;
     if (!classic || watchers.has(classic.create)) return;
     const create = classic.create;
-    // A subclass inheriting `create` creates its own kind; a call without a class, Drupal's.
+    // A subclass inheriting `create` creates its own kind; a call without a class is Drupal's class's of now.
     /** @this {unknown} */
     const watcher = function (/** @type {unknown[]} */ ...args) {
-      const created = create.apply(this ?? page.CKEditor5?.editorClassic?.ClassicEditor ?? classic, args);
+      if (this === undefined) {
+        const now = page.CKEditor5?.editorClassic?.ClassicEditor ?? classic;
+        return now.create.apply(now, args);
+      }
+      const created = create.apply(this, args);
       const pending = awaited;
       if (pending && pending.element === args[0]) {
         awaited = null;
@@ -187,10 +191,6 @@ if (editors?.ckeditor5 && shared()) {
               giveBack(element, mine);
               return false;
             },
-            ready: () => {
-              mine.ready = true;
-              handle.ready();
-            },
           },
         },
       },
@@ -217,13 +217,6 @@ if (editors?.ckeditor5 && shared()) {
     } finally {
       awaited = null;
     }
-    // However Drupal creates it (later, or out of sight), an editor not ready in time cannot follow the draft.
-    setTimeout(
-      () => {
-        if (!mine.ready && current()) handle.failed();
-      },
-      session.setting('nextEditorGrace', 10_000)
-    );
   };
 
   /**

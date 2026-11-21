@@ -589,17 +589,17 @@ test('each editor of a field settles its own wait: a later one replaces it, whoe
   const timers = vi.getTimerCount();
   second.release();
   expect(vi.getTimerCount()).toBe(timers + 1);
-  // A third editor is awaited afresh, and takes the time given.
+  // A third editor is awaited afresh, and takes the time given: one deadline, its own.
   const third = (await session.editorConfiguration(field)).collaborate;
-  expect(vi.getTimerCount()).toBe(timers);
+  expect(vi.getTimerCount()).toBe(timers + 1);
   expect(session.editorWaiters.get('Record[body]').ready).toBe(false);
-  // Gone before it was ready, its field still in the form: the field's next editor takes the wait in time, and
-  // the time given is counted once.
+  // Gone before it was ready, its field still in the form: the time given is counted once.
   third.release();
   third.release();
   expect(vi.getTimerCount()).toBe(timers + 1);
-  expect(session.editorWaiters.get('Record[body]').ready).toBe(false);
+  // The field's next editor, ready in time, holds nothing.
   const next = (await session.editorConfiguration(field)).collaborate;
+  next.ready();
   expect(vi.getTimerCount()).toBe(timers);
   vi.advanceTimersByTime(10_000);
   expect(session.stopped).toBeFalsy();
@@ -615,6 +615,32 @@ test('each editor of a field settles its own wait: a later one replaces it, whoe
   expect(session.stopped).toBeFalsy();
   vi.advanceTimersByTime(1);
   expect(session.stopped).toBe(true);
+  vi.useRealTimers();
+});
+
+test('an editor not ready in time stops the draft, unless its field left the form', async () => {
+  const { session, form } = fixture('<textarea name="Record[body]"></textarea>', {
+    'Record[body]': { type: 'rich', initial: 'Body' },
+  });
+  await session.ready;
+  vi.useFakeTimers();
+  const field = { name: 'Record[body]' };
+  // Its field gone meanwhile (no host said so): nothing waits for it.
+  (await session.editorConfiguration(field)).collaborate;
+  const textarea = form.querySelector('textarea');
+  textarea.remove();
+  vi.advanceTimersByTime(10_000);
+  expect(session.editorWaiters.has('Record[body]')).toBe(false);
+  expect(session.stopped).toBeFalsy();
+  form.append(textarea);
+  // Still there: the draft stops.
+  (await session.editorConfiguration(field)).collaborate;
+  vi.advanceTimersByTime(10_000);
+  expect(session.stopped).toBe(true);
+  // A draft stopped awaits no editor.
+  const timers = vi.getTimerCount();
+  (await session.editorConfiguration(field)).collaborate;
+  expect(vi.getTimerCount()).toBe(timers);
   vi.useRealTimers();
 });
 

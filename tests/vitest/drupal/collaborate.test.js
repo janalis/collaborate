@@ -14,7 +14,6 @@ function fakeSession(overrides = {}) {
     }),
     initializeControls: vi.fn(),
     scanCollections: vi.fn(),
-    setting: vi.fn((_name, fallback) => fallback),
     ...overrides,
   };
   return session;
@@ -107,7 +106,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  vi.useRealTimers();
   vi.resetModules();
   vi.restoreAllMocks();
   delete globalThis.Drupal;
@@ -130,7 +128,7 @@ test("a shared field's editor follows the draft, created on its content with the
     plugins: ['basic', 'collaborate.Collaborate'],
     config: {
       toolbar: [],
-      collaborate: { ...session.handles[0], current: expect.any(Function), ready: expect.any(Function) },
+      collaborate: { ...session.handles[0], current: expect.any(Function) },
     },
   });
   expect(collaborate.current()).toBe(true);
@@ -357,32 +355,6 @@ test("an attach hears only its field's first creation", async () => {
   await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(3));
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(session.handles[0].failed).not.toHaveBeenCalled();
-});
-
-test('an editor not ready in time stops the draft, however Drupal creates it', async () => {
-  build();
-  const session = await load({ session: followed() });
-  session.setting = vi.fn(() => 100);
-  const ckeditor5 = globalThis.Drupal.editors.ckeditor5;
-  ckeditor5.attach(body(), format);
-  await vi.waitFor(() => expect(attach).toHaveBeenCalledOnce());
-  expect(session.handles[0].failed).not.toHaveBeenCalled();
-  await vi.waitFor(() => expect(session.handles[0].failed).toHaveBeenCalledOnce());
-  expect(session.setting).toHaveBeenCalledWith('nextEditorGrace', 10_000);
-  // One ready in time, or whose attach Drupal replaced, stops nothing.
-  session.stopped = false;
-  ckeditor5.attach(body(), format);
-  await vi.waitFor(() => expect(attach).toHaveBeenCalledTimes(2));
-  attach.mock.calls[1][1].editorSettings.config.collaborate.ready();
-  expect(session.handles[1].ready).toHaveBeenCalledOnce();
-  await new Promise((resolve) => setTimeout(resolve, 200));
-  expect(session.handles[1].failed).not.toHaveBeenCalled();
-  ckeditor5.attach(body(), format);
-  await vi.waitFor(() => expect(attach).toHaveBeenCalledTimes(3));
-  ckeditor5.detach(body(), format, 'unload');
-  await new Promise((resolve) => setTimeout(resolve, 200));
-  expect(session.handles[1].failed).not.toHaveBeenCalled();
-  expect(session.handles[2].failed).not.toHaveBeenCalled();
 });
 
 test("a creation Drupal began is the editor's outcome, whatever Drupal's attach does next or returns", async () => {

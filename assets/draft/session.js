@@ -478,33 +478,47 @@ export class DraftSession {
     if (previous && previous !== waiter && !previous.ready) waiter.promise.then(previous.resolve);
     waiter.claimed = true;
     const current = () => this.editorWaiters.get(name) === waiter;
+    const gone = () => !this.form.isConnected || !this.form.elements.namedItem(this.formName(name));
+    // Its editor, or once it went away the field's next, has a while to come: then nothing waits for a field gone
+    // from the form, and the draft, which cannot follow a field still there without an editor, stops.
+    const deadline = () => {
+      clearTimeout(waiter.grace);
+      waiter.grace = setTimeout(
+        () => {
+          if (!current()) return;
+          if (!gone()) {
+            this.editorFailed();
+            return;
+          }
+          this.editorWaiters.delete(name);
+          waiter.resolve();
+        },
+        this.setting('nextEditorGrace', 10_000)
+      );
+    };
+    if (!this.stopped) deadline();
     return {
       getSession: () => this,
       field: name,
       current,
       ready: () => {
-        if (current()) waiter.resolve();
+        if (!current()) return;
+        clearTimeout(waiter.grace);
+        waiter.resolve();
       },
       failed: () => {
         if (current()) this.editorFailed();
       },
-      // An editor gone: nothing waits for a field gone from the form. One still there awaits its next editor
-      // (rebuilt, or of another format), which takes this wait; none in time, and the draft, which cannot follow the
-      // field without one, stops.
+      // An editor gone: nothing waits for a field gone from the form; one still there awaits its next editor
+      // (rebuilt, or of another format), which takes this wait in time.
       release: () => {
         if (!current() || this.stopped) return;
-        if (!this.form.isConnected || !this.form.elements.namedItem(this.formName(name))) {
+        if (gone()) {
           this.editorWaiters.delete(name);
           waiter.resolve();
           return;
         }
-        clearTimeout(waiter.grace);
-        waiter.grace = setTimeout(
-          () => {
-            if (current()) this.editorFailed();
-          },
-          this.setting('nextEditorGrace', 10_000)
-        );
+        deadline();
       },
     };
   }

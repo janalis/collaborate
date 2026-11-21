@@ -601,7 +601,9 @@ final class Configuration
             ->min(0)
             ->end()
             ->integerNode('next_editor_grace')
-            ->info('Seconds a rich-text field whose editor went away waits for its next editor before the draft stops.')
+            ->info(
+                'Seconds a rich-text field waits for its editor (its first, or its next once one went away) before the draft stops.',
+            )
             ->defaultValue(FormDraft::REPLAY['next_editor_grace'])
             ->min(1)
             ->end()

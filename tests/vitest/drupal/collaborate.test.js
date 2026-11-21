@@ -334,41 +334,49 @@ test('an editor whose creation fails once it followed the draft stops it: Drupal
   await vi.waitFor(() => expect(session.handles[0].failed).toHaveBeenCalledOnce());
 });
 
-test("each attach hears its own editor's creation, in order, and a subclass of Drupal's class creates its kind", async () => {
+test("an attach hears only its field's first creation", async () => {
   build();
-  /** @type {((error: Error) => void)[]} */
-  const failures = [];
-  const create = vi.fn(
-    () =>
-      new Promise((_resolve, reject) => {
-        failures.push(reject);
-      })
+  const failed = Promise.reject(new Error('Not this one.'));
+  failed.catch(() => {});
+  const create = vi.fn((element) =>
+    element === body() && create.mock.calls.length === 2 ? Promise.resolve() : failed
   );
   globalThis.CKEditor5.editorClassic = { ClassicEditor: { create } };
   const session = await load({ session: followed() });
-  /** @type {(() => void)[]} */
-  const later = [];
+  // Drupal's attach creates another field's editor, then this field's, then this field's again: only the second is
+  // this attach's.
   attach.mockImplementation((element) => {
-    later.push(() => globalThis.CKEditor5.editorClassic.ClassicEditor.create(element).catch(() => {}));
+    const { ClassicEditor } = globalThis.CKEditor5.editorClassic;
+    ClassicEditor.create(document.createElement('textarea')).catch(() => {});
+    ClassicEditor.create(element).catch(() => {});
+    ClassicEditor.create(element).catch(() => {});
   });
-  const ckeditor5 = globalThis.Drupal.editors.ckeditor5;
-  // Two attaches of the field (its format switched) whose editors Drupal creates late, in turn.
-  ckeditor5.attach(body(), format);
+  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(3));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(session.handles[0].failed).not.toHaveBeenCalled();
+});
+
+test("Drupal's class, watched, creates as it did: a subclass its own kind, a call without a class Drupal's", async () => {
+  build();
+  const create = vi.fn(async () => {});
+  globalThis.CKEditor5.editorClassic = { ClassicEditor: { create } };
+  await load({ session: followed() });
+  attach.mockImplementation((element) => globalThis.CKEditor5.editorClassic.ClassicEditor.create(element));
+  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
   await vi.waitFor(() => expect(attach).toHaveBeenCalledOnce());
-  ckeditor5.attach(body(), format);
-  await vi.waitFor(() => expect(attach).toHaveBeenCalledTimes(2));
-  for (const each of later) each();
-  // The first's editor fails: its attach, replaced, only gives its wait back.
-  failures[0](new Error('Destroyed.'));
-  await vi.waitFor(() => expect(session.handles[0].release).toHaveBeenCalledOnce());
-  expect(session.handles[1].failed).not.toHaveBeenCalled();
-  // The second's fails too: its own attach hears it.
-  failures[1](new Error('A plugin failed.'));
-  await vi.waitFor(() => expect(session.handles[1].failed).toHaveBeenCalledOnce());
-  // A subclass inheriting `create` is the class `create` builds.
-  const Sub = Object.create(globalThis.CKEditor5.editorClassic.ClassicEditor);
-  Sub.create(document.createElement('textarea')).catch(() => {});
+  const { ClassicEditor } = globalThis.CKEditor5.editorClassic;
+  const Sub = Object.create(ClassicEditor);
+  await Sub.create(document.createElement('textarea'));
   expect(create.mock.contexts.at(-1)).toBe(Sub);
+  const detached = ClassicEditor.create;
+  await detached(document.createElement('textarea'));
+  expect(create.mock.contexts.at(-1)).toBe(ClassicEditor);
+  // A subclass made Drupal's class is not watched twice: its inherited `create` is the watcher already.
+  globalThis.CKEditor5.editorClassic = { ClassicEditor: Sub };
+  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledTimes(2));
+  expect(Object.hasOwn(Sub, 'create')).toBe(false);
 });
 
 test('an editor created while its attach is current gives nothing back', async () => {
@@ -511,7 +519,7 @@ test('a field the draft does not follow takes Drupal’s editor at once, or once
   expect(session.editorFailed).toHaveBeenCalledOnce();
 });
 
-test('an editor Drupal fails to create tells its handle, whenever Drupal creates it', async () => {
+test("an editor Drupal fails to create as it attaches tells its handle; Drupal's class is watched once", async () => {
   build();
   /** @type {Promise<unknown>[]} */
   const creations = [];
@@ -520,8 +528,7 @@ test('an editor Drupal fails to create tells its handle, whenever Drupal creates
     if (failure) throw failure;
   });
   globalThis.CKEditor5.editorClassic = { ClassicEditor: { create } };
-  // Drupal's attach creates the editor of the field, and logs a failure: core before its attach returns, another
-  // build later.
+  // Drupal's attach creates the field's editor before it returns, and logs a failure.
   /** @param {HTMLTextAreaElement} element */
   const drupal = (element) => {
     const created = globalThis.CKEditor5.editorClassic.ClassicEditor.create(element, {});
@@ -539,35 +546,17 @@ test('an editor Drupal fails to create tells its handle, whenever Drupal creates
   expect(session.handles[0].failed).toHaveBeenCalledOnce();
   expect(session.editorFailed).toHaveBeenCalledOnce();
   expect(create).toHaveBeenCalledWith(body(), {});
-
-  // Created later, after Drupal's attach returned.
-  vi.resetModules();
-  const late = await load({ session: followed() });
-  /** @type {() => void} */
-  let later;
-  attach.mockImplementation((element) => {
-    later = () => drupal(element);
-  });
-  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
-  await vi.waitFor(() => expect(attach).toHaveBeenCalledOnce());
-  later();
-  await settled();
-  expect(late.handles[0].failed).toHaveBeenCalledOnce();
-  // Heard once: Drupal creating the field's editor again tells that attach nothing more.
-  later();
-  await settled();
-  expect(late.handles[0].failed).toHaveBeenCalledOnce();
-  // Drupal's class is watched once, however many fields attach.
-  late.stopped = false;
+  // A creation once that attach returned, or for another field, is Drupal's alone.
+  globalThis.CKEditor5.editorClassic.ClassicEditor.create(body()).catch(() => {});
+  globalThis.CKEditor5.editorClassic.ClassicEditor.create(document.createElement('textarea')).catch(() => {});
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(session.handles[0].failed).toHaveBeenCalledOnce();
+  // Watched once, however many fields attach.
+  session.stopped = false;
   const watching = globalThis.CKEditor5.editorClassic.ClassicEditor.create;
   globalThis.Drupal.editors.ckeditor5.attach(body(), format);
-  await vi.waitFor(() => expect(attach).toHaveBeenCalledTimes(2));
+  await vi.waitFor(() => expect(creations).toHaveLength(2));
   expect(globalThis.CKEditor5.editorClassic.ClassicEditor.create).toBe(watching);
-  // An editor created for another element, or without one, is Drupal's alone.
-  globalThis.CKEditor5.editorClassic.ClassicEditor.create(document.createElement('textarea')).catch(() => {});
-  globalThis.CKEditor5.editorClassic.ClassicEditor.create().catch(() => {});
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  expect(late.handles[0].failed).toHaveBeenCalledOnce();
 
   // A creation that succeeds tells nothing: the plugin does, once the editor is ready.
   failure = null;
@@ -575,7 +564,7 @@ test('an editor Drupal fails to create tells its handle, whenever Drupal creates
   const created = await load({ session: followed() });
   attach.mockImplementation(drupal);
   globalThis.Drupal.editors.ckeditor5.attach(body(), format);
-  await vi.waitFor(() => expect(creations).toHaveLength(4));
+  await vi.waitFor(() => expect(creations).toHaveLength(3));
   await settled();
   expect(created.handles[0].failed).not.toHaveBeenCalled();
 });

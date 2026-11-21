@@ -15,9 +15,10 @@ export default class Collaborate extends Plugin {
      * What `session.editorConfiguration(field)` hands the editor: the session's factory, the shared field, and what
      * tells the session this editor is ready.
      */
-    const configuration = /** @type {{ getSession: () => any, field: string, ready?: () => boolean } | undefined} */ (
-      this.editor.config.get('collaborate')
-    );
+    const configuration =
+      /** @type {{ getSession: () => any, field: string, current?: () => boolean, ready?: () => void } | undefined} */ (
+        this.editor.config.get('collaborate')
+      );
     if (!configuration) return;
     // CKEditor deep-clones configuration objects, including Map state. A factory
     // keeps every editor attached to the form's actual transport instance.
@@ -26,7 +27,7 @@ export default class Collaborate extends Plugin {
     this.field = configuration.field;
     this.editor.on('ready', () => {
       // An editor the draft no longer waits for (a later one replaced it, its field left) follows nothing.
-      if (configuration.ready?.() === false) return;
+      if (configuration.current?.() === false) return;
       this.buffer = new OperationBuffer(this.editor.model, () => session.schedule());
       const receive = this.buffer.receive.bind(this.buffer);
       this.buffer.receive = (event) => {
@@ -57,10 +58,14 @@ export default class Collaborate extends Plugin {
       };
       this.buffer.adopt = (source) => this.applySource(source);
       this.unregister = session.register(configuration.field, this.buffer);
+      // The draft follows this editor from now on: the form it waited for is released.
+      configuration.ready?.();
     });
   }
 
   attachSource() {
+    // An editor that follows nothing shares no mode.
+    if (!this.buffer) return;
     this.removeMode = this.session?.registerMode?.(
       this.field,
       this.editor,

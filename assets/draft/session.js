@@ -82,15 +82,16 @@ import { initializeText, initializeValue, valueAdapter } from './fields.js';
 
 /** @typedef {{ ready: boolean, claimed?: boolean, resolve: () => void, promise: Promise<void> }} EditorWaiter */
 /**
- * What `editorConfiguration()` hands one editor of a field, as `collaborate`: the `Collaborate` plugin calls `ready`
- * once the editor is, and follows the draft only if it answers `true`; the host calls `failed` when the editor cannot
- * be created or wired, or `release` when the field leaves without one. Each settles this editor's wait only, and
- * nothing once a later editor of the field or the field's removal replaced it.
+ * What `editorConfiguration()` hands one editor of a field, as `collaborate`: the `Collaborate` plugin follows the
+ * draft only while `current` answers `true`, and calls `ready` once it does; the host calls `failed` when the editor
+ * cannot be created or wired, or `release` when the field leaves the form without one. Each settles this editor's
+ * wait only, and nothing once a later editor of the field or the field's removal replaced it.
  *
  * @typedef {object} EditorHandle
  * @property {() => DraftSession} getSession
  * @property {string} field
- * @property {() => boolean} ready
+ * @property {() => boolean} current
+ * @property {() => void} ready
  * @property {() => void} failed
  * @property {() => void} release
  */
@@ -477,16 +478,16 @@ export class DraftSession {
     return {
       getSession: () => this,
       field: name,
+      current,
       ready: () => {
-        if (!current()) return false;
-        waiter.resolve();
-        return true;
+        if (current()) waiter.resolve();
       },
       failed: () => {
         if (current()) this.editorFailed();
       },
+      // A field still in the form awaits its next editor (rebuilt, or of another format), which takes this wait.
       release: () => {
-        if (!current()) return;
+        if (!current() || this.form.elements.namedItem(this.formName(name))) return;
         this.editorWaiters.delete(name);
         waiter.resolve();
       },
@@ -730,11 +731,12 @@ export class DraftSession {
     for (const radio of radios) radio.addEventListener('change', modeChanged);
     field.addEventListener('input', sourceChanged);
     field.addEventListener('blur', settle);
+    // A later editor of the field may have registered its own since: they stay.
     return () => {
       clearTimeout(/** @type {number | undefined} */ (sourceTimer));
-      this.sources.delete(name);
+      if (this.sources.get(name) === settle) this.sources.delete(name);
       editor.model.document.off('change:data', uploadChanged);
-      this.adapters.delete(modeName);
+      if (this.adapters.get(modeName) === adapter) this.adapters.delete(modeName);
       for (const radio of radios) radio.removeEventListener('change', modeChanged);
       field.removeEventListener('input', sourceChanged);
       field.removeEventListener('blur', settle);

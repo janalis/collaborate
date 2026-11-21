@@ -39,7 +39,11 @@ versions follow [Semantic Versioning](https://semver.org/).
   follows nothing: a removed entry's late editor no longer releases the form
   for the entry added again under its key, nor takes its edits. An earlier
   editor destroyed once a later one registered no longer unregisters it, and
-  removing an entry stops the wait for its editors still starting.
+  removing an entry stops the wait for its editors still starting. An editor
+  asks `collaborate.current()` before it follows the draft, and is said ready
+  only once it registered. Drupal: a field whose text format is switched to
+  one without an editor stops the draft, which cannot follow it; switched to
+  another editor, the form waits for that one, however long Drupal takes.
 - Drupal: a list set in a higher layer of the options (the form, then
   settings.php) replaces the one below whole: an `advanced` list no longer
   shows through a shorter one. So do the maps the bundle replaces whole from

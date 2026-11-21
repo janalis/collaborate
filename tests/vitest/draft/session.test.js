@@ -551,12 +551,14 @@ test('awaits the editor of an entry added again under a key whose editor was det
   expect(detached.ready).toBe(true);
   const added = (await session.editorConfiguration(field)).collaborate;
   // The removed entry's editor, late, settles nothing of the new entry's, and follows nothing.
-  expect(removed.ready()).toBe(false);
+  expect(removed.current()).toBe(false);
+  removed.ready();
   removed.failed();
   removed.release();
   expect(session.editorWaiters.get('Record[body]').ready).toBe(false);
   expect(session.stopped).toBeFalsy();
-  expect(added.ready()).toBe(true);
+  expect(added.current()).toBe(true);
+  added.ready();
   expect(session.editorWaiters.get('Record[body]').ready).toBe(true);
 });
 
@@ -585,10 +587,15 @@ test('each editor of a field settles its own wait: a later one replaces it, whoe
   // A third editor is awaited afresh.
   const third = (await session.editorConfiguration(field)).collaborate;
   expect(session.editorWaiters.get('Record[body]').ready).toBe(false);
-  // Its field taken off without an editor: nothing waits for it.
+  // Its field still in the form awaits its next editor; once the field left, nothing waits for it.
+  third.release();
+  expect(session.editorWaiters.get('Record[body]').ready).toBe(false);
+  const textarea = form.querySelector('textarea');
+  textarea.remove();
   third.release();
   expect(session.editorWaiters.has('Record[body]')).toBe(false);
   third.release();
+  form.append(textarea);
   // An editor that cannot be created, or wired once ready, stops the draft.
   const fourth = (await session.editorConfiguration(field)).collaborate;
   fourth.ready();
@@ -1198,6 +1205,16 @@ test('shares source mode while preserving pending local choices and locking sour
   expect(markdown.disabled).toBe(false);
   remove();
   expect(session.adapters.has(`${name}[__mode__]`)).toBe(false);
+  expect(session.sources.has(name)).toBe(false);
+  // An earlier editor's removal, once a later one registered, leaves the later one's mode and source.
+  const earlier = session.registerMode(name, { sourceElement: field, model }, apply);
+  const later = session.registerMode(name, { sourceElement: field, model }, apply);
+  const mode = session.adapters.get(`${name}[__mode__]`);
+  const source = session.sources.get(name);
+  earlier();
+  expect(session.adapters.get(`${name}[__mode__]`)).toBe(mode);
+  expect(session.sources.get(name)).toBe(source);
+  later();
   session.registerMode(name, { sourceElement: null }, apply)();
   model.destroy();
 });

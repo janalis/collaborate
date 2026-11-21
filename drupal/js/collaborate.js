@@ -82,22 +82,18 @@ if (editors?.ckeditor5 && shared()) {
   const attaches = new WeakMap();
 
   /**
-   * Gives an editor's wait back once Drupal is done (it detaches a field before it attaches its rebuild or its next
-   * format), unless the field is attached again: the draft then waits for that editor instead.
+   * Gives an editor's wait back once Drupal is done (it detaches a field before it puts its rebuild in its place):
+   * the session lets it go if the field left the form, and otherwise waits for the field's next editor. A field
+   * whose format now has no editor cannot follow the draft: the form falls back to ordinary editing.
    *
    * @param {HTMLTextAreaElement} element
    * @param {EditorHandle} handle
    */
   const giveBack = (element, handle) =>
     setTimeout(() => {
-      const again = Array.from(document.querySelectorAll('form[data-collaborate] textarea')).some(
-        (other) =>
-          other instanceof HTMLTextAreaElement &&
-          other.name === element.name &&
-          attaches.has(other) &&
-          sessions?.sessionFor(other) === handle.getSession()
-      );
-      if (!again) handle.release();
+      const active = element.getAttribute('data-editor-active-text-format');
+      if (element.isConnected && active && !page.drupalSettings?.editor?.formats?.[active]) handle.failed();
+      else handle.release();
     });
 
   /**
@@ -149,8 +145,8 @@ if (editors?.ckeditor5 && shared()) {
           // An editor ready once its attach was replaced, or its field gone, follows nothing.
           collaborate: {
             ...handle,
-            ready: () => {
-              if (current()) return handle.ready();
+            current: () => {
+              if (current()) return handle.current();
               giveBack(element, handle);
               return false;
             },

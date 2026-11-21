@@ -17,11 +17,12 @@ const editors = [];
 
 async function peer(initial = '<p>abcd</p>', extraPlugins = [], follows = true) {
   let buffer;
-  // Told once the editor is ready, before it follows the draft.
-  const ready = vi.fn(() => {
+  // Asked before the editor follows the draft, told once it does.
+  const current = vi.fn(() => {
     expect(session.register).not.toHaveBeenCalled();
     return follows;
   });
+  const ready = vi.fn(() => expect(session.register).toHaveBeenCalledOnce());
   const session = {
     adapters: new Map(),
     applying: false,
@@ -54,14 +55,14 @@ async function peer(initial = '<p>abcd</p>', extraPlugins = [], follows = true) 
       Collaborate,
       ...extraPlugins,
     ],
-    collaborate: { getSession: () => session, field: 'body', ready },
+    collaborate: { getSession: () => session, field: 'body', current, ready },
   });
   editors.push(editor);
   editor.model.document.createRoot();
   await editor.initPlugins();
   await editor.data.init(initial);
   editor.fire('ready');
-  return { editor, buffer, session, ready };
+  return { editor, buffer, session, current, ready };
 }
 
 const insert = (peer, value, offset) =>
@@ -91,9 +92,15 @@ test('uses the requested public plugin name and stays inactive without configura
 
 test('an editor the draft no longer waits for follows nothing', async () => {
   const late = await peer('<p>abcd</p>', [], false);
-  expect(late.ready).toHaveBeenCalledOnce();
+  expect(late.current).toHaveBeenCalledOnce();
+  expect(late.ready).not.toHaveBeenCalled();
   expect(late.session.register).not.toHaveBeenCalled();
-  expect(late.editor.plugins.get('Collaborate').buffer).toBeUndefined();
+  const plugin = late.editor.plugins.get('Collaborate');
+  expect(plugin.buffer).toBeUndefined();
+  // Nor shares its mode.
+  late.session.registerMode = vi.fn();
+  plugin.attachSource();
+  expect(late.session.registerMode).not.toHaveBeenCalled();
 });
 
 test('merges two simultaneous writers, undoes only local content and synchronizes redo', async () => {

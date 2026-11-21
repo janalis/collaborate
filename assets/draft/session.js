@@ -992,33 +992,7 @@ export class DraftSession {
       }
     }
     window.onbeforeunload = null;
-    // A page that asks whether to leave (a site's unsaved-changes prompt) may stay: asked first, as the browser will,
-    // with the event the browser sends (its `returnValue` the prompt's message), or a plain one where none is made.
-    /** @type {Event} */
-    let asking;
-    try {
-      asking = document.createEvent('BeforeUnloadEvent');
-      asking.initEvent('beforeunload', false, true);
-    } catch {
-      asking = new Event('beforeunload', { cancelable: true });
-    }
-    window.dispatchEvent(asking);
-    const message = /** @type {{ returnValue?: unknown }} */ (asking).returnValue;
-    const asked = asking.defaultPrevented || (typeof message === 'string' && message !== '');
     location.reload();
-    if (!asked) return;
-    // One that stays goes on with ordinary editing, its draft (halted for the reload) stopped: its controls are no
-    // longer held inert.
-    let left = false;
-    const leave = () => {
-      left = true;
-    };
-    window.addEventListener('pagehide', leave, { once: true });
-    setTimeout(() => {
-      if (left) return;
-      this.setStatus('unavailable');
-      this.stop();
-    }, 10_000);
   }
 
   noticeKey() {

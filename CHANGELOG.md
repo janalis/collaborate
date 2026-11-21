@@ -121,10 +121,6 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- A draft that reloads its page (rebased, superseded, discarded by a peer)
-  on a page whose own unsaved-changes prompt the user answers by staying no
-  longer leaves the form inert: ten seconds on, the draft stops and the form
-  goes on with ordinary editing.
 - A shared draft that stops while an editor is still awaited (access
   denied, the draft full or discarded) releases the form's controls, which
   stayed inert until the page was reloaded; one about to reload keeps them

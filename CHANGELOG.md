@@ -47,8 +47,10 @@ versions follow [Semantic Versioning](https://semver.org/).
   only once it registered. Drupal: a field whose text format is switched to
   one without CKEditor 5, or rebuilt with such a format, stops the draft,
   which cannot follow it; switched to another CKEditor 5 format, the form
-  waits for its editor. An editor Drupal fails to create, even once it
-  followed the draft, stops it: Drupal keeps no such editor.
+  waits for its editor. An editor Drupal fails to create as it attaches,
+  even once it followed the draft, stops it: Drupal keeps no such editor.
+  One not ready within `drafts.replay.next_editor_grace` of its attach,
+  however Drupal creates it, stops it too.
 - Drupal: a list set in a higher layer of the options (the form, then
   settings.php) replaces the one below whole: an `advanced` list no longer
   shows through a shorter one. So do the maps the bundle replaces whole from

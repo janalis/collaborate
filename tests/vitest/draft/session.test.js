@@ -757,6 +757,8 @@ test('a Save posts the form as usual once the draft stopped for an editor, witho
   session.hidden('_collaborate_revision', '3');
   form.insertAdjacentHTML('beforeend', '<input type="hidden" name="_host" value="kept">');
   session.hidden('_host', 'set');
+  // A second Save sets it again: the host's own value is the one before the first.
+  session.hidden('_host', 'set again');
   const native = vi.fn((event) => event.preventDefault());
   form.addEventListener('submit', native);
   // The flush ends as the draft stops for an editor: nothing thrown, the Save still posts.
@@ -767,14 +769,33 @@ test('a Save posts the form as usual once the draft stopped for an editor, witho
   form.dispatchEvent(new SubmitEvent('submit', { cancelable: true, submitter }));
   await vi.waitFor(() => expect(native).toHaveBeenCalledOnce());
   expect(form.elements.namedItem('_collaborate_revision')).toBeNull();
-  expect(/** @type {HTMLInputElement} */ (form.elements.namedItem('_host')).value).toBe('set');
-  // A button gone from the form meanwhile: the form posts without it.
+  // The host's own field gets its value back.
+  expect(/** @type {HTMLInputElement} */ (form.elements.namedItem('_host')).value).toBe('kept');
+  // A button gone from the form meanwhile: one alike in it posts, none posts nothing, and a failure is said.
   native.mockClear();
-  const gone = document.createElement('button');
-  gone.type = 'submit';
-  session.submitOrdinarily(gone);
+  const said = vi.spyOn(console, 'error').mockImplementation(() => {});
+  submitter.name = 'op';
+  submitter.value = 'Save';
+  const gone = /** @type {HTMLButtonElement} */ (submitter.cloneNode());
+  session.post(gone);
+  expect(native.mock.calls[0][0].submitter).toBe(submitter);
+  gone.value = 'Preview';
+  session.post(gone);
   expect(native).toHaveBeenCalledOnce();
-  expect(native.mock.calls[0][0].submitter).toBeNull();
+  expect(said).toHaveBeenCalledWith(expect.stringContaining('gone'));
+  vi.spyOn(form, 'requestSubmit').mockImplementation(() => {
+    throw new Error('Detached.');
+  });
+  session.post(null);
+  expect(said).toHaveBeenCalledWith(new Error('Detached.'));
+});
+
+test('a draft stopped for an editor while no Save is under way leaves none of its save fields to the next Save', async () => {
+  const { session, form } = fixture();
+  await session.ready;
+  session.hidden('_collaborate_revision', '3');
+  session.editorFailed();
+  expect(form.elements.namedItem('_collaborate_revision')).toBeNull();
 });
 
 test('a draft stopped otherwise (the page left) posts nothing for a Save under way', async () => {

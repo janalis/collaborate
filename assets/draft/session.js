@@ -174,8 +174,8 @@ export class DraftSession {
     this.abort = new AbortController();
     /** @type {(() => void)[]} */
     this.removers = [];
-    /** @type {HTMLInputElement[]} the save fields this session added to the form */
-    this.added = [];
+    /** @type {Map<HTMLInputElement, string | null>} the save fields set, with the host's value, null for one added */
+    this.saveFields = new Map();
     // Settled once the draft stops: a save awaiting editors then waits no more. One rejection serves every save.
     /** @type {(value: unknown) => void} */
     let end;
@@ -392,11 +392,21 @@ export class DraftSession {
         if (this.composing || this.suspended || this.resuming || this.saving) return;
         this.saving = true;
         try {
-          await this.refreshRecord();
-          await this.flush();
+          /** @type {unknown} */
+          let failure = null;
+          try {
+            await this.refreshRecord();
+            await this.flush();
+          } catch (error) {
+            failure = error;
+          }
           // An editor that never came stopped the draft meanwhile: the Save posts the form as usual.
           if (this.ordinary) {
-            this.submitOrdinarily(event.submitter);
+            this.post(event.submitter);
+            return;
+          }
+          if (failure) {
+            this.failed(failure);
             return;
           }
           if (this.stopped || this.suspended || this.resuming || this.composing) return;
@@ -419,19 +429,11 @@ export class DraftSession {
           };
           window.addEventListener('submit', posted);
           try {
-            if (event.submitter) this.form.requestSubmit(event.submitter);
-            else this.form.requestSubmit();
+            this.post(event.submitter);
           } finally {
             window.removeEventListener('submit', posted);
             this.submitting = false;
           }
-        } catch (error) {
-          // An editor that never came stopped the draft meanwhile: the Save posts the form as usual.
-          if (this.ordinary) {
-            this.submitOrdinarily(event.submitter);
-            return;
-          }
-          this.failed(error);
         } finally {
           this.saving = false;
         }
@@ -467,24 +469,44 @@ export class DraftSession {
       control.type = 'hidden';
       control.name = name;
       this.form.append(control);
-      this.added.push(control);
-    }
+      this.saveFields.set(control, null);
+    } else if (!this.saveFields.has(control)) this.saveFields.set(control, control.value);
     control.value = value;
   }
 
+  // The save fields this page set, as the host had them: a form left to ordinary saving posts none of the draft's.
+  forgetSaveFields() {
+    for (const [control, value] of this.saveFields) {
+      if (value === null) control.remove();
+      else control.value = value;
+    }
+    this.saveFields.clear();
+  }
+
   /**
-   * Posts the form as usual, the draft left behind: without the save fields an earlier Save of this page added, from
-   * the button the user pressed while it still belongs to the form.
+   * Posts the form with the button the user pressed, or one alike the form has now (a host rendered its actions
+   * again meanwhile). Without either, nothing is posted: another button would run another action.
    *
    * @param {HTMLElement | null} [submitter]
    */
-  submitOrdinarily(submitter) {
-    for (const control of this.added.splice(0)) control.remove();
+  post(submitter) {
+    const pressed = /** @type {HTMLButtonElement | HTMLInputElement | null | undefined} */ (submitter);
+    const button =
+      pressed && pressed.form !== this.form
+        ? Array.from(this.form.elements).find(
+            (control) =>
+              (control instanceof HTMLButtonElement || control instanceof HTMLInputElement) &&
+              control.type === 'submit' &&
+              control.name === pressed.name &&
+              control.value === pressed.value
+          )
+        : pressed;
     try {
-      if (submitter) this.form.requestSubmit(submitter);
-      else this.form.requestSubmit();
-    } catch {
-      this.form.requestSubmit();
+      if (button) this.form.requestSubmit(/** @type {HTMLElement} */ (button));
+      else if (!pressed) this.form.requestSubmit();
+      else console.error('Collaborate: the button that saved the form is gone from it; save again.');
+    } catch (error) {
+      console.error(error);
     }
   }
 
@@ -502,8 +524,9 @@ export class DraftSession {
     // what is typed there would not be shared, and a peer's edits would be lost, so the draft stops.
     if (state.type !== 'rich') {
       console.error(
-        `Collaborate: "${field.name}" is shared as text, not rich text, and the draft cannot follow it in an editor: ` +
-          "list its form type's block prefix in drafts.rich_text.block_prefixes."
+        `Collaborate: "${field.name}" is shared as text, not rich text, and the draft cannot follow it in an editor ` +
+          '(a Symfony form type: list its block prefix in drafts.rich_text.block_prefixes; Drupal: its text format ' +
+          'was switched to one with CKEditor 5).'
       );
       this.editorFailed();
       return {};
@@ -640,8 +663,9 @@ export class DraftSession {
   // Without every editor the draft cannot be followed; keep the ordinary submission path.
   editorFailed() {
     if (this.stopped) return;
-    // Its form is edited and saved as usual from now on: a Save under way posts it so.
+    // Its form is edited and saved as usual from now on: a Save under way posts it so, without the draft's fields.
     this.ordinary = true;
+    this.forgetSaveFields();
     this.setStatus('unavailable');
     this.stop();
   }

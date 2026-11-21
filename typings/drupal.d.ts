@@ -14,6 +14,9 @@ export interface DrupalGlobals {
     /** Missing from a page without core/drupal.ajax. */
     ajax?: { instances: (DrupalAjax | null)[] };
     behaviors: Record<string, { attach(context: Document | Element): void }>;
+    /** Attaches a field's editor for its text format: `format.editor` names it. */
+    // biome-ignore lint/suspicious/noExplicitAny: Drupal's editor settings, which each text format shapes
+    editorAttach?: (element: HTMLTextAreaElement, format: any) => unknown;
     /** Drupal's editors by name; `format` is its settings for a field's text format. */
     // biome-ignore lint/suspicious/noExplicitAny: Drupal's editor settings, which each text format shapes
     editors?: {

@@ -261,27 +261,45 @@ if (editors?.ckeditor5 && shared()) {
 
 // Drupal's other editors (CodeMirror, a contrib one) hide a field behind one the draft cannot follow: what is typed
 // there would not be shared, and a peer's edits would be lost, so the draft stops for a field it follows.
-if (editors && shared()) {
-  for (const [name, editor] of Object.entries(editors)) {
-    if (name === 'ckeditor5' || typeof editor?.attach !== 'function') continue;
-    const attachOther = editor.attach;
+/** @param {HTMLTextAreaElement} element a field another editor than CKEditor 5 takes */
+const otherEditor = (element) => {
+  if (!element.form?.dataset.collaborate) return;
+  loadDrafts()
+    .then(({ sessionFor }) => {
+      const session = sessionFor(element);
+      if (session && !session.stopped) stopFor(session, element);
+    })
+    // The drafts' own failure is said once already.
+    .catch((error) => {
+      if (!said.has(/** @type {object} */ (error))) console.error(error);
+    });
+};
+if (page.Drupal && shared()) {
+  const drupal = page.Drupal;
+  const editorAttach = drupal.editorAttach;
+  if (typeof editorAttach === 'function') {
+    // Drupal attaches every editor through it, one whose library came later (a dialog's) included.
     /**
      * @param {HTMLTextAreaElement} element
      * @param {any} format
      */
-    editor.attach = (element, format) => {
-      if (element.form?.dataset.collaborate)
-        loadDrafts()
-          .then(({ sessionFor }) => {
-            const session = sessionFor(element);
-            if (session && !session.stopped) stopFor(session, element);
-          })
-          // The drafts' own failure is said once already.
-          .catch((error) => {
-            if (!said.has(/** @type {object} */ (error))) console.error(error);
-          });
-      return attachOther.call(editor, element, format);
+    drupal.editorAttach = (element, format) => {
+      if (format?.editor && format.editor !== 'ckeditor5') otherEditor(element);
+      return editorAttach.call(drupal, element, format);
     };
+  } else if (editors) {
+    for (const [name, editor] of Object.entries(editors)) {
+      if (name === 'ckeditor5' || typeof editor?.attach !== 'function') continue;
+      const attachOther = editor.attach;
+      /**
+       * @param {HTMLTextAreaElement} element
+       * @param {any} format
+       */
+      editor.attach = (element, format) => {
+        otherEditor(element);
+        return attachOther.call(editor, element, format);
+      };
+    }
   }
 }
 

@@ -462,7 +462,7 @@ export class DraftSession {
    */
   hidden(name, value) {
     // The hidden inputs this session added: a host's own control of the name, or the id, is not the session's.
-    let control = this.added.find((added) => added.name === name);
+    let control = this.added.find((added) => added.name === name && added.form === this.form);
     if (!control) {
       control = document.createElement('input');
       control.type = 'hidden';
@@ -1287,20 +1287,11 @@ export class DraftSession {
     if (this.running) return this.running;
     this.running = (async () => {
       await this.ready;
-      let editorTimeout;
-      try {
-        await Promise.race([
-          Promise.all(Array.from(this.editorWaiters.values(), (waiter) => waiter.promise)),
-          this.stopping,
-          new Promise((_resolve, reject) => {
-            // At least as long as an editor is given to come.
-            const wait = Math.max(15_000, this.setting('nextEditorGrace', 10_000));
-            editorTimeout = setTimeout(() => reject(new Error('Collaborate editors are not ready.')), wait);
-          }),
-        ]);
-      } finally {
-        clearTimeout(editorTimeout);
-      }
+      // Every editor awaited has its own time to come, past which the draft stops: a save waits that long.
+      await Promise.race([
+        Promise.all(Array.from(this.editorWaiters.values(), (waiter) => waiter.promise)),
+        this.stopping,
+      ]);
       await this.pull();
       for (const settle of this.sources.values()) settle();
       for (;;) {
@@ -1455,6 +1446,8 @@ export class DraftSession {
 
   suspend() {
     this.suspended = true;
+    // A page frozen (the back/forward cache) gives its editors their time again once it is back.
+    for (const waiter of this.editorWaiters.values()) clearTimeout(waiter.grace);
     // Join must finish building adapters even if navigation freezes startup.
     if (this.initialized || this.stopped) this.abort.abort();
     this.disconnect();
@@ -1468,6 +1461,8 @@ export class DraftSession {
   resume() {
     if (!this.suspended || this.stopped) return;
     if (this.resuming) return this.resuming.then(() => this.resume());
+    // Its editors have their time again from now: a save they hold settles before the page goes on.
+    for (const [name, waiter] of this.editorWaiters) if (!waiter.ready) this.awaitEditor(name, waiter);
     this.resuming = (async () => {
       // Aborted requests must settle before replacing their shared transport.
       await Promise.allSettled([this.ready, this.running, this.pulling]);

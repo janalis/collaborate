@@ -436,6 +436,46 @@ test("Drupal's other editors stop the draft on a field it follows, which it cann
   expect(() => globalThis.Drupal.editors.codemirror.attach(body(), {})).not.toThrow();
 });
 
+test("Drupal's editor attach for another editor than CKEditor 5, one registered later included, stops the draft", async () => {
+  const own = vi.fn(() => 'attached');
+  globalThis.Drupal = undefined;
+  const session = await load({ session: fakeSession({ follows: vi.fn(async () => true) }) });
+  // The script ran before Drupal's dispatcher existed: the editors it found are wrapped.
+  expect(globalThis.Drupal.editorAttach).toBeUndefined();
+  vi.resetModules();
+  vi.doMock('@janalis/collaborate/draft/session.js', () => ({ sessionFor: vi.fn(() => session) }));
+  for (const path of ['bridges/drupal.js', 'cursors/cursors.js', 'updates.js'])
+    vi.doMock(`@janalis/collaborate/${path}`, () => ({}));
+  globalThis.Drupal = {
+    behaviors: {},
+    editors: { ckeditor5: { attach: vi.fn(), detach: vi.fn() } },
+    editorAttach: own,
+  };
+  await import('../../../drupal/js/collaborate.js');
+  expect(globalThis.Drupal.editorAttach(body(), { editor: 'ckeditor5' })).toBe('attached');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(session.follows).not.toHaveBeenCalled();
+  globalThis.Drupal.editorAttach(body(), { editor: 'codemirror' });
+  await vi.waitFor(() => expect(session.editorFailed).toHaveBeenCalledOnce());
+  expect(own).toHaveBeenLastCalledWith(body(), { editor: 'codemirror' });
+  // A format without an editor, or a field outside the shared form, says nothing.
+  const alone = /** @type {HTMLTextAreaElement} */ (document.querySelector('[name="alone"]'));
+  globalThis.Drupal.editorAttach(alone, { editor: 'codemirror' });
+  globalThis.Drupal.editorAttach(body(), {});
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(session.follows).toHaveBeenCalledOnce();
+});
+
+test('a Drupal page without editors has none to watch', async () => {
+  for (const path of ['bridges/drupal.js', 'cursors/cursors.js', 'updates.js'])
+    vi.doMock(`@janalis/collaborate/${path}`, () => ({}));
+  vi.doMock('@janalis/collaborate/draft/session.js', () => ({ sessionFor: vi.fn(() => null) }));
+  globalThis.Drupal = { behaviors: {} };
+  await import('../../../drupal/js/collaborate.js');
+  expect(globalThis.Drupal.editors).toBeUndefined();
+  expect(globalThis.Drupal.behaviors.collaborate).toBeDefined();
+});
+
 test("a script wrapping Drupal's watched create again makes no loop", async () => {
   build();
   const create = vi.fn(async () => {});

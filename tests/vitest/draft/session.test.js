@@ -797,6 +797,55 @@ test('a Save whose button left the form posts nothing, says so, and leaves the p
   expect(native).not.toHaveBeenCalled();
 });
 
+test('a page frozen in the back/forward cache gives its editors their whole time again once back', async () => {
+  vi.useFakeTimers();
+  const { session } = fixture('<textarea name="Record[body]"></textarea><textarea name="Record[note]"></textarea>', {
+    'Record[body]': { type: 'rich', initial: 'Body' },
+    'Record[note]': { type: 'rich', initial: 'Note' },
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  await session.ready;
+  // An editor ready already is given no time again.
+  (await session.editorConfiguration({ name: 'Record[note]' })).collaborate.ready();
+  vi.advanceTimersByTime(9_000);
+  window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+  vi.advanceTimersByTime(60_000);
+  expect(session.stopped).toBeFalsy();
+  window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+  await vi.advanceTimersByTimeAsync(9_000);
+  expect(session.stopped).toBeFalsy();
+  // Its editor comes in time; the one ready before was given no time to run out.
+  (await session.editorConfiguration({ name: 'Record[body]' })).collaborate.ready();
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect(session.stopped).toBeFalsy();
+  vi.useRealTimers();
+});
+
+test('an editor still awaited once the page is back has its whole time, then stops the draft', async () => {
+  vi.useFakeTimers();
+  const { session } = fixture('<textarea name="Record[body]"></textarea>', {
+    'Record[body]': { type: 'rich', initial: 'Body' },
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  await session.ready;
+  window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+  window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+  await vi.advanceTimersByTimeAsync(9_999);
+  expect(session.stopped).toBeFalsy();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(session.stopped).toBe(true);
+  vi.useRealTimers();
+});
+
+test('a save field a host took out of the form is added again', async () => {
+  const { session, form } = fixture();
+  await session.ready;
+  session.hidden('_collaborate_revision', '3');
+  form.querySelector('[name="_collaborate_revision"]').remove();
+  session.hidden('_collaborate_revision', '4');
+  expect(/** @type {HTMLInputElement} */ (form.elements.namedItem('_collaborate_revision')).value).toBe('4');
+});
+
 test("the draft's save fields are its own: a host's control of the name is left as it is", async () => {
   const { session, form } = fixture('<input type="hidden" name="_collaborate_revision" value="host">');
   await session.ready;
@@ -1996,23 +2045,29 @@ test('waits for rich editor initialization, no more once the draft stops for an 
   expect(session.stopped).toBe(true);
 });
 
-test('a save gives up on editors that take longer than they are given', async () => {
+test('a save waits for an editor asked for again as long as its time runs, never less', async () => {
   vi.useFakeTimers();
-  const { session } = fixture(
-    '<textarea name="Record[body]"></textarea>',
-    { 'Record[body]': { type: 'rich', initial: 'Body' } },
-    { configuration: { config: { nextEditorGrace: 30_000 } } }
-  );
+  const { session } = fixture('<textarea name="Record[body]"></textarea>', {
+    'Record[body]': { type: 'rich', initial: 'Body' },
+  });
   await vi.advanceTimersByTimeAsync(0);
   await session.ready;
-  // The editor is asked for again and again: its own time keeps starting over, the save's does not.
-  const pending = session.flush();
-  const rejected = expect(pending).rejects.toThrow('editors are not ready');
-  for (let elapsed = 0; elapsed < 30_000; elapsed += 10_000) {
-    await session.editorConfiguration({ name: 'Record[body]' });
-    await vi.advanceTimersByTimeAsync(10_000);
+  // The editor is asked for again and again (Drupal swapping it): the save waits past any time of its own.
+  let settled = false;
+  const pending = session.flush().then(() => {
+    settled = true;
+  });
+  let editor;
+  for (let elapsed = 0; elapsed < 30_000; elapsed += 9_000) {
+    editor = (await session.editorConfiguration({ name: 'Record[body]' })).collaborate;
+    await vi.advanceTimersByTimeAsync(9_000);
   }
-  await rejected;
+  expect(settled).toBe(false);
+  expect(session.stopped).toBeFalsy();
+  editor.ready();
+  await vi.advanceTimersByTimeAsync(0);
+  await pending;
+  expect(settled).toBe(true);
 });
 
 test('falls back to ordinary editing when a rich editor fails to mount', async () => {

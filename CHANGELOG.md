@@ -66,7 +66,12 @@ versions follow [Semantic Versioning](https://semver.org/).
   the form as usual, and a draft stopped so leaves none of the save fields an
   earlier Save added. A Save whose button left the form meanwhile (its actions
   rendered again) posts nothing and says so in the console, rather than run
-  another button: pressing Save again posts it.
+  another button: pressing Save again posts it. A save waits for editors as
+  long as each is given, never less; a page restored from the back/forward
+  cache gives them their whole time again. Drupal: another editor than CKEditor
+  5 is watched through `Drupal.editorAttach`, one whose library came later
+  included, and the format a rebuilt form shows decides how its value is
+  shared.
 - Drupal: a list set in a higher layer of the options (the form, then
   settings.php) replaces the one below whole: an `advanced` list no longer
   shows through a shorter one. So do the maps the bundle replaces whole from

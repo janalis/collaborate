@@ -753,12 +753,8 @@ test('a Save posts the form as usual once the draft stopped for an editor, witho
   });
   await session.ready;
   vi.spyOn(session, 'refreshRecord').mockResolvedValue(undefined);
-  // An earlier Save of this page added its fields; the host's own are its.
+  // An earlier Save of this page added its fields.
   session.hidden('_collaborate_revision', '3');
-  form.insertAdjacentHTML('beforeend', '<input type="hidden" name="_host" value="kept">');
-  session.hidden('_host', 'set');
-  // A second Save sets it again: the host's own value is the one before the first.
-  session.hidden('_host', 'set again');
   const native = vi.fn((event) => event.preventDefault());
   form.addEventListener('submit', native);
   // The flush ends as the draft stops for an editor: nothing thrown, the Save still posts.
@@ -768,26 +764,50 @@ test('a Save posts the form as usual once the draft stopped for an editor, witho
   const submitter = /** @type {HTMLButtonElement} */ (form.querySelector('button[type="submit"]'));
   form.dispatchEvent(new SubmitEvent('submit', { cancelable: true, submitter }));
   await vi.waitFor(() => expect(native).toHaveBeenCalledOnce());
-  expect(form.elements.namedItem('_collaborate_revision')).toBeNull();
-  // The host's own field gets its value back.
-  expect(/** @type {HTMLInputElement} */ (form.elements.namedItem('_host')).value).toBe('kept');
-  // A button gone from the form meanwhile: one alike in it posts, none posts nothing, and a failure is said.
-  native.mockClear();
-  const said = vi.spyOn(console, 'error').mockImplementation(() => {});
-  submitter.name = 'op';
-  submitter.value = 'Save';
-  const gone = /** @type {HTMLButtonElement} */ (submitter.cloneNode());
-  session.post(gone);
   expect(native.mock.calls[0][0].submitter).toBe(submitter);
-  gone.value = 'Preview';
-  session.post(gone);
-  expect(native).toHaveBeenCalledOnce();
-  expect(said).toHaveBeenCalledWith(expect.stringContaining('gone'));
+  expect(form.elements.namedItem('_collaborate_revision')).toBeNull();
+});
+
+test('a Save whose button left the form posts nothing, and says so', async () => {
+  const { session, form } = fixture();
+  await session.ready;
+  vi.spyOn(session, 'refreshRecord').mockResolvedValue(undefined);
+  const native = vi.fn((event) => event.preventDefault());
+  form.addEventListener('submit', native);
+  const submitter = /** @type {HTMLButtonElement} */ (form.querySelector('button[type="submit"]'));
+  // The host renders its actions again while the Save waits.
+  vi.spyOn(session, 'flush').mockImplementation(async () => {
+    submitter.replaceWith(submitter.cloneNode(true));
+  });
+  form.dispatchEvent(new SubmitEvent('submit', { cancelable: true, submitter }));
+  await vi.waitFor(() => expect(form.dataset.collaborateState).toBe('failed'));
+  expect(native).not.toHaveBeenCalled();
+  // Stopped for an editor meanwhile, it says so in the console.
+  const said = vi.spyOn(console, 'error').mockImplementation(() => {});
+  session.flush.mockImplementation(async () => {
+    session.editorFailed();
+  });
+  const again = /** @type {HTMLButtonElement} */ (form.querySelector('button[type="submit"]'));
+  session.onSubmit(new SubmitEvent('submit', { cancelable: true, submitter: document.createElement('button') }));
+  await vi.waitFor(() => expect(said).toHaveBeenCalledWith(expect.stringContaining('save again')));
+  // A submission that throws is said too.
   vi.spyOn(form, 'requestSubmit').mockImplementation(() => {
     throw new Error('Detached.');
   });
-  session.post(null);
+  expect(session.post(again)).toBe(false);
   expect(said).toHaveBeenCalledWith(new Error('Detached.'));
+});
+
+test('an unexpected failure of a Save is said in the bar', async () => {
+  const { session, form } = fixture();
+  await session.ready;
+  vi.spyOn(session, 'refreshRecord').mockResolvedValue(undefined);
+  vi.spyOn(session, 'flush').mockResolvedValue(undefined);
+  vi.spyOn(session, 'hidden').mockImplementation(() => {
+    throw new Error('Unexpected.');
+  });
+  form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
+  await vi.waitFor(() => expect(form.dataset.collaborateState).toBe('offline'));
 });
 
 test('a draft stopped for an editor while no Save is under way leaves none of its save fields to the next Save', async () => {

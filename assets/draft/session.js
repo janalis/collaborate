@@ -174,8 +174,8 @@ export class DraftSession {
     this.abort = new AbortController();
     /** @type {(() => void)[]} */
     this.removers = [];
-    /** @type {Map<HTMLInputElement, string | null>} the save fields set, with the host's value, null for one added */
-    this.saveFields = new Map();
+    /** @type {HTMLInputElement[]} the save fields this session added to the form */
+    this.added = [];
     // Settled once the draft stops: a save awaiting editors then waits no more. One rejection serves every save.
     /** @type {(value: unknown) => void} */
     let end;
@@ -402,13 +402,10 @@ export class DraftSession {
           }
           // An editor that never came stopped the draft meanwhile: the Save posts the form as usual.
           if (this.ordinary) {
-            this.post(event.submitter);
+            if (!this.post(event.submitter)) console.error('Collaborate: the form could not be saved; save again.');
             return;
           }
-          if (failure) {
-            this.failed(failure);
-            return;
-          }
+          if (failure) throw failure;
           if (this.stopped || this.suspended || this.resuming || this.composing) return;
           // A form that can save has joined: its conflicts are known.
           if (Object.keys(/** @type {Record<string, unknown>} */ (this.conflicts)).length) {
@@ -429,11 +426,13 @@ export class DraftSession {
           };
           window.addEventListener('submit', posted);
           try {
-            this.post(event.submitter);
+            if (!this.post(event.submitter)) this.setStatus('failed');
           } finally {
             window.removeEventListener('submit', posted);
             this.submitting = false;
           }
+        } catch (error) {
+          this.failed(error);
         } finally {
           this.saving = false;
         }
@@ -469,44 +468,31 @@ export class DraftSession {
       control.type = 'hidden';
       control.name = name;
       this.form.append(control);
-      this.saveFields.set(control, null);
-    } else if (!this.saveFields.has(control)) this.saveFields.set(control, control.value);
+      this.added.push(control);
+    }
     control.value = value;
   }
 
-  // The save fields this page set, as the host had them: a form left to ordinary saving posts none of the draft's.
+  // The save fields this page added: a form left to ordinary saving posts none of them.
   forgetSaveFields() {
-    for (const [control, value] of this.saveFields) {
-      if (value === null) control.remove();
-      else control.value = value;
-    }
-    this.saveFields.clear();
+    for (const control of this.added.splice(0)) control.remove();
   }
 
   /**
-   * Posts the form with the button the user pressed, or one alike the form has now (a host rendered its actions
-   * again meanwhile). Without either, nothing is posted: another button would run another action.
+   * Posts the form with the button the user pressed. One gone from the form meanwhile (its actions rendered again)
+   * posts nothing, the browser refusing it: another button would run another action.
    *
    * @param {HTMLElement | null} [submitter]
+   * @returns {boolean} whether the form was submitted
    */
   post(submitter) {
-    const pressed = /** @type {HTMLButtonElement | HTMLInputElement | null | undefined} */ (submitter);
-    const button =
-      pressed && pressed.form !== this.form
-        ? Array.from(this.form.elements).find(
-            (control) =>
-              (control instanceof HTMLButtonElement || control instanceof HTMLInputElement) &&
-              control.type === 'submit' &&
-              control.name === pressed.name &&
-              control.value === pressed.value
-          )
-        : pressed;
     try {
-      if (button) this.form.requestSubmit(/** @type {HTMLElement} */ (button));
-      else if (!pressed) this.form.requestSubmit();
-      else console.error('Collaborate: the button that saved the form is gone from it; save again.');
+      if (submitter) this.form.requestSubmit(submitter);
+      else this.form.requestSubmit();
+      return true;
     } catch (error) {
       console.error(error);
+      return false;
     }
   }
 
@@ -663,9 +649,8 @@ export class DraftSession {
   // Without every editor the draft cannot be followed; keep the ordinary submission path.
   editorFailed() {
     if (this.stopped) return;
-    // Its form is edited and saved as usual from now on: a Save under way posts it so, without the draft's fields.
+    // Its form is edited and saved as usual from now on: a Save under way posts it so.
     this.ordinary = true;
-    this.forgetSaveFields();
     this.setStatus('unavailable');
     this.stop();
   }
@@ -1422,9 +1407,7 @@ export class DraftSession {
 
   /** The bar's Save submits the form as its own button would, through the same draft-aware submit handler. */
   saveFromBar() {
-    const submitter = this.submitter();
-    if (submitter) this.form.requestSubmit(submitter);
-    else this.form.requestSubmit();
+    this.post(this.submitter());
   }
 
   async discardDraft() {
@@ -1509,6 +1492,7 @@ export class DraftSession {
     this.releaseControls();
     this.stopped = true;
     this.forgetGraces();
+    this.forgetSaveFields();
     this.suspend();
     this.form.removeEventListener('submit', /** @type {(event: SubmitEvent) => Promise<void>} */ (this.onSubmit), true);
     this.form.removeEventListener('submit', this.earlySubmit, true);

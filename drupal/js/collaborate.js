@@ -319,28 +319,4 @@ if (page.Drupal) {
       );
     },
   };
-
-  // A shared rich field whose text format has no CKEditor 5 gets no editor from Drupal, and the draft cannot follow
-  // it without one: told so, read as Drupal reads it once its behaviors ran, the form goes on with ordinary editing.
-  page.Drupal.behaviors.collaborateFormats = {
-    /** @param {Document | Element} context */
-    attach(context) {
-      const selectors = Array.from(context.querySelectorAll('form[data-collaborate] [data-editor-for]'));
-      if (!selectors.length) return;
-      loadDrafts().then(
-        ({ sessionFor }) => {
-          const formats = page.drupalSettings?.editor?.formats;
-          for (const selector of selectors) {
-            const field = document.getElementById(String(/** @type {HTMLElement} */ (selector).dataset.editorFor));
-            const format = /** @type {HTMLInputElement} */ (selector).value;
-            if (!(field instanceof HTMLTextAreaElement) || formats?.[format]?.editor === 'ckeditor5') continue;
-            const session = sessionFor(field);
-            if (!session || session.stopped) continue;
-            session.editorConfiguration(field).then((configuration) => configuration.collaborate?.failed());
-          }
-        },
-        () => {}
-      );
-    },
-  };
 }

@@ -384,68 +384,6 @@ test("a creation Drupal began is the editor's outcome, whatever Drupal's attach 
   await vi.waitFor(() => expect(session.handles[1].failed).toHaveBeenCalledOnce());
 });
 
-test('a shared rich field whose format has no CKEditor 5 stops the draft, which cannot follow it', async () => {
-  const session = await load({ session: followed() });
-  const form = document.querySelector('form');
-  body().id = 'edit-body';
-  form.insertAdjacentHTML(
-    'beforeend',
-    '<select data-editor-for="edit-body"><option value="plain_text">Plain</option><option value="full">Full</option></select>' +
-      '<select data-editor-for="edit-gone"><option value="plain_text">Plain</option></select>'
-  );
-  const selector = /** @type {HTMLSelectElement} */ (form.querySelector('[data-editor-for="edit-body"]'));
-  const { collaborateFormats } = globalThis.Drupal.behaviors;
-  // Its format has CKEditor 5: Drupal attaches it.
-  globalThis.drupalSettings = {
-    editor: { formats: { full: { editor: 'ckeditor5' }, code: { editor: 'codemirror' } } },
-  };
-  selector.insertAdjacentHTML('beforeend', '<option value="code">Code</option>');
-  selector.value = 'full';
-  collaborateFormats.attach(document);
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  expect(session.editorConfiguration).not.toHaveBeenCalled();
-  // Another editor than CKEditor 5: the draft cannot follow it either.
-  selector.value = 'code';
-  collaborateFormats.attach(document);
-  await vi.waitFor(() => expect(session.handles[0].failed).toHaveBeenCalledOnce());
-  session.stopped = false;
-  session.handles.length = 0;
-  session.editorConfiguration.mockClear();
-  // Plain text: the draft stops; a selector whose field is not there is passed over.
-  selector.value = 'plain_text';
-  collaborateFormats.attach(document);
-  await vi.waitFor(() => expect(session.handles[0].failed).toHaveBeenCalledOnce());
-  expect(session.editorConfiguration).toHaveBeenCalledOnce();
-  // A stopped draft, or a form without one, is told nothing more.
-  collaborateFormats.attach(document);
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  expect(session.editorConfiguration).toHaveBeenCalledOnce();
-  const { sessionFor } = await import('@janalis/collaborate/draft/session.js');
-  sessionFor.mockReturnValueOnce(null);
-  collaborateFormats.attach(document);
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  // Without Drupal's editor settings, no field has CKEditor 5; a field the draft does not follow says nothing.
-  delete globalThis.drupalSettings;
-  session.stopped = false;
-  session.editorConfiguration.mockResolvedValueOnce({});
-  collaborateFormats.attach(document);
-  await vi.waitFor(() => expect(session.editorConfiguration).toHaveBeenCalledTimes(2));
-  // A part of the page without a shared format selector loads nothing.
-  const parts = document.createElement('div');
-  collaborateFormats.attach(parts);
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  expect(session.editorConfiguration).toHaveBeenCalledTimes(2);
-});
-
-test('without the drafts, a format selector of a shared form changes nothing', async () => {
-  await load({ drafts: false });
-  document.querySelector('form').insertAdjacentHTML('beforeend', '<select data-editor-for="edit-body"></select>');
-  globalThis.Drupal.behaviors.collaborateFormats.attach(document);
-  await vi.waitFor(() =>
-    expect(errors).toHaveBeenCalledWith('Collaborate: the shared draft could not load.', expect.any(Error))
-  );
-});
-
 test("a script wrapping Drupal's watched create again makes no loop", async () => {
   build();
   const create = vi.fn(async () => {});
@@ -849,16 +787,6 @@ test('a page without a shared form or without Drupal loads no draft', async () =
   const session = await load();
   expect(globalThis.Drupal.editors.ckeditor5.attach).toBe(attach);
   globalThis.Drupal.behaviors.collaborate.attach(document.body);
-  // A format selector outside any shared form loads no draft either.
-  document.body.insertAdjacentHTML('beforeend', '<select data-editor-for="x"><option>plain_text</option></select>');
-  const imported = vi.fn();
-  vi.doMock('@janalis/collaborate/draft/session.js', () => {
-    imported();
-    return { sessionFor: vi.fn(() => session) };
-  });
-  globalThis.Drupal.behaviors.collaborateFormats.attach(document);
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  expect(imported).not.toHaveBeenCalled();
 
   vi.resetModules();
   delete globalThis.Drupal;

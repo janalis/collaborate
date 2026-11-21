@@ -458,7 +458,8 @@ export class DraftSession {
     }
     const name = this.fieldKey(field.name);
     const state = this.ensureField(name);
-    if (!state) return {};
+    // A field the draft follows as text (a Drupal format without CKEditor 5) awaits no editor.
+    if (state?.type !== 'rich') return {};
     return { initialData: state.initial, collaborate: this.editorHandle(name) };
   }
 
@@ -480,7 +481,7 @@ export class DraftSession {
     if (previous && previous !== waiter && !previous.ready) waiter.promise.then(previous.resolve);
     waiter.claimed = true;
     const current = () => this.editorWaiters.get(name) === waiter;
-    // The editor asked for now has the whole while to come.
+    // The editor asked for now has the whole while to come: the join's wait, taken, starts again.
     this.awaitEditor(name, waiter);
     return {
       getSession: () => this,
@@ -505,8 +506,8 @@ export class DraftSession {
   }
 
   /**
-   * The wait for a field's editor, set up as the join or a host first asks for it: its time runs from the host's
-   * asking (`editorHandle()`), as a host may build an editor late (in a tab opened later).
+   * The wait for a field's editor, set up as the join or a host first asks for it: its editor has a while to come,
+   * the form held inert meanwhile.
    *
    * @param {string} name
    * @returns {EditorWaiter}
@@ -526,6 +527,7 @@ export class DraftSession {
       );
       waiter.promise = promise;
       this.editorWaiters.set(name, waiter);
+      this.awaitEditor(name, waiter);
     }
     return /** @type {EditorWaiter} */ (this.editorWaiters.get(name));
   }

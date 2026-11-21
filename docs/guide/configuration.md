@@ -254,7 +254,7 @@ Read by `collaborate:purge`.
 | `connected` | `30` (min 1) | Replay interval while the page's hub stream is up; it only covers a lost publication. |
 | `disconnected` | `5` (min 1) | Replay interval while the stream is down. |
 | `join_retry` | `12` (min 0) | How long a page retries a busy Join (429 or 503) before falling back to ordinary editing. Keep it above `locks.save`. |
-| `next_editor_grace` | `10` (min 1) | How long a rich-text field waits for its editor to be ready: its first once the host asked for it, or its next once one went away (a Drupal format switch, a rebuild). Then the draft, which cannot follow the field without one, stops; a field gone from the form meanwhile holds nothing. |
+| `next_editor_grace` | `10` (min 1) | How long a rich-text field waits for its editor to be ready: its first from the join (again from the host's asking), or its next once one went away (a Drupal format switch, a rebuild). Then the draft, which cannot follow the field without one, stops; a field gone from the form meanwhile holds nothing. |
 
 ### `drafts.rich_text`
 

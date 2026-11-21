@@ -472,11 +472,10 @@ export class DraftSession {
   editorHandle(name) {
     const previous = this.editorWaiters.get(name);
     clearTimeout(previous?.grace);
-    if (previous?.claimed) {
-      this.editorWaiters.delete(name);
-      if (!previous.ready) this.editorWaiter(name).promise.then(previous.resolve);
-    }
+    if (previous?.claimed) this.editorWaiters.delete(name);
     const waiter = this.editorWaiter(name);
+    // Whoever awaited the previous editor awaits this one (the join's wait, taken as it is, settles with it anyway).
+    if (previous && !previous.ready) waiter.promise.then(previous.resolve);
     waiter.claimed = true;
     const current = () => this.editorWaiters.get(name) === waiter;
     return {
@@ -489,11 +488,11 @@ export class DraftSession {
       failed: () => {
         if (current()) this.editorFailed();
       },
-      // An editor gone before it was ready: nothing waits for a field gone from the form. One still there awaits its
-      // next editor (rebuilt, or of another format), which takes this wait; none in time, and the draft, which
-      // cannot follow the field without one, stops.
+      // An editor gone: nothing waits for a field gone from the form. One still there awaits its next editor
+      // (rebuilt, or of another format), which takes this wait; none in time, and the draft, which cannot follow the
+      // field without one, stops.
       release: () => {
-        if (!current() || waiter.ready) return;
+        if (!current() || this.stopped) return;
         if (!this.form.isConnected || !this.form.elements.namedItem(this.formName(name))) {
           this.editorWaiters.delete(name);
           waiter.resolve();

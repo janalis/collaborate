@@ -76,7 +76,10 @@ if (editors?.ckeditor5 && shared()) {
   const ckeditor5 = editors.ckeditor5;
   const { attach, detach } = ckeditor5;
   /** @typedef {import('@janalis/collaborate/draft/session.js').EditorHandle} EditorHandle */
-  /** @typedef {{ handle?: EditorHandle, given?: boolean }} Attach an attach, and the draft's handle of its editor */
+  /**
+   * @typedef {{ handle?: EditorHandle, given?: boolean, ready?: boolean }} Attach an attach, the draft's handle of its
+   *   editor, and whether that editor follows the draft
+   */
   // Each field's latest attach, until Drupal detaches it: one Drupal replaced meanwhile (a text format switched)
   // creates nothing, and one detached gives its editor's wait back.
   /** @type {WeakMap<HTMLTextAreaElement, Attach>} */
@@ -159,6 +162,10 @@ if (editors?.ckeditor5 && shared()) {
               giveBack(element, mine);
               return false;
             },
+            ready: () => {
+              mine.ready = true;
+              handle.ready();
+            },
           },
         },
       },
@@ -172,10 +179,12 @@ if (editors?.ckeditor5 && shared()) {
       classic.create = (...args) => {
         const created = create.apply(classic, args);
         // A field replaced or gone meanwhile only gives its editor's wait back, its editor created or not.
-        created.then(
-          () => current() || giveBack(element, mine),
-          () => (current() ? handle.failed() : giveBack(element, mine))
-        );
+        // One that followed the draft already (a later 'ready' listener threw) leaves it as it is.
+        created.catch(() => {
+          if (mine.ready) return;
+          if (current()) handle.failed();
+          else giveBack(element, mine);
+        });
         return created;
       };
     try {

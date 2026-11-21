@@ -584,15 +584,14 @@ test('each editor of a field settles its own wait: a later one replaces it, whoe
   second.ready();
   await awaited.promise;
   expect(form.querySelector('input').hasAttribute('inert')).toBe(false);
-  // A ready editor taken off gives nothing back: its wait stays settled.
+  // A ready editor taken off, its field still in the form: the field's next editor has a while to come.
   vi.useFakeTimers();
   const timers = vi.getTimerCount();
   second.release();
-  vi.advanceTimersByTime(10_000);
-  expect(session.stopped).toBeFalsy();
-  expect(session.editorWaiters.get('Record[body]').ready).toBe(true);
-  // A third editor is awaited afresh.
+  expect(vi.getTimerCount()).toBe(timers + 1);
+  // A third editor is awaited afresh, and takes the time given.
   const third = (await session.editorConfiguration(field)).collaborate;
+  expect(vi.getTimerCount()).toBe(timers);
   expect(session.editorWaiters.get('Record[body]').ready).toBe(false);
   // Gone before it was ready, its field still in the form: the field's next editor takes the wait in time, and
   // the time given is counted once.
@@ -626,10 +625,15 @@ test('a stopped draft forgets the editors it gave time to come', async () => {
   await session.ready;
   vi.useFakeTimers();
   const editorFailed = vi.spyOn(session, 'editorFailed');
-  (await session.editorConfiguration({ name: 'Record[body]' })).collaborate.release();
+  const handle = (await session.editorConfiguration({ name: 'Record[body]' })).collaborate;
+  handle.release();
   session.stop();
   vi.advanceTimersByTime(10_000);
   expect(editorFailed).not.toHaveBeenCalled();
+  // Nor gives any once stopped.
+  const timers = vi.getTimerCount();
+  handle.release();
+  expect(vi.getTimerCount()).toBe(timers);
   vi.useRealTimers();
 });
 

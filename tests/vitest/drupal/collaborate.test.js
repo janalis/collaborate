@@ -126,11 +126,15 @@ test("a shared field's editor follows the draft, created on its content with the
   const { collaborate } = attach.mock.calls[0][1].editorSettings.config;
   expect(attach.mock.calls[0][1].editorSettings).toEqual({
     plugins: ['basic', 'collaborate.Collaborate'],
-    config: { toolbar: [], collaborate: { ...session.handles[0], current: expect.any(Function) } },
+    config: {
+      toolbar: [],
+      collaborate: { ...session.handles[0], current: expect.any(Function), ready: expect.any(Function) },
+    },
   });
   expect(collaborate.current()).toBe(true);
   expect(session.handles[0].current).toHaveBeenCalledOnce();
-  expect(collaborate.ready).toBe(session.handles[0].ready);
+  collaborate.ready();
+  expect(session.handles[0].ready).toHaveBeenCalledOnce();
   expect(ckeditor.collaborate).toEqual({ Collaborate: 'CollaboratePlugin' });
   expect(session.editorFailed).not.toHaveBeenCalled();
 });
@@ -308,6 +312,29 @@ test('a field rebuilt with a format without CKEditor 5 stops the draft; with one
   rebuild('plain_text');
   await vi.waitFor(() => expect(session.handles[1].failed).toHaveBeenCalledOnce());
   expect(session.handles[1].release).not.toHaveBeenCalled();
+});
+
+test('an editor that failed once it followed the draft leaves the draft as it is', async () => {
+  build();
+  /** @type {(error: Error) => void} */
+  let fail;
+  const created = new Promise((_resolve, reject) => {
+    fail = reject;
+  });
+  created.catch(() => {});
+  globalThis.CKEditor5.editorClassic = { ClassicEditor: { create: vi.fn(() => created) } };
+  const session = await load({ session: followed() });
+  attach.mockImplementation(() => globalThis.CKEditor5.editorClassic.ClassicEditor.create());
+  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledOnce());
+  // The plugin followed the draft; a later 'ready' listener throws.
+  attach.mock.calls[0][1].editorSettings.config.collaborate.ready();
+  expect(session.handles[0].ready).toHaveBeenCalledOnce();
+  fail(new Error('Another plugin failed.'));
+  await created.catch(() => {});
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(session.handles[0].failed).not.toHaveBeenCalled();
+  expect(session.handles[0].release).not.toHaveBeenCalled();
 });
 
 test('an editor created while its attach is current gives nothing back', async () => {

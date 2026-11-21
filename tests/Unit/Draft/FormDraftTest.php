@@ -95,7 +95,13 @@ final class FormDraftTest extends TestCase
         self::assertSame('/node/__record__/edit', $configuration['editUrl']);
         self::assertSame('/node/add/article?tab=main&draft=' . str_repeat('cd', 16), $configuration['invitation']);
         self::assertSame(
-            ['replayConnected' => 20_000, 'replayDisconnected' => 5000, 'joinRetry' => 12_000, 'labelLength' => 80],
+            [
+                'replayConnected' => 20_000,
+                'replayDisconnected' => 5000,
+                'joinRetry' => 12_000,
+                'nextEditorGrace' => 10_000,
+                'labelLength' => 80,
+            ],
             $configuration['config'],
         );
         $edit = $this->draft()->scope($this->record(new: false), 'update', $request, self::FIELDS);

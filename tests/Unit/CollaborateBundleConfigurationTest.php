@@ -459,6 +459,7 @@ final class CollaborateBundleConfigurationTest extends TestCase
             'drafts.replay.connected' => [30, 1],
             'drafts.replay.disconnected' => [5, 1],
             'drafts.replay.join_retry' => [12, 0],
+            'drafts.replay.next_editor_grace' => [10, 1],
             'updates.association_depth' => [2, 0],
             'updates.chunk' => [100, 1],
         ];

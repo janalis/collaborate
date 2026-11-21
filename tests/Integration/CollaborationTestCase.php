@@ -46,7 +46,13 @@ abstract class CollaborationTestCase extends ApplicationTestCase
         self::assertNull($configuration['invitation']);
         self::assertSame('All changes saved by %name%.', $configuration['messages']['savedBy']);
         self::assertSame(
-            ['replayConnected' => 30_000, 'replayDisconnected' => 5_000, 'joinRetry' => 12_000, 'labelLength' => 255],
+            [
+                'replayConnected' => 30_000,
+                'replayDisconnected' => 5_000,
+                'joinRetry' => 12_000,
+                'nextEditorGrace' => 10_000,
+                'labelLength' => 255,
+            ],
             $configuration['config'],
         );
         self::assertStringContainsString('__record__', $configuration['editUrl']);

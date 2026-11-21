@@ -47,7 +47,7 @@ use Symfony\Component\Security\Core\User\UserInterface;
  *
  * @phpstan-type Sharing array{user: UserInterface, record: FormRecord, context: FormContextInterface, request: Request, permission: 'create'|'update'}
  *
- * @phpstan-type Options array{max_update_bytes?: int, rich_text?: array{block_prefixes?: list<string>, schema_option?: string|null, ckeditor_version?: string|null, ...}, position_field?: string, sensitive_fields?: list<string>, replay?: array{connected?: int, disconnected?: int, join_retry?: int, ...}, label_length?: int, ...}
+ * @phpstan-type Options array{max_update_bytes?: int, rich_text?: array{block_prefixes?: list<string>, schema_option?: string|null, ckeditor_version?: string|null, ...}, position_field?: string, sensitive_fields?: list<string>, replay?: array{connected?: int, disconnected?: int, join_retry?: int, next_editor_grace?: int, ...}, label_length?: int, ...}
  */
 final class CollaborateFormExtension extends AbstractTypeExtension
 {

@@ -34,8 +34,9 @@ versions follow [Semantic Versioning](https://semver.org/).
   `shared.collaborate?.failed()` (or still `session.editorFailed()` to stop
   the draft whatever the field), and `shared.collaborate?.release()` when the
   editor is gone: the draft stops waiting for it at once if the field left the
-  form; otherwise the field's next editor has 10 seconds to take the wait, or
-  the draft, which cannot follow the field without one, stops. Each editor settles its own wait: a
+  form; otherwise the field's next editor has `drafts.replay.next_editor_grace`
+  (10 seconds) to take the wait, or the draft, which cannot follow the field
+  without one, stops. Each editor settles its own wait: a
   later editor of the field, or the field's removal, makes the earlier
   editor's ready or failure tell the draft nothing, and the earlier editor
   follows nothing: a removed entry's late editor no longer releases the form

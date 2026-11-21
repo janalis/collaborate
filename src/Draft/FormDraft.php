@@ -26,9 +26,9 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  * @phpstan-import-type SchemaField from DraftJournal
  * @phpstan-type Record array{entity: object|null, class: string, new: bool, id: string|null, draft: string|null}
  *
- * @phpstan-type Client array{replayConnected: int, replayDisconnected: int, joinRetry: int, labelLength: int}
+ * @phpstan-type Client array{replayConnected: int, replayDisconnected: int, joinRetry: int, nextEditorGrace: int, labelLength: int}
  * @phpstan-type Configuration array{grant: string, url: string, csrf: string, messages: array<string, string>, isNew: bool, editUrl: string, invitation: string|null, config: Client}
- * @phpstan-type Options array{max_update_bytes?: int, replay?: array{connected?: int, disconnected?: int, join_retry?: int, ...}, label_length?: int, ...}
+ * @phpstan-type Options array{max_update_bytes?: int, replay?: array{connected?: int, disconnected?: int, join_retry?: int, next_editor_grace?: int, ...}, label_length?: int, ...}
  */
 final readonly class FormDraft
 {
@@ -89,7 +89,7 @@ final readonly class FormDraft
     private array $client;
 
     /** The `collaborate.drafts.replay` defaults, seconds, which the configuration tree declares from here. */
-    public const array REPLAY = ['connected' => 30, 'disconnected' => 5, 'join_retry' => 12];
+    public const array REPLAY = ['connected' => 30, 'disconnected' => 5, 'join_retry' => 12, 'next_editor_grace' => 10];
 
     /** @param Options $options the `collaborate.drafts` configuration */
     public function __construct(
@@ -108,6 +108,7 @@ final readonly class FormDraft
             'replayConnected' => ($options['replay']['connected'] ?? self::REPLAY['connected']) * 1000,
             'replayDisconnected' => ($options['replay']['disconnected'] ?? self::REPLAY['disconnected']) * 1000,
             'joinRetry' => ($options['replay']['join_retry'] ?? self::REPLAY['join_retry']) * 1000,
+            'nextEditorGrace' => ($options['replay']['next_editor_grace'] ?? self::REPLAY['next_editor_grace']) * 1000,
             'labelLength' => $options['label_length'] ?? DraftJournal::DEFAULTS['label_length'],
         ];
     }

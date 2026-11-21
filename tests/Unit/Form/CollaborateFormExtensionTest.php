@@ -171,7 +171,7 @@ final class CollaborateFormExtensionTest extends TypeTestCase
             $options += $defaults
                 ? [
                     'rich_text' => ['block_prefixes' => ['rich_text'], 'schema_option' => 'compact'],
-                    'replay' => ['connected' => 20, 'disconnected' => 4, 'join_retry' => 10],
+                    'replay' => ['connected' => 20, 'disconnected' => 4, 'join_retry' => 10, 'next_editor_grace' => 7],
                     'label_length' => 120,
                 ] : [];
 
@@ -380,7 +380,13 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         self::assertStringContainsString('draft=', (string) $view->vars['action']);
         self::assertStringContainsString('draft=', $configuration['invitation']);
         self::assertSame(
-            ['replayConnected' => 20_000, 'replayDisconnected' => 4000, 'joinRetry' => 10_000, 'labelLength' => 120],
+            [
+                'replayConnected' => 20_000,
+                'replayDisconnected' => 4000,
+                'joinRetry' => 10_000,
+                'nextEditorGrace' => 7000,
+                'labelLength' => 120,
+            ],
             $configuration['config'],
         );
         $messages = $configuration['messages'];
@@ -1429,7 +1435,13 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         $this->rebuild();
 
         self::assertSame(
-            ['replayConnected' => 30_000, 'replayDisconnected' => 5000, 'joinRetry' => 12_000, 'labelLength' => 255],
+            [
+                'replayConnected' => 30_000,
+                'replayDisconnected' => 5000,
+                'joinRetry' => 12_000,
+                'nextEditorGrace' => 10_000,
+                'labelLength' => 255,
+            ],
             $this->configuration($this->form()->createView())['config'],
         );
     }

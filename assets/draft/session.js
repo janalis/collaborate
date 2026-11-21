@@ -474,8 +474,8 @@ export class DraftSession {
     clearTimeout(previous?.grace);
     if (previous?.claimed) this.editorWaiters.delete(name);
     const waiter = this.editorWaiter(name);
-    // Whoever awaited the previous editor awaits this one (the join's wait, taken as it is, settles with it anyway).
-    if (previous && !previous.ready) waiter.promise.then(previous.resolve);
+    // Whoever awaited the previous editor awaits this one.
+    if (previous && previous !== waiter && !previous.ready) waiter.promise.then(previous.resolve);
     waiter.claimed = true;
     const current = () => this.editorWaiters.get(name) === waiter;
     return {

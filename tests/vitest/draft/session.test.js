@@ -618,6 +618,30 @@ test('each editor of a field settles its own wait: a later one replaces it, whoe
   vi.useRealTimers();
 });
 
+test('a ready editor gone leaves its field to its next editor in time, or stops the draft', async () => {
+  const { session, form } = fixture('<textarea name="Record[body]"></textarea>', {
+    'Record[body]': { type: 'rich', initial: 'Body' },
+  });
+  await session.ready;
+  const field = { name: 'Record[body]' };
+  const first = (await session.editorConfiguration(field)).collaborate;
+  first.ready();
+  // Its field gone from the form: nothing waits for it.
+  const textarea = form.querySelector('textarea');
+  textarea.remove();
+  first.release();
+  expect(session.editorWaiters.has('Record[body]')).toBe(false);
+  form.append(textarea);
+  // Its field still there, and no next editor: the draft stops.
+  const second = (await session.editorConfiguration(field)).collaborate;
+  second.ready();
+  vi.useFakeTimers();
+  second.release();
+  vi.advanceTimersByTime(10_000);
+  expect(session.stopped).toBe(true);
+  vi.useRealTimers();
+});
+
 test('a stopped draft forgets the editors it gave time to come', async () => {
   const { session } = fixture('<textarea name="Record[body]"></textarea>', {
     'Record[body]': { type: 'rich', initial: 'Body' },

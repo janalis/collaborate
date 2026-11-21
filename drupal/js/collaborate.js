@@ -76,14 +76,34 @@ if (editors?.ckeditor5 && shared()) {
   const ckeditor5 = editors.ckeditor5;
   const { attach, detach } = ckeditor5;
   /** @typedef {import('@janalis/collaborate/draft/session.js').EditorHandle} EditorHandle */
-  /**
-   * @typedef {{ handle?: EditorHandle, given?: boolean, ready?: boolean }} Attach an attach, the draft's handle of its
-   *   editor, and whether that editor follows the draft
-   */
+  /** @typedef {{ handle?: EditorHandle, given?: boolean }} Attach an attach, and the draft's handle of its editor */
   // Each field's latest attach, until Drupal detaches it: one Drupal replaced meanwhile (a text format switched)
   // creates nothing, and one detached gives its editor's wait back.
   /** @type {WeakMap<HTMLTextAreaElement, Attach>} */
   const attaches = new WeakMap();
+
+  // The editor creations awaited, by the field they are for, and Drupal's editor class watched for them: once, for
+  // however late a creation comes.
+  /** @type {WeakMap<Element, (created: Promise<unknown>) => void>} */
+  const creating = new WeakMap();
+  /** @type {WeakSet<object>} */
+  const watched = new WeakSet();
+  const watch = () => {
+    const classic = page.CKEditor5?.editorClassic?.ClassicEditor;
+    if (!classic || watched.has(classic)) return;
+    watched.add(classic);
+    const create = classic.create;
+    classic.create = (...args) => {
+      const created = create.apply(classic, args);
+      const field = /** @type {Element} */ (args[0]);
+      const heard = creating.get(field);
+      if (heard) {
+        creating.delete(field);
+        heard(created);
+      }
+      return created;
+    };
+  };
 
   /**
    * Gives an attach's editor wait back, once, after Drupal is done (it detaches a field before it puts its rebuild
@@ -162,39 +182,26 @@ if (editors?.ckeditor5 && shared()) {
               giveBack(element, mine);
               return false;
             },
-            ready: () => {
-              mine.ready = true;
-              handle.ready();
-            },
           },
         },
       },
     };
     if (typeof configuration.initialData === 'string') element.value = configuration.initialData;
     // Drupal creates the editor without handing its promise back, and only logs a failure: the draft waits for the
-    // editor, its form inert, unless it is told. Drupal core calls `create` before its attach returns.
-    const classic = page.CKEditor5?.editorClassic?.ClassicEditor;
-    const create = classic?.create;
-    if (classic && create)
-      classic.create = (...args) => {
-        const created = create.apply(classic, args);
-        // A field replaced or gone meanwhile only gives its editor's wait back, its editor created or not.
-        // One that followed the draft already (a later 'ready' listener threw) leaves it as it is.
-        created.catch(() => {
-          if (mine.ready) return;
-          if (current()) handle.failed();
-          else giveBack(element, mine);
-        });
-        return created;
-      };
+    // editor, its form inert, unless it is told. Its creation is heard whenever it comes, by the field it is for.
+    creating.set(element, (created) =>
+      // An editor Drupal does not keep (it failed, even once it followed the draft) stops it; a field replaced or
+      // gone meanwhile only gives its editor's wait back.
+      created.catch(() => (current() ? handle.failed() : giveBack(element, mine)))
+    );
+    watch();
     try {
       attach.call(ckeditor5, element, settings);
     } catch (error) {
       // The editor the draft waits for never comes: the form is released, the field left as Drupal left it.
+      creating.delete(element);
       handle.failed();
       throw error;
-    } finally {
-      if (classic && create) classic.create = create;
     }
   };
 

@@ -232,7 +232,7 @@ test('an editor whose field is gone gives its wait back when it fails, and stops
   created.catch(() => {});
   globalThis.CKEditor5.editorClassic = { ClassicEditor: { create: vi.fn(() => created) } };
   const session = await load({ session: followed() });
-  attach.mockImplementation(() => globalThis.CKEditor5.editorClassic.ClassicEditor.create());
+  attach.mockImplementation((element) => globalThis.CKEditor5.editorClassic.ClassicEditor.create(element));
   const removed = body();
   globalThis.Drupal.editors.ckeditor5.attach(removed, format);
   await vi.waitFor(() => expect(attach).toHaveBeenCalledOnce());
@@ -255,7 +255,7 @@ test('an editor ready once its field left follows nothing, and gives its wait ba
   });
   globalThis.CKEditor5.editorClassic = { ClassicEditor: { create: vi.fn(() => created) } };
   const session = await load({ session: followed() });
-  attach.mockImplementation(() => globalThis.CKEditor5.editorClassic.ClassicEditor.create());
+  attach.mockImplementation((element) => globalThis.CKEditor5.editorClassic.ClassicEditor.create(element));
   const removed = body();
   removed.setAttribute('data-editor-active-text-format', 'plain_text');
   globalThis.Drupal.editors.ckeditor5.attach(removed, format);
@@ -314,7 +314,7 @@ test('a field rebuilt with a format without CKEditor 5 stops the draft; with one
   expect(session.handles[1].release).not.toHaveBeenCalled();
 });
 
-test('an editor that failed once it followed the draft leaves the draft as it is', async () => {
+test('an editor whose creation fails once it followed the draft stops it: Drupal does not keep that editor', async () => {
   build();
   /** @type {(error: Error) => void} */
   let fail;
@@ -324,24 +324,21 @@ test('an editor that failed once it followed the draft leaves the draft as it is
   created.catch(() => {});
   globalThis.CKEditor5.editorClassic = { ClassicEditor: { create: vi.fn(() => created) } };
   const session = await load({ session: followed() });
-  attach.mockImplementation(() => globalThis.CKEditor5.editorClassic.ClassicEditor.create());
+  attach.mockImplementation(() => globalThis.CKEditor5.editorClassic.ClassicEditor.create(body()));
   globalThis.Drupal.editors.ckeditor5.attach(body(), format);
   await vi.waitFor(() => expect(attach).toHaveBeenCalledOnce());
   // The plugin followed the draft; a later 'ready' listener throws.
   attach.mock.calls[0][1].editorSettings.config.collaborate.ready();
-  expect(session.handles[0].ready).toHaveBeenCalledOnce();
   fail(new Error('Another plugin failed.'));
   await created.catch(() => {});
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  expect(session.handles[0].failed).not.toHaveBeenCalled();
-  expect(session.handles[0].release).not.toHaveBeenCalled();
+  await vi.waitFor(() => expect(session.handles[0].failed).toHaveBeenCalledOnce());
 });
 
 test('an editor created while its attach is current gives nothing back', async () => {
   build();
   globalThis.CKEditor5.editorClassic = { ClassicEditor: { create: vi.fn(async () => {}) } };
   const session = await load({ session: followed() });
-  attach.mockImplementation(() => globalThis.CKEditor5.editorClassic.ClassicEditor.create());
+  attach.mockImplementation((element) => globalThis.CKEditor5.editorClassic.ClassicEditor.create(element));
   globalThis.Drupal.editors.ckeditor5.attach(body(), format);
   await vi.waitFor(() => expect(attach).toHaveBeenCalledOnce());
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -477,7 +474,7 @@ test('a field the draft does not follow takes Drupal’s editor at once, or once
   expect(session.editorFailed).toHaveBeenCalledOnce();
 });
 
-test("an editor Drupal fails to create once attached tells its handle, and Drupal's class is left as it was", async () => {
+test('an editor Drupal fails to create tells its handle, whenever Drupal creates it', async () => {
   build();
   /** @type {Promise<unknown>[]} */
   const creations = [];
@@ -486,9 +483,11 @@ test("an editor Drupal fails to create once attached tells its handle, and Drupa
     if (failure) throw failure;
   });
   globalThis.CKEditor5.editorClassic = { ClassicEditor: { create } };
-  // Drupal's attach calls `create` before it returns, and logs a failure.
-  const drupal = () => {
-    const created = globalThis.CKEditor5.editorClassic.ClassicEditor.create('element', {});
+  // Drupal's attach creates the editor of the field, and logs a failure: core before its attach returns, another
+  // build later.
+  /** @param {HTMLTextAreaElement} element */
+  const drupal = (element) => {
+    const created = globalThis.CKEditor5.editorClassic.ClassicEditor.create(element, {});
     creations.push(created);
     created.catch(() => {});
   };
@@ -502,8 +501,36 @@ test("an editor Drupal fails to create once attached tells its handle, and Drupa
   await settled();
   expect(session.handles[0].failed).toHaveBeenCalledOnce();
   expect(session.editorFailed).toHaveBeenCalledOnce();
-  expect(create).toHaveBeenCalledWith('element', {});
-  expect(globalThis.CKEditor5.editorClassic.ClassicEditor.create).toBe(create);
+  expect(create).toHaveBeenCalledWith(body(), {});
+
+  // Created later, after Drupal's attach returned.
+  vi.resetModules();
+  const late = await load({ session: followed() });
+  /** @type {() => void} */
+  let later;
+  attach.mockImplementation((element) => {
+    later = () => drupal(element);
+  });
+  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledOnce());
+  later();
+  await settled();
+  expect(late.handles[0].failed).toHaveBeenCalledOnce();
+  // Heard once: Drupal creating the field's editor again tells that attach nothing more.
+  later();
+  await settled();
+  expect(late.handles[0].failed).toHaveBeenCalledOnce();
+  // Drupal's class is watched once, however many fields attach.
+  late.stopped = false;
+  const watching = globalThis.CKEditor5.editorClassic.ClassicEditor.create;
+  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledTimes(2));
+  expect(globalThis.CKEditor5.editorClassic.ClassicEditor.create).toBe(watching);
+  // An editor created for another element, or without one, is Drupal's alone.
+  globalThis.CKEditor5.editorClassic.ClassicEditor.create(document.createElement('textarea')).catch(() => {});
+  globalThis.CKEditor5.editorClassic.ClassicEditor.create().catch(() => {});
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(late.handles[0].failed).toHaveBeenCalledOnce();
 
   // A creation that succeeds tells nothing: the plugin does, once the editor is ready.
   failure = null;
@@ -511,10 +538,9 @@ test("an editor Drupal fails to create once attached tells its handle, and Drupa
   const created = await load({ session: followed() });
   attach.mockImplementation(drupal);
   globalThis.Drupal.editors.ckeditor5.attach(body(), format);
-  await vi.waitFor(() => expect(creations).toHaveLength(2));
+  await vi.waitFor(() => expect(creations).toHaveLength(4));
   await settled();
   expect(created.handles[0].failed).not.toHaveBeenCalled();
-  expect(globalThis.CKEditor5.editorClassic.ClassicEditor.create).toBe(create);
 });
 
 test('a draft that stopped, before or while its configuration was read, gives the field Drupal’s editor', async () => {
@@ -576,6 +602,10 @@ test('a form without a session gives its field Drupal’s editor', async () => {
 
 test("Drupal's own failure is said, the field attached once and the form released", async () => {
   build();
+  const create = vi.fn(async () => {
+    throw new Error('No editor.');
+  });
+  globalThis.CKEditor5.editorClassic = { ClassicEditor: { create } };
   const session = await load({ session: followed() });
   attach.mockImplementation(() => {
     throw new Error('Malformed settings.');
@@ -587,6 +617,10 @@ test("Drupal's own failure is said, the field attached once and the form release
   expect(attach).toHaveBeenCalledOnce();
   expect(session.handles[0].failed).toHaveBeenCalledOnce();
   expect(session.editorFailed).toHaveBeenCalledOnce();
+  // That attach awaits no creation any more.
+  await globalThis.CKEditor5.editorClassic.ClassicEditor.create(body()).catch(() => {});
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(session.handles[0].failed).toHaveBeenCalledOnce();
 });
 
 test("typing in an empty row makes it an item, what was typed kept, a file input's file left alone", async () => {

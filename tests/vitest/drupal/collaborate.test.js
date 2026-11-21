@@ -621,14 +621,6 @@ test('a field the draft does not follow takes Drupal’s editor at once, or once
   expect(session.editorFailed).toHaveBeenCalledOnce();
 });
 
-test('CKEditor 5 on a field the draft follows as text stops it: its format switched, what is typed there is lost', async () => {
-  build();
-  const session = await load({ session: fakeSession({ follows: vi.fn(async () => true) }) });
-  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
-  await vi.waitFor(() => expect(attach).toHaveBeenCalledWith(body(), format));
-  await vi.waitFor(() => expect(session.editorFailed).toHaveBeenCalledOnce());
-});
-
 test("an editor Drupal fails to create as it attaches tells its handle; Drupal's class is watched once", async () => {
   build();
   /** @type {Promise<unknown>[]} */

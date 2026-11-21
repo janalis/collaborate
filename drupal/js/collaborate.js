@@ -68,8 +68,8 @@ const loadPlugins = () => {
 };
 
 /**
- * Stops a draft that follows a field Drupal hides behind an editor it cannot follow: what is typed there would not
- * be shared, and a peer's edits would be lost.
+ * Stops a draft that follows a field Drupal hides behind another editor than CKEditor 5: what is typed there would
+ * not be shared, and a peer's edits would be lost. (CKEditor 5 on a field followed as text is the session's to stop.)
  *
  * @param {import('@janalis/collaborate/draft/session.js').DraftSession} session
  * @param {HTMLTextAreaElement} element
@@ -179,9 +179,6 @@ if (editors?.ckeditor5 && shared()) {
     // Replaced, detached or gone meanwhile: nothing waits for an editor this attach never creates.
     if (!current()) return giveBack(element, mine);
     const handle = configuration.collaborate;
-    // A field the draft follows as text, hidden behind Drupal's editor (its format switched to CKEditor 5): the draft
-    // cannot follow it there.
-    if (session && !session.stopped && !handle) stopFor(session, element);
     // Another field's editor may have failed meanwhile.
     if (!session || session.stopped || !handle) return attach.call(ckeditor5, element, format);
     if (!Array.isArray(format?.editorSettings?.plugins)) {

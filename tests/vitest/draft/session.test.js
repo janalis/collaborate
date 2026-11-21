@@ -701,16 +701,47 @@ test('a rich field whose editor nobody asks for stops the draft in time, unless 
   vi.useRealTimers();
 });
 
-test('a field followed as text gets no editor handle, and the host can ask whether the draft follows a field', async () => {
-  const { session } = fixture('<input name="Record[name]">', { 'Record[name]': { type: 'text', initial: '' } });
+test('a field followed as text that gets an editor stops the draft, and a host can ask what the draft follows', async () => {
+  const { session, form } = fixture('<input name="Record[name]">', {
+    'Record[name]': { type: 'text', initial: '' },
+    'Record[items][__name__][title]': { type: 'text', initial: '' },
+  });
   await session.ready;
-  expect(await session.editorConfiguration({ name: 'Record[name]' })).toEqual({});
-  expect(session.stopped).toBeFalsy();
   expect(await session.follows({ name: 'Record[name]' })).toBe(true);
+  // A row the draft will follow once it is one.
+  expect(await session.follows({ name: 'Record[items][n1][title]' })).toBe(true);
   expect(await session.follows({ name: 'Unknown' })).toBe(false);
+  expect(await session.editorConfiguration({ name: 'Unknown' })).toEqual({});
+  expect(session.stopped).toBeFalsy();
+  expect(await session.editorConfiguration({ name: 'Record[name]' })).toEqual({});
+  expect(session.stopped).toBe(true);
+  expect(form.dataset.collaborateState).toBe('unavailable');
   const refused = fixture(undefined, undefined, { failJoin: true, joinStatus: 403 });
   await expect(refused.session.ready).rejects.toThrow();
   expect(await refused.session.follows({ name: 'Record[name]' })).toBe(false);
+});
+
+test.each([
+  true,
+  false,
+])('a Save (from its button: %s) under way as the draft stops for an editor that never came posts the form as usual', async (button) => {
+  vi.useFakeTimers();
+  const { session, form } = fixture('<textarea name="Record[body]"></textarea>', {
+    'Record[body]': { type: 'rich', initial: 'Body' },
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  await session.ready;
+  vi.spyOn(session, 'refreshRecord').mockResolvedValue(undefined);
+  const native = vi.fn((event) => event.preventDefault());
+  form.addEventListener('submit', native);
+  const submitter = button ? form.querySelector('button[type="submit"]') : null;
+  form.dispatchEvent(new SubmitEvent('submit', { cancelable: true, submitter }));
+  expect(native).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(session.stopped).toBe(true);
+  expect(native).toHaveBeenCalledOnce();
+  expect(native.mock.calls[0][0].submitter).toBe(submitter);
+  vi.useRealTimers();
 });
 
 test('a save awaits editors at least as long as they are given to come', async () => {

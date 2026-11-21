@@ -174,10 +174,16 @@ export class DraftSession {
     this.abort = new AbortController();
     /** @type {(() => void)[]} */
     this.removers = [];
-    // Settled once the draft stops: a save awaiting editors then waits no more.
-    const end = Promise.withResolvers();
-    this.end = end.promise;
-    this.ended = () => end.resolve(undefined);
+    // Settled once the draft stops: a save awaiting editors then waits no more. One rejection serves every save.
+    /** @type {(value: unknown) => void} */
+    let end;
+    this.stopping = new Promise((resolve) => {
+      end = resolve;
+    }).then(() => {
+      throw new Error('Collaborate draft stopped.');
+    });
+    this.stopping.catch(() => {});
+    this.ended = () => end(undefined);
     /** @type {WeakSet<Element>} */
     this.bound = new WeakSet();
     // Set by the modules sharing the session: a received value being written to a control (fields.js and the
@@ -413,6 +419,12 @@ export class DraftSession {
             this.submitting = false;
           }
         } catch (error) {
+          // The draft stopped meanwhile, the form left to ordinary editing: the Save posts it as usual.
+          if (this.ordinary) {
+            if (event.submitter) this.form.requestSubmit(event.submitter);
+            else this.form.requestSubmit();
+            return;
+          }
           this.failed(error);
         } finally {
           this.saving = false;
@@ -462,9 +474,13 @@ export class DraftSession {
     }
     const name = this.fieldKey(field.name);
     const state = this.ensureField(name);
-    // A field the draft does not follow, or follows as text, gets no editor handle: the editor starts from the
-    // textarea (see follows() for a host that would hide a followed field behind one).
-    if (state?.type !== 'rich') return {};
+    if (!state) return {};
+    // A field the draft follows as text gets an editor it cannot follow (a Drupal format switched to CKEditor 5):
+    // what is typed there would not be shared, and a peer's edits would be lost, so the draft stops.
+    if (state.type !== 'rich') {
+      this.editorFailed();
+      return {};
+    }
     return { initialData: state.initial, collaborate: this.editorHandle(name) };
   }
 
@@ -480,7 +496,9 @@ export class DraftSession {
     } catch {
       return false;
     }
-    return Boolean(this.state?.fields[this.fieldKey(field.name)]);
+    const name = this.fieldKey(field.name);
+    // A field the draft follows from its definition on (a row typed in, a row added since) counts too.
+    return Boolean(this.state?.fields[name] ?? this.definition(name));
   }
 
   /**
@@ -1234,11 +1252,11 @@ export class DraftSession {
       try {
         await Promise.race([
           Promise.all(Array.from(this.editorWaiters.values(), (waiter) => waiter.promise)),
+          this.stopping,
           new Promise((_resolve, reject) => {
             // At least as long as an editor is given to come.
             const wait = Math.max(15_000, this.setting('nextEditorGrace', 10_000));
             editorTimeout = setTimeout(() => reject(new Error('Collaborate editors are not ready.')), wait);
-            this.end.then(() => reject(new Error('Collaborate draft stopped.')));
           }),
         ]);
       } finally {
@@ -1437,6 +1455,8 @@ export class DraftSession {
   stop() {
     this.releaseControls();
     this.stopped = true;
+    // Its form is edited and saved as usual from now on.
+    this.ordinary = true;
     this.forgetGraces();
     this.suspend();
     this.form.removeEventListener('submit', /** @type {(event: SubmitEvent) => Promise<void>} */ (this.onSubmit), true);

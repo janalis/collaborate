@@ -55,12 +55,15 @@ versions follow [Semantic Versioning](https://semver.org/).
   field left the form: a field no editor comes for (Drupal leaves one whose
   format has no CKEditor 5 bare) no longer holds the form inert for good. A
   field the draft follows as text gets no editor handle; `session.follows(field)`
-  says whether the draft follows a field. Drupal: a formatted text whose format
-  has an editor the draft does not follow (another than CKEditor 5, or CKEditor
-  5 with `drafts.rich_text` off) stays out of the draft, and an editor that
-  takes a field the draft follows (its format switched) stops the draft: what
-  is typed there would not be shared. A save waits for editors at least as long
-  as they are given to come, and no longer once the draft stopped.
+  says whether the draft follows a field. An editor asked for on a field the
+  draft follows as text (a Drupal format switched to CKEditor 5) stops the
+  draft: what is typed there would not be shared. Drupal: a formatted text's
+  value whose format has an editor the draft does not follow (another than
+  CKEditor 5, or CKEditor 5 with `drafts.rich_text` off) stays out of the draft,
+  its summary and format in it, and another editor taking a field the draft
+  follows stops the draft. A save waits for editors at least as long as they
+  are given to come; one under way as the draft stops posts the form as
+  usual.
 - Drupal: a list set in a higher layer of the options (the form, then
   settings.php) replaces the one below whole: an `advanced` list no longer
   shows through a shorter one. So do the maps the bundle replaces whole from

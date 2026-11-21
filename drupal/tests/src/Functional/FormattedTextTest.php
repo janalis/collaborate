@@ -52,8 +52,10 @@ final class FormattedTextTest extends BrowserTestBase
         $this->config('collaborate.settings')->set('drafts.rich_text', false)->save();
         $this->resetAll();
 
-        // Its textarea is hidden behind an editor the draft does not follow.
-        self::assertArrayNotHasKey('body[0][value]', $this->fields($this->article('full')));
+        // Its textarea is hidden behind an editor the draft does not follow; its format, a select beside it, is not.
+        $fields = $this->fields($this->article('full'));
+        self::assertArrayNotHasKey('body[0][value]', $fields);
+        self::assertArrayHasKey('body[0][format]', $fields);
         self::assertSame('text', $this->fields($this->article('plain'))['body[0][value]']['type'] ?? null);
     }
 

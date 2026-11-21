@@ -417,11 +417,13 @@ final class EntityForms
      *
      * A multi-value field's keyed items are a collection's entries ({@see ItemKeys}).
      *
-     * @param bool $fresh whether a field's `initial` is what the form was submitted with, not what it showed
+     * @param bool $rich   whether a formatted text's value is its CKEditor 5's, shared as rich text
+     * @param bool $fresh  whether a field's `initial` is what the form was submitted with, not what it showed
+     * @param bool $hidden whether a formatted text's value is hidden behind an editor the draft does not follow
      *
      * @return array<string, SchemaField>
      */
-    private function fields(array $element, bool $rich = false, bool $fresh = false): array
+    private function fields(array $element, bool $rich = false, bool $fresh = false, bool $hidden = false): array
     {
         $fields = [];
         foreach (Element::children($element) as $key) {
@@ -442,13 +444,14 @@ final class EntityForms
             $name = \is_string($child['#name'] ?? null) ? $child['#name'] : null;
             if ('text_format' === $type) {
                 $editor = self::editor($child);
+                $shared = 'ckeditor5' === $editor && \in_array('text_format', $this->rich, true);
                 // A format edited in an editor the draft does not follow (another than CKEditor 5, or CKEditor 5 with
-                // rich text not shared) hides the field's textarea: what is typed there would not be shared, and a
-                // peer's edits would be lost, so the field stays out of the draft.
-                if (null !== $editor && ('ckeditor5' !== $editor || !\in_array('text_format', $this->rich, true))) {
-                    continue;
-                }
-                $fields += $this->fields($child, null !== $editor, $fresh);
+                // rich text not shared) hides the value's textarea: what is typed there would not be shared, and a
+                // peer's edits would be lost, so the value stays out of the draft. Its summary and format do not.
+                $fields += $this->fields($child, $shared, $fresh, null !== $editor && !$shared);
+                continue;
+            }
+            if ($hidden && 'value' === $key) {
                 continue;
             }
             if (null !== $name && null !== $type && !$this->excluded($name)) {

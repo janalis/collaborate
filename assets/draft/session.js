@@ -174,6 +174,8 @@ export class DraftSession {
     this.abort = new AbortController();
     /** @type {(() => void)[]} */
     this.removers = [];
+    /** @type {HTMLInputElement[]} the save fields this session added to the form */
+    this.added = [];
     // Settled once the draft stops: a save awaiting editors then waits no more. One rejection serves every save.
     /** @type {(value: unknown) => void} */
     let end;
@@ -392,6 +394,11 @@ export class DraftSession {
         try {
           await this.refreshRecord();
           await this.flush();
+          // An editor that never came stopped the draft meanwhile: the Save posts the form as usual.
+          if (this.ordinary) {
+            this.submitOrdinarily(event.submitter);
+            return;
+          }
           if (this.stopped || this.suspended || this.resuming || this.composing) return;
           // A form that can save has joined: its conflicts are known.
           if (Object.keys(/** @type {Record<string, unknown>} */ (this.conflicts)).length) {
@@ -419,10 +426,9 @@ export class DraftSession {
             this.submitting = false;
           }
         } catch (error) {
-          // The draft stopped meanwhile, the form left to ordinary editing: the Save posts it as usual.
+          // An editor that never came stopped the draft meanwhile: the Save posts the form as usual.
           if (this.ordinary) {
-            if (event.submitter) this.form.requestSubmit(event.submitter);
-            else this.form.requestSubmit();
+            this.submitOrdinarily(event.submitter);
             return;
           }
           this.failed(error);
@@ -461,8 +467,25 @@ export class DraftSession {
       control.type = 'hidden';
       control.name = name;
       this.form.append(control);
+      this.added.push(control);
     }
     control.value = value;
+  }
+
+  /**
+   * Posts the form as usual, the draft left behind: without the save fields an earlier Save of this page added, from
+   * the button the user pressed while it still belongs to the form.
+   *
+   * @param {HTMLElement | null} [submitter]
+   */
+  submitOrdinarily(submitter) {
+    for (const control of this.added.splice(0)) control.remove();
+    try {
+      if (submitter) this.form.requestSubmit(submitter);
+      else this.form.requestSubmit();
+    } catch {
+      this.form.requestSubmit();
+    }
   }
 
   /** @param {HTMLTextAreaElement} field the rich editor's source element */
@@ -478,6 +501,10 @@ export class DraftSession {
     // A field the draft follows as text gets an editor it cannot follow (a Drupal format switched to CKEditor 5):
     // what is typed there would not be shared, and a peer's edits would be lost, so the draft stops.
     if (state.type !== 'rich') {
+      console.error(
+        `Collaborate: "${field.name}" is shared as text, not rich text, and the draft cannot follow it in an editor: ` +
+          "list its form type's block prefix in drafts.rich_text.block_prefixes."
+      );
       this.editorFailed();
       return {};
     }
@@ -613,6 +640,8 @@ export class DraftSession {
   // Without every editor the draft cannot be followed; keep the ordinary submission path.
   editorFailed() {
     if (this.stopped) return;
+    // Its form is edited and saved as usual from now on: a Save under way posts it so.
+    this.ordinary = true;
     this.setStatus('unavailable');
     this.stop();
   }
@@ -1455,8 +1484,6 @@ export class DraftSession {
   stop() {
     this.releaseControls();
     this.stopped = true;
-    // Its form is edited and saved as usual from now on.
-    this.ordinary = true;
     this.forgetGraces();
     this.suspend();
     this.form.removeEventListener('submit', /** @type {(event: SubmitEvent) => Promise<void>} */ (this.onSubmit), true);

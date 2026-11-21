@@ -713,9 +713,12 @@ test('a field followed as text that gets an editor stops the draft, and a host c
   expect(await session.follows({ name: 'Unknown' })).toBe(false);
   expect(await session.editorConfiguration({ name: 'Unknown' })).toEqual({});
   expect(session.stopped).toBeFalsy();
+  const said = vi.spyOn(console, 'error').mockImplementation(() => {});
   expect(await session.editorConfiguration({ name: 'Record[name]' })).toEqual({});
   expect(session.stopped).toBe(true);
   expect(form.dataset.collaborateState).toBe('unavailable');
+  // Said, with what to configure: a field type the bundle shares as text.
+  expect(said).toHaveBeenCalledWith(expect.stringContaining('drafts.rich_text.block_prefixes'));
   const refused = fixture(undefined, undefined, { failJoin: true, joinStatus: 403 });
   await expect(refused.session.ready).rejects.toThrow();
   expect(await refused.session.follows({ name: 'Record[name]' })).toBe(false);
@@ -742,6 +745,50 @@ test.each([
   expect(native).toHaveBeenCalledOnce();
   expect(native.mock.calls[0][0].submitter).toBe(submitter);
   vi.useRealTimers();
+});
+
+test('a Save posts the form as usual once the draft stopped for an editor, without the save fields it added', async () => {
+  const { session, form } = fixture('<textarea name="Record[body]"></textarea>', {
+    'Record[body]': { type: 'rich', initial: 'Body' },
+  });
+  await session.ready;
+  vi.spyOn(session, 'refreshRecord').mockResolvedValue(undefined);
+  // An earlier Save of this page added its fields; the host's own are its.
+  session.hidden('_collaborate_revision', '3');
+  form.insertAdjacentHTML('beforeend', '<input type="hidden" name="_host" value="kept">');
+  session.hidden('_host', 'set');
+  const native = vi.fn((event) => event.preventDefault());
+  form.addEventListener('submit', native);
+  // The flush ends as the draft stops for an editor: nothing thrown, the Save still posts.
+  vi.spyOn(session, 'flush').mockImplementation(async () => {
+    session.editorFailed();
+  });
+  const submitter = /** @type {HTMLButtonElement} */ (form.querySelector('button[type="submit"]'));
+  form.dispatchEvent(new SubmitEvent('submit', { cancelable: true, submitter }));
+  await vi.waitFor(() => expect(native).toHaveBeenCalledOnce());
+  expect(form.elements.namedItem('_collaborate_revision')).toBeNull();
+  expect(/** @type {HTMLInputElement} */ (form.elements.namedItem('_host')).value).toBe('set');
+  // A button gone from the form meanwhile: the form posts without it.
+  native.mockClear();
+  const gone = document.createElement('button');
+  gone.type = 'submit';
+  session.submitOrdinarily(gone);
+  expect(native).toHaveBeenCalledOnce();
+  expect(native.mock.calls[0][0].submitter).toBeNull();
+});
+
+test('a draft stopped otherwise (the page left) posts nothing for a Save under way', async () => {
+  const { session, form } = fixture();
+  await session.ready;
+  vi.spyOn(session, 'refreshRecord').mockImplementation(async () => {
+    session.stop();
+    throw new DOMException('Left.', 'AbortError');
+  });
+  const native = vi.fn((event) => event.preventDefault());
+  form.addEventListener('submit', native);
+  form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(native).not.toHaveBeenCalled();
 });
 
 test('a save awaits editors at least as long as they are given to come', async () => {

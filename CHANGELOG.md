@@ -59,11 +59,11 @@ versions follow [Semantic Versioning](https://semver.org/).
   draft follows as text (a Drupal format switched to CKEditor 5) stops the
   draft: what is typed there would not be shared. Drupal: a formatted text's
   value whose format has an editor the draft does not follow (another than
-  CKEditor 5, or CKEditor 5 with `drafts.rich_text` off) stays out of the draft,
-  its summary and format in it, and another editor taking a field the draft
-  follows stops the draft. A save waits for editors at least as long as they
-  are given to come; one under way as the draft stops posts the form as
-  usual.
+  CKEditor 5, or CKEditor 5 with `drafts.rich_text` off) stays out of the draft
+  with its format, its summary in it, and another editor taking a field the
+  draft follows stops the draft. A save waits for editors at least as long as
+  they are given to come; one under way as the draft stops for an editor posts
+  the form as usual, without the save fields an earlier Save added.
 - Drupal: a list set in a higher layer of the options (the form, then
   settings.php) replaces the one below whole: an `advanced` list no longer
   shows through a shorter one. So do the maps the bundle replaces whole from

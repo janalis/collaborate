@@ -447,11 +447,12 @@ final class EntityForms
                 $shared = 'ckeditor5' === $editor && \in_array('text_format', $this->rich, true);
                 // A format edited in an editor the draft does not follow (another than CKEditor 5, or CKEditor 5 with
                 // rich text not shared) hides the value's textarea: what is typed there would not be shared, and a
-                // peer's edits would be lost, so the value stays out of the draft. Its summary and format do not.
+                // peer's edits would be lost, so the value and its format stay out of the draft. Its summary does not.
                 $fields += $this->fields($child, $shared, $fresh, null !== $editor && !$shared);
                 continue;
             }
-            if ($hidden && 'value' === $key) {
+            // The value and its format go together: a peer's format switch would put this page's own value under it.
+            if ($hidden && ('value' === $key || 'format' === $key)) {
                 continue;
             }
             if (null !== $name && null !== $type && !$this->excluded($name)) {

@@ -35,9 +35,11 @@ versions follow [Semantic Versioning](https://semver.org/).
   the draft whatever the field), and `shared.collaborate?.release()` when the
   field leaves the page without one. Each editor settles its own wait: a
   later editor of the field, or the field's removal, makes the earlier
-  editor's ready or failure tell the draft nothing, so a removed entry's late
-  editor no longer releases the form for the entry added again under its
-  key, and an editor that fails once ready stops nothing.
+  editor's ready or failure tell the draft nothing, and the earlier editor
+  follows nothing: a removed entry's late editor no longer releases the form
+  for the entry added again under its key, nor takes its edits. An earlier
+  editor destroyed once a later one registered no longer unregisters it, and
+  removing an entry stops the wait for its editors still starting.
 - Drupal: a list set in a higher layer of the options (the form, then
   settings.php) replaces the one below whole: an `advanced` list no longer
   shows through a shorter one. So do the maps the bundle replaces whole from

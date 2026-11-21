@@ -83,14 +83,14 @@ import { initializeText, initializeValue, valueAdapter } from './fields.js';
 /** @typedef {{ ready: boolean, claimed?: boolean, resolve: () => void, promise: Promise<void> }} EditorWaiter */
 /**
  * What `editorConfiguration()` hands one editor of a field, as `collaborate`: the `Collaborate` plugin calls `ready`
- * once the editor is; the host calls `failed` when the editor cannot be created, or `release` when the field leaves
- * without one. Each settles this editor's wait only, and nothing once a later editor of the field or the field's
- * removal replaced it.
+ * once the editor is, and follows the draft only if it answers `true`; the host calls `failed` when the editor cannot
+ * be created or wired, or `release` when the field leaves without one. Each settles this editor's wait only, and
+ * nothing once a later editor of the field or the field's removal replaced it.
  *
  * @typedef {object} EditorHandle
  * @property {() => DraftSession} getSession
  * @property {string} field
- * @property {() => void} ready
+ * @property {() => boolean} ready
  * @property {() => void} failed
  * @property {() => void} release
  */
@@ -478,10 +478,12 @@ export class DraftSession {
       getSession: () => this,
       field: name,
       ready: () => {
-        if (current()) waiter.resolve();
+        if (!current()) return false;
+        waiter.resolve();
+        return true;
       },
       failed: () => {
-        if (current() && !waiter.ready) this.editorFailed();
+        if (current()) this.editorFailed();
       },
       release: () => {
         if (!current()) return;
@@ -586,7 +588,10 @@ export class DraftSession {
       this.incompatible('replay', name, messageOf(error));
       throw error;
     }
-    return () => this.adapters.delete(name);
+    // A later editor of the field may have registered since: its adapter stays.
+    return () => {
+      if (this.adapters.get(name) === buffer) this.adapters.delete(name);
+    };
   }
 
   /**

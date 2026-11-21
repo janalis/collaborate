@@ -155,6 +155,9 @@ test('projects members first discovered by replay and detaches their descendant 
   const resolve = vi.fn();
   session.adapters.set('Record[items][remote][title]', { destroy });
   session.editorWaiters.set('Record[items][remote][title]', { resolve });
+  // An editor of the entry still starting: nothing waits for it either.
+  const starting = vi.fn();
+  session.editorWaiters.set('Record[items][remote][body]', { resolve: starting });
   const editable = document.createElement('div');
   editable.className = 'ck-editor__editable';
   editable.ckeditorInstance = { destroy: vi.fn() };
@@ -162,6 +165,8 @@ test('projects members first discovered by replay and detaches their descendant 
   session.adapters.get(name).receive({ id: 'delete', version: 1, value: { alive: false, order: 2 } });
   expect(destroy).toHaveBeenCalledOnce();
   expect(resolve).toHaveBeenCalledOnce();
+  expect(starting).toHaveBeenCalledOnce();
+  expect(session.editorWaiters.size).toBe(0);
   expect(editable.ckeditorInstance.destroy).toHaveBeenCalledOnce();
   expect(container.querySelector('[data-collaborate-item="remote"]')).toBeNull();
   stop();

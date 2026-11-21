@@ -550,13 +550,13 @@ test('awaits the editor of an entry added again under a key whose editor was det
   session.detachField('Record[body]');
   expect(detached.ready).toBe(true);
   const added = (await session.editorConfiguration(field)).collaborate;
-  // The removed entry's editor, late, settles nothing of the new entry's.
-  removed.ready();
+  // The removed entry's editor, late, settles nothing of the new entry's, and follows nothing.
+  expect(removed.ready()).toBe(false);
   removed.failed();
   removed.release();
   expect(session.editorWaiters.get('Record[body]').ready).toBe(false);
   expect(session.stopped).toBeFalsy();
-  added.ready();
+  expect(added.ready()).toBe(true);
   expect(session.editorWaiters.get('Record[body]').ready).toBe(true);
 });
 
@@ -582,17 +582,16 @@ test('each editor of a field settles its own wait: a later one replaces it, whoe
   second.ready();
   await awaited.promise;
   expect(form.querySelector('input').hasAttribute('inert')).toBe(false);
-  // A ready editor's late failure stops nothing; a third editor is awaited afresh.
-  second.failed();
-  expect(session.stopped).toBeFalsy();
+  // A third editor is awaited afresh.
   const third = (await session.editorConfiguration(field)).collaborate;
   expect(session.editorWaiters.get('Record[body]').ready).toBe(false);
   // Its field taken off without an editor: nothing waits for it.
   third.release();
   expect(session.editorWaiters.has('Record[body]')).toBe(false);
   third.release();
-  // An editor that cannot be created stops the draft.
+  // An editor that cannot be created, or wired once ready, stops the draft.
   const fourth = (await session.editorConfiguration(field)).collaborate;
+  fourth.ready();
   fourth.failed();
   expect(session.stopped).toBe(true);
 });
@@ -778,6 +777,12 @@ test('waits for rich editors, checks initial versions and releases registration 
   expect(session.adapters.get('body')).toBe(adapter);
   remove();
   expect(session.adapters.has('body')).toBe(false);
+  // An earlier editor of the field, destroyed once a later one registered, leaves the later one's adapter.
+  const earlier = session.register('body', adapter);
+  const later = { version: 2, receive: vi.fn(), next: () => null };
+  session.register('body', later);
+  earlier();
+  expect(session.adapters.get('body')).toBe(later);
   const waiter = session.editorWaiter('body');
   waiter.resolve();
   await expect(waiter.promise).resolves.toBeUndefined();

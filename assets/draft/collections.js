@@ -145,7 +145,8 @@ export function initializeCollections(session) {
      * @param {HTMLElement} node
      */
     function detach(key, node) {
-      for (const name of [...session.adapters.keys()]) {
+      // Its editors, and those still starting: nothing waits for them.
+      for (const name of new Set([...session.adapters.keys(), ...session.editorWaiters.keys()])) {
         if (session.formName(name).startsWith(`${path}[${key}]`)) session.detachField(name);
       }
       for (const root of node.querySelectorAll('.ck-editor__editable')) root.ckeditorInstance?.destroy();

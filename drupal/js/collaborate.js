@@ -82,6 +82,25 @@ if (editors?.ckeditor5 && shared()) {
   const attaches = new WeakMap();
 
   /**
+   * Gives an editor's wait back once Drupal is done (it detaches a field before it attaches its rebuild or its next
+   * format), unless the field is attached again: the draft then waits for that editor instead.
+   *
+   * @param {HTMLTextAreaElement} element
+   * @param {EditorHandle} handle
+   */
+  const giveBack = (element, handle) =>
+    setTimeout(() => {
+      const again = Array.from(document.querySelectorAll('form[data-collaborate] textarea')).some(
+        (other) =>
+          other instanceof HTMLTextAreaElement &&
+          other.name === element.name &&
+          attaches.has(other) &&
+          sessions?.sessionFor(other) === handle.getSession()
+      );
+      if (!again) handle.release();
+    });
+
+  /**
    * Attaches a shared field once: with the draft's editor, or with Drupal's own when anything before fails, the form
    * then no longer following its draft.
    *
@@ -105,12 +124,13 @@ if (editors?.ckeditor5 && shared()) {
       }
     } catch (error) {
       if (!said.has(/** @type {object} */ (error))) console.error(error);
-      session?.editorFailed();
+      // A field replaced or gone meanwhile stops nothing.
+      if (current()) session?.editorFailed();
       configuration = {};
     }
-    const handle = configuration.collaborate;
     // Replaced, detached or gone meanwhile: nothing waits for an editor this attach never creates.
-    if (!current()) return handle?.release();
+    if (!current()) return mine.handle && giveBack(element, mine.handle);
+    const handle = configuration.collaborate;
     // Another field's editor may have failed meanwhile.
     if (!session || session.stopped || !handle) return attach.call(ckeditor5, element, format);
     if (!Array.isArray(format?.editorSettings?.plugins)) {
@@ -124,7 +144,18 @@ if (editors?.ckeditor5 && shared()) {
       editorSettings: {
         ...format.editorSettings,
         plugins: [...format.editorSettings.plugins, 'collaborate.Collaborate'],
-        config: { ...format.editorSettings.config, collaborate: handle },
+        config: {
+          ...format.editorSettings.config,
+          // An editor ready once its attach was replaced, or its field gone, follows nothing.
+          collaborate: {
+            ...handle,
+            ready: () => {
+              if (current()) return handle.ready();
+              giveBack(element, handle);
+              return false;
+            },
+          },
+        },
       },
     };
     if (typeof configuration.initialData === 'string') element.value = configuration.initialData;
@@ -135,8 +166,8 @@ if (editors?.ckeditor5 && shared()) {
     if (classic && create)
       classic.create = (...args) => {
         const created = create.apply(classic, args);
-        // A field gone meanwhile only gives its editor's wait back.
-        created.catch(() => (element.isConnected ? handle.failed() : handle.release()));
+        // A field replaced or gone meanwhile only gives its editor's wait back.
+        created.catch(() => (current() ? handle.failed() : giveBack(element, handle)));
         return created;
       };
     try {
@@ -170,8 +201,9 @@ if (editors?.ckeditor5 && shared()) {
    */
   ckeditor5.detach = (element, format, trigger) => {
     if (trigger !== 'serialize') {
-      attaches.get(element)?.handle?.release();
+      const ended = attaches.get(element);
       attaches.delete(element);
+      if (ended?.handle) giveBack(element, ended.handle);
     }
     return detach.call(ckeditor5, element, format, trigger);
   };

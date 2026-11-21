@@ -15,10 +15,13 @@ import { applySource, hasPendingUpload } from '../../../assets/ckeditor5/source.
 
 const editors = [];
 
-async function peer(initial = '<p>abcd</p>', extraPlugins = []) {
+async function peer(initial = '<p>abcd</p>', extraPlugins = [], follows = true) {
   let buffer;
-  // Told once the editor follows the draft: its buffer registered.
-  const ready = vi.fn(() => expect(session.register).toHaveBeenCalledOnce());
+  // Told once the editor is ready, before it follows the draft.
+  const ready = vi.fn(() => {
+    expect(session.register).not.toHaveBeenCalled();
+    return follows;
+  });
   const session = {
     adapters: new Map(),
     applying: false,
@@ -84,6 +87,13 @@ test('uses the requested public plugin name and stays inactive without configura
   editor.fire('ready');
   expect(editor.plugins.get('Collaborate').buffer).toBeUndefined();
   expect(editor.getData()).toBe('<p>local</p>');
+});
+
+test('an editor the draft no longer waits for follows nothing', async () => {
+  const late = await peer('<p>abcd</p>', [], false);
+  expect(late.ready).toHaveBeenCalledOnce();
+  expect(late.session.register).not.toHaveBeenCalled();
+  expect(late.editor.plugins.get('Collaborate').buffer).toBeUndefined();
 });
 
 test('merges two simultaneous writers, undoes only local content and synchronizes redo', async () => {

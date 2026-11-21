@@ -466,6 +466,30 @@ test("Drupal's editor attach for another editor than CKEditor 5, one registered 
   expect(session.follows).toHaveBeenCalledOnce();
 });
 
+test("Drupal's editors coming later with an AJAX response are watched, once, as its behaviors run", async () => {
+  const session = fakeSession({ follows: vi.fn(async () => true) });
+  for (const path of ['bridges/drupal.js', 'cursors/cursors.js', 'updates.js'])
+    vi.doMock(`@janalis/collaborate/${path}`, () => ({}));
+  vi.doMock('@janalis/collaborate/draft/session.js', () => ({ sessionFor: vi.fn(() => session) }));
+  globalThis.Drupal = { behaviors: {} };
+  await import('../../../drupal/js/collaborate.js');
+  // The response brings Drupal's editor dispatcher, CodeMirror and CKEditor 5.
+  const own = vi.fn();
+  const dispatch = vi.fn();
+  const ckeditor = vi.fn();
+  globalThis.Drupal.editorAttach = dispatch;
+  globalThis.Drupal.editors = { codemirror: { attach: own }, ckeditor5: { attach: ckeditor, detach: vi.fn() } };
+  globalThis.Drupal.behaviors.collaborate.attach(document);
+  const watching = globalThis.Drupal.editorAttach;
+  expect(watching).not.toBe(dispatch);
+  expect(globalThis.Drupal.editors.ckeditor5.attach).not.toBe(ckeditor);
+  globalThis.Drupal.behaviors.collaborate.attach(document);
+  expect(globalThis.Drupal.editorAttach).toBe(watching);
+  globalThis.Drupal.editors.codemirror.attach(body(), {});
+  expect(own).toHaveBeenCalledOnce();
+  await vi.waitFor(() => expect(session.editorFailed).toHaveBeenCalledOnce());
+});
+
 test('a Drupal page without editors has none to watch', async () => {
   for (const path of ['bridges/drupal.js', 'cursors/cursors.js', 'updates.js'])
     vi.doMock(`@janalis/collaborate/${path}`, () => ({}));

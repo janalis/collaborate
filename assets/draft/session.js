@@ -462,7 +462,9 @@ export class DraftSession {
    */
   hidden(name, value) {
     // The hidden inputs this session added: a host's own control of the name, or the id, is not the session's.
-    let control = this.added.find((added) => added.name === name && added.form === this.form);
+    // One a host took out of the form is forgotten, and added again.
+    this.added = this.added.filter((added) => added.form === this.form);
+    let control = this.added.find((added) => added.name === name);
     if (!control) {
       control = document.createElement('input');
       control.type = 'hidden';
@@ -1288,10 +1290,20 @@ export class DraftSession {
     this.running = (async () => {
       await this.ready;
       // Every editor awaited has its own time to come, past which the draft stops: a save waits that long.
-      await Promise.race([
-        Promise.all(Array.from(this.editorWaiters.values(), (waiter) => waiter.promise)),
-        this.stopping,
-      ]);
+      let editorTimeout;
+      try {
+        await Promise.race([
+          Promise.all(Array.from(this.editorWaiters.values(), (waiter) => waiter.promise)),
+          this.stopping,
+          // A host asking for an editor again and again would hold it for good: past a few graces, it gives up.
+          new Promise((_resolve, reject) => {
+            const wait = Math.max(15_000, 3 * this.setting('nextEditorGrace', 10_000));
+            editorTimeout = setTimeout(() => reject(new Error('Collaborate editors are not ready.')), wait);
+          }),
+        ]);
+      } finally {
+        clearTimeout(editorTimeout);
+      }
       await this.pull();
       for (const settle of this.sources.values()) settle();
       for (;;) {

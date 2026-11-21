@@ -86,9 +86,19 @@ const stopFor = (session, element) =>
 // field is created once the draft is joined, on its content, with the bundle's plugin, which tells the draft once
 // it is ready. The draft's handle of each editor settles that editor's wait only: one Drupal replaced, or whose
 // field left, settles nothing of the next.
-const editors = page.Drupal?.editors;
-if (editors?.ckeditor5 && shared()) {
-  const ckeditor5 = editors.ckeditor5;
+// Drupal's editors and its dispatcher, watched once each, whenever they come: on the page at first, or later with an
+// AJAX response's libraries (the module's behavior runs before the behaviors those bring).
+/** @type {WeakSet<object>} */
+const hooked = new WeakSet();
+/** @param {object | undefined} target */
+const hook = (target) => {
+  if (!target || hooked.has(target)) return false;
+  hooked.add(target);
+  return true;
+};
+const watchCkeditor5 = () => {
+  const ckeditor5 = page.Drupal?.editors?.ckeditor5;
+  if (!ckeditor5 || !shared() || !hook(ckeditor5)) return;
   const { attach, detach } = ckeditor5;
   /** @typedef {import('@janalis/collaborate/draft/session.js').EditorHandle} EditorHandle */
   /**
@@ -257,7 +267,7 @@ if (editors?.ckeditor5 && shared()) {
     return detach.call(ckeditor5, element, format, trigger);
   };
   loadPlugins().catch(() => {});
-}
+};
 
 // Drupal's other editors (CodeMirror, a contrib one) hide a field behind one the draft cannot follow: what is typed
 // there would not be shared, and a peer's edits would be lost, so the draft stops for a field it follows.
@@ -274,34 +284,42 @@ const otherEditor = (element) => {
       if (!said.has(/** @type {object} */ (error))) console.error(error);
     });
 };
-if (page.Drupal && shared()) {
+const watchOthers = () => {
   const drupal = page.Drupal;
+  if (!drupal || !shared()) return;
   const editorAttach = drupal.editorAttach;
-  if (typeof editorAttach === 'function') {
+  if (typeof editorAttach === 'function' && hook(editorAttach)) {
     // Drupal attaches every editor through it, one whose library came later (a dialog's) included.
     /**
      * @param {HTMLTextAreaElement} element
      * @param {any} format
      */
-    drupal.editorAttach = (element, format) => {
+    const watcher = (element, format) => {
       if (format?.editor && format.editor !== 'ckeditor5') otherEditor(element);
       return editorAttach.call(drupal, element, format);
     };
-  } else if (editors) {
-    for (const [name, editor] of Object.entries(editors)) {
-      if (name === 'ckeditor5' || typeof editor?.attach !== 'function') continue;
-      const attachOther = editor.attach;
-      /**
-       * @param {HTMLTextAreaElement} element
-       * @param {any} format
-       */
-      editor.attach = (element, format) => {
-        otherEditor(element);
-        return attachOther.call(editor, element, format);
-      };
-    }
+    hooked.add(watcher);
+    drupal.editorAttach = watcher;
   }
-}
+  // And each editor, for a script calling one directly.
+  for (const [name, editor] of Object.entries(drupal.editors ?? {})) {
+    if (name === 'ckeditor5' || typeof editor?.attach !== 'function' || !hook(editor)) continue;
+    const attachOther = editor.attach;
+    /**
+     * @param {HTMLTextAreaElement} element
+     * @param {any} format
+     */
+    editor.attach = (element, format) => {
+      otherEditor(element);
+      return attachOther.call(editor, element, format);
+    };
+  }
+};
+const watchEditors = () => {
+  watchCkeditor5();
+  watchOthers();
+};
+watchEditors();
 
 // Typing in a multi-value field's empty row makes it an item: the row takes a key of its own and follows the
 // draft from then on. The draft's controls replace what the row shows as they bind: what was typed is put back
@@ -362,6 +380,7 @@ if (page.Drupal) {
   page.Drupal.behaviors.collaborate = {
     /** @param {Document | Element} context the part of the page Drupal attached behaviors to */
     attach(context) {
+      watchEditors();
       if (!(context instanceof Element)) return;
       const form = /** @type {HTMLFormElement | null} */ (
         context.closest('form[data-collaborate]') ?? context.querySelector('form[data-collaborate]')

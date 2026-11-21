@@ -679,12 +679,7 @@ final class EntityForms
     /** The editor a formatted text's format is edited with (`ckeditor5`), or null for a plain textarea. */
     private static function editor(array $element): ?string
     {
-        // The format the form shows: chosen anew in a rebuilt form, else its field's.
-        $format =
-            $element['format']['format']['#value']
-            ?? $element['format']['format']['#default_value']
-            ?? $element['#format']
-            ?? null;
+        $format = $element['format']['format']['#default_value'] ?? $element['#format'] ?? null;
         if (!\is_string($format)) {
             return null;
         }

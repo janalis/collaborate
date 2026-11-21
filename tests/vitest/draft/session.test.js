@@ -2058,7 +2058,7 @@ test('a save waits for an editor asked for again as long as its time runs, never
     settled = true;
   });
   let editor;
-  for (let elapsed = 0; elapsed < 30_000; elapsed += 9_000) {
+  for (let elapsed = 0; elapsed < 27_000; elapsed += 9_000) {
     editor = (await session.editorConfiguration({ name: 'Record[body]' })).collaborate;
     await vi.advanceTimersByTimeAsync(9_000);
   }
@@ -2068,6 +2068,22 @@ test('a save waits for an editor asked for again as long as its time runs, never
   await vi.advanceTimersByTimeAsync(0);
   await pending;
   expect(settled).toBe(true);
+});
+
+test('a save gives up on an editor asked for again and again, past a few of its graces', async () => {
+  vi.useFakeTimers();
+  const { session } = fixture('<textarea name="Record[body]"></textarea>', {
+    'Record[body]': { type: 'rich', initial: 'Body' },
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  await session.ready;
+  const rejected = expect(session.flush()).rejects.toThrow('editors are not ready');
+  for (let elapsed = 0; elapsed < 30_000; elapsed += 9_000) {
+    await session.editorConfiguration({ name: 'Record[body]' });
+    await vi.advanceTimersByTimeAsync(9_000);
+  }
+  await rejected;
+  expect(session.stopped).toBeFalsy();
 });
 
 test('falls back to ordinary editing when a rich editor fails to mount', async () => {

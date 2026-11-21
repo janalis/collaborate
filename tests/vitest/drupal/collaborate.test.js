@@ -68,9 +68,9 @@ let detach;
 /**
  * The page script, evaluated on the page each test sets.
  *
- * @param {{ session?: object | null, drafts?: boolean, plugin?: boolean, drupal?: boolean }} [options]
+ * @param {{ session?: object | null, drafts?: boolean, plugin?: boolean, drupal?: boolean, others?: object }} [options]
  */
-async function load({ session = fakeSession(), drafts = true, plugin = true, drupal = true } = {}) {
+async function load({ session = fakeSession(), drafts = true, plugin = true, drupal = true, others = {} } = {}) {
   for (const path of ['bridges/drupal.js', 'cursors/cursors.js', 'updates.js'])
     vi.doMock(`@janalis/collaborate/${path}`, () => ({}));
   vi.doMock('@janalis/collaborate/draft/session.js', () => {
@@ -83,7 +83,7 @@ async function load({ session = fakeSession(), drafts = true, plugin = true, dru
   });
   attach = vi.fn();
   detach = vi.fn(() => 'detached');
-  if (drupal) globalThis.Drupal = { behaviors: {}, editors: { ckeditor5: { attach, detach } } };
+  if (drupal) globalThis.Drupal = { behaviors: {}, editors: { ckeditor5: { attach, detach }, ...others } };
   await import('../../../drupal/js/collaborate.js');
   return session;
 }
@@ -382,6 +382,31 @@ test("a creation Drupal began is the editor's outcome, whatever Drupal's attach 
   expect(session.handles[1].failed).not.toHaveBeenCalled();
   fail(new Error('It failed after all.'));
   await vi.waitFor(() => expect(session.handles[1].failed).toHaveBeenCalledOnce());
+});
+
+test("Drupal's other editors stop the draft on a field it follows, which it cannot follow there", async () => {
+  const own = vi.fn(() => 'attached');
+  const codemirror = { attach: own };
+  const session = await load({ session: followed(), others: { codemirror, broken: null } });
+  expect(globalThis.Drupal.editors.codemirror.attach(body(), {})).toBe('attached');
+  expect(own).toHaveBeenCalledWith(body(), {});
+  await vi.waitFor(() => expect(session.handles[0].failed).toHaveBeenCalledOnce());
+  // A field outside the shared form is the editor's alone.
+  const alone = /** @type {HTMLTextAreaElement} */ (document.querySelector('[name="alone"]'));
+  globalThis.Drupal.editors.codemirror.attach(alone, {});
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(session.editorConfiguration).toHaveBeenCalledOnce();
+  // Without the drafts, nothing to stop.
+  vi.resetModules();
+  await load({ drafts: false, others: { codemirror: { attach: own } } });
+  globalThis.Drupal.editors.codemirror.attach(body(), {});
+  await vi.waitFor(() =>
+    expect(errors).toHaveBeenCalledWith('Collaborate: the shared draft could not load.', expect.any(Error))
+  );
+  // A form without a session either.
+  vi.resetModules();
+  await load({ session: null, others: { codemirror: { attach: own } } });
+  expect(() => globalThis.Drupal.editors.codemirror.attach(body(), {})).not.toThrow();
 });
 
 test("a script wrapping Drupal's watched create again makes no loop", async () => {

@@ -458,8 +458,13 @@ export class DraftSession {
     }
     const name = this.fieldKey(field.name);
     const state = this.ensureField(name);
-    // A field the draft follows as text (a Drupal format without CKEditor 5) awaits no editor.
-    if (state?.type !== 'rich') return {};
+    if (!state) return {};
+    // A field the draft follows as text gets an editor it cannot follow (a Drupal format switched to CKEditor 5):
+    // what is typed there would not be shared, and a peer's edits would be lost, so the draft stops.
+    if (state.type !== 'rich') {
+      this.editorFailed();
+      return {};
+    }
     return { initialData: state.initial, collaborate: this.editorHandle(name) };
   }
 
@@ -481,8 +486,9 @@ export class DraftSession {
     if (previous && previous !== waiter && !previous.ready) waiter.promise.then(previous.resolve);
     waiter.claimed = true;
     const current = () => this.editorWaiters.get(name) === waiter;
-    // The editor asked for now has the whole while to come: the join's wait, taken, starts again.
-    this.awaitEditor(name, waiter);
+    // The editor asked for now has the whole while to come: the join's wait, taken, starts again (a wait made now
+    // started with it).
+    if (waiter === previous) this.awaitEditor(name, waiter);
     return {
       getSession: () => this,
       field: name,
@@ -1212,7 +1218,9 @@ export class DraftSession {
         await Promise.race([
           Promise.all(Array.from(this.editorWaiters.values(), (waiter) => waiter.promise)),
           new Promise((_resolve, reject) => {
-            editorTimeout = setTimeout(() => reject(new Error('Collaborate editors are not ready.')), 15_000);
+            // At least as long as an editor is given to come.
+            const wait = Math.max(15_000, this.setting('nextEditorGrace', 10_000));
+            editorTimeout = setTimeout(() => reject(new Error('Collaborate editors are not ready.')), wait);
           }),
         ]);
       } finally {

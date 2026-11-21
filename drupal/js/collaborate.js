@@ -244,6 +244,30 @@ if (editors?.ckeditor5 && shared()) {
   loadPlugins().catch(() => {});
 }
 
+// Drupal's other editors (CodeMirror, a contrib one) hide a field behind one the draft cannot follow: what is typed
+// there would not be shared, and a peer's edits would be lost, so the draft stops for a field it follows.
+if (editors && shared()) {
+  for (const [name, editor] of Object.entries(editors)) {
+    if (name === 'ckeditor5' || typeof editor?.attach !== 'function') continue;
+    const attachOther = editor.attach;
+    /**
+     * @param {HTMLTextAreaElement} element
+     * @param {any} format
+     */
+    editor.attach = (element, format) => {
+      if (element.form?.dataset.collaborate)
+        loadDrafts().then(
+          ({ sessionFor }) =>
+            sessionFor(element)
+              ?.editorConfiguration(element)
+              .then((configuration) => configuration.collaborate?.failed()),
+          () => {}
+        );
+      return attachOther.call(editor, element, format);
+    };
+  }
+}
+
 // Typing in a multi-value field's empty row makes it an item: the row takes a key of its own and follows the
 // draft from then on. The draft's controls replace what the row shows as they bind: what was typed is put back
 // before the event reaches its control, whose binding sends it.

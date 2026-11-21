@@ -681,22 +681,49 @@ test('a rich field whose editor nobody asks for stops the draft in time, unless 
   await vi.advanceTimersByTimeAsync(0);
   await session.ready;
   expect(session.editorWaiters.size).toBe(2);
-  // A field followed as text awaits no editor.
-  expect(await session.editorConfiguration({ name: 'Record[plain]' })).toEqual({});
-  // One field's editor is ready, its time given once; the other's field left the form: nothing waits for it.
-  const timers = vi.getTimerCount();
-  (await session.editorConfiguration({ name: 'Record[body]' })).collaborate.ready();
-  expect(vi.getTimerCount()).toBe(timers - 1);
+  // The other's field leaves the form: once its time runs out, nothing waits for it.
   const note = form.querySelector('[name="Record[note]"]');
   note.remove();
-  vi.advanceTimersByTime(10_000);
+  // An editor asked for late has the whole while from its asking, once ready none.
+  vi.advanceTimersByTime(9_000);
+  const body = (await session.editorConfiguration({ name: 'Record[body]' })).collaborate;
+  vi.advanceTimersByTime(9_000);
+  expect(session.stopped).toBeFalsy();
   expect(session.editorWaiters.has('Record[note]')).toBe(false);
+  body.ready();
+  vi.advanceTimersByTime(10_000);
   expect(session.stopped).toBeFalsy();
   // Back, and still asked for by nobody: the draft stops.
   form.append(note);
   session.editorWaiter('Record[note]');
   vi.advanceTimersByTime(10_000);
   expect(session.stopped).toBe(true);
+  vi.useRealTimers();
+});
+
+test('a field followed as text that gets an editor stops the draft: what is typed there would not be shared', async () => {
+  const { session, form } = fixture('<input name="Record[name]">', { 'Record[name]': { type: 'text', initial: '' } });
+  await session.ready;
+  expect(await session.editorConfiguration({ name: 'Unknown' })).toEqual({});
+  expect(session.stopped).toBeFalsy();
+  expect(await session.editorConfiguration({ name: 'Record[name]' })).toEqual({});
+  expect(session.stopped).toBe(true);
+  expect(form.dataset.collaborateState).toBe('unavailable');
+});
+
+test('a save awaits editors at least as long as they are given to come', async () => {
+  const { session } = fixture(
+    '<textarea name="Record[body]"></textarea>',
+    { 'Record[body]': { type: 'rich', initial: 'Body' } },
+    { configuration: { config: { nextEditorGrace: 30_000 } } }
+  );
+  await session.ready;
+  vi.useFakeTimers();
+  const flushed = session.flush().catch((error) => error);
+  await vi.advanceTimersByTimeAsync(15_000);
+  (await session.editorConfiguration({ name: 'Record[body]' })).collaborate.ready();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(await flushed).toBeUndefined();
   vi.useRealTimers();
 });
 

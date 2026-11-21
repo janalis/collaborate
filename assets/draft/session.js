@@ -505,7 +505,8 @@ export class DraftSession {
   }
 
   /**
-   * The wait for a field's editor, set up as the join or a host first asks for it: its editor has a while to come.
+   * The wait for a field's editor, set up as the join or a host first asks for it: its time runs from the host's
+   * asking (`editorHandle()`), as a host may build an editor late (in a tab opened later).
    *
    * @param {string} name
    * @returns {EditorWaiter}
@@ -525,7 +526,6 @@ export class DraftSession {
       );
       waiter.promise = promise;
       this.editorWaiters.set(name, waiter);
-      this.awaitEditor(name, waiter);
     }
     return /** @type {EditorWaiter} */ (this.editorWaiters.get(name));
   }

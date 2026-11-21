@@ -668,30 +668,16 @@ test('a ready editor gone leaves its field to its next editor in time, or stops 
   vi.useRealTimers();
 });
 
-test('a rich field whose editor nobody asks for stops the draft in time, unless it left the form', async () => {
+test('a rich field whose editor nobody asks for holds no time: a host may build it late', async () => {
   vi.useFakeTimers();
-  const { session, form } = fixture(
-    '<textarea name="Record[body]"></textarea><textarea name="Record[note]"></textarea>',
-    {
-      'Record[body]': { type: 'rich', initial: 'Body' },
-      'Record[note]': { type: 'rich', initial: 'Note' },
-    }
-  );
+  const { session } = fixture('<textarea name="Record[body]"></textarea>', {
+    'Record[body]': { type: 'rich', initial: 'Body' },
+  });
   await vi.advanceTimersByTimeAsync(0);
   await session.ready;
-  expect(session.editorWaiters.size).toBe(2);
-  // One field's editor is ready; the other's field left the form: nothing waits for it.
-  (await session.editorConfiguration({ name: 'Record[body]' })).collaborate.ready();
-  const note = form.querySelector('[name="Record[note]"]');
-  note.remove();
-  vi.advanceTimersByTime(10_000);
-  expect(session.editorWaiters.has('Record[note]')).toBe(false);
+  expect(session.editorWaiters.get('Record[body]').grace).toBeUndefined();
+  vi.advanceTimersByTime(60_000);
   expect(session.stopped).toBeFalsy();
-  // Back, and still asked for by nobody: the draft stops.
-  form.append(note);
-  session.editorWaiter('Record[note]');
-  vi.advanceTimersByTime(10_000);
-  expect(session.stopped).toBe(true);
   vi.useRealTimers();
 });
 

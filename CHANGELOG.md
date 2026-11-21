@@ -49,11 +49,11 @@ versions follow [Semantic Versioning](https://semver.org/).
   which cannot follow it; switched to another CKEditor 5 format, the form
   waits for its editor. An editor Drupal fails to create as it attaches,
   even once it followed the draft, stops it: Drupal keeps no such editor.
-  On every host, a rich field whose editor is not ready within
-  `drafts.replay.next_editor_grace` of the join, or of the
-  `editorConfiguration()` that asked for it, stops the draft too, unless the
-  field left the form: a field no host builds an editor for no longer holds
-  the form inert for good.
+  On every host, an editor not ready within `drafts.replay.next_editor_grace`
+  of the `editorConfiguration()` that asked for it stops the draft too, unless
+  its field left the form. Drupal: a shared field whose text format has no
+  CKEditor 5 when the page loads stops the draft, which cannot follow it,
+  instead of holding the form inert for good.
 - Drupal: a list set in a higher layer of the options (the form, then
   settings.php) replaces the one below whole: an `advanced` list no longer
   shows through a shorter one. So do the maps the bundle replaces whole from

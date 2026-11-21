@@ -26,6 +26,18 @@ const routes = {
 };
 
 /** An editor of the application: a browser context signed in as `username`. */
+/**
+ * The page a navigation leads to, loaded: its document committed, a redirect's target included, then its load
+ * event. The page before it may still be loading, and its own load would pass for the next one's.
+ *
+ * @param {import('@playwright/test').Page} page
+ */
+export function nextPage(page) {
+  return page
+    .waitForEvent('framenavigated', (frame) => frame === page.mainFrame())
+    .then(() => page.waitForLoadState('load'));
+}
+
 export class Editor {
   constructor(context, page, routes, project) {
     this.context = context;
@@ -193,9 +205,8 @@ export class Editor {
   /** Submits the form with the page's main save button (EasyAdmin's sit outside the form) and waits for the page it leads to. */
   async save() {
     const posted = this.page.waitForRequest((request) => request.method() === 'POST' && request.isNavigationRequest());
-    // The page the save answers, a redirect's target included: the page before it counts as loaded already, and
-    // a redirect still under way would interrupt the next navigation.
-    const loaded = this.page.waitForEvent('load');
+    // The page the save answers: a redirect still under way would interrupt the next navigation.
+    const loaded = nextPage(this.page);
     await this.saveButton.click();
     // The save checkpoints the draft before it answers: a page opened before the answer would read the draft
     // as it was, and leaving earlier aborts the request while the server still saves.
@@ -219,7 +230,7 @@ export class Editor {
   async saveAndStay() {
     const posted = this.page.waitForRequest((request) => request.method() === 'POST' && request.isNavigationRequest());
     // The edit page the save answers: the one before it would pass for joined.
-    const loaded = this.page.waitForEvent('load');
+    const loaded = nextPage(this.page);
     await this.page
       .getByRole('button', { name: this.easyAdmin ? 'Save and continue editing' : 'Save', exact: true })
       .and(this.page.locator(':not([data-collaborate-save])'))

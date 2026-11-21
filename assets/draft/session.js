@@ -520,7 +520,9 @@ export class DraftSession {
   detachField(name) {
     this.adapters.get(name)?.destroy?.();
     this.adapters.delete(name);
+    // Resolved for whoever waits on it, and forgotten: an entry added again under its key awaits its own editor.
     this.editorWaiters.get(name)?.resolve();
+    this.editorWaiters.delete(name);
   }
 
   /**
@@ -604,9 +606,10 @@ export class DraftSession {
    * its controls are released: an editor still awaited no longer holds them inert.
    *
    * @param {string} [status]
+   * @param {boolean} [release] false for a page about to reload, where whatever is typed meanwhile would be lost
    */
-  halt(status) {
-    this.releaseControls();
+  halt(status, release = true) {
+    if (release) this.releaseControls();
     this.stopped = true;
     if (status) this.setStatus(status);
     this.disconnect();
@@ -976,7 +979,7 @@ export class DraftSession {
     // A draft that had nothing unsaved holds what this page shows. A compaction keeps only saved content, so
     // a page that sent every edit loses none by reloading, even one that has not heard of the save yet.
     if (rebased ? this.sent() : this.clean()) {
-      this.halt('connecting');
+      this.halt('connecting', false);
       this.rejoin(name ? { key: 'noticeDiscarded', name } : null);
       throw new Error('Collaborate draft was rebased; rejoining.');
     }

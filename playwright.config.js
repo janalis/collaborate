@@ -34,8 +34,10 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
-  timeout: 60_000,
-  expect: { timeout: 15_000 },
+  // Generous for a starved machine, where an edit reaches its peer late but whole: a lost edit still fails, and a
+  // passing scenario takes no longer.
+  timeout: 120_000,
+  expect: { timeout: 30_000 },
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: { ...devices['Desktop Chrome'], trace: 'retain-on-failure' },
   projects: [

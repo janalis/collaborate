@@ -1,4 +1,4 @@
-import { expect, expectState, test } from './lib/app.js';
+import { expect, expectState, nextPage, test } from './lib/app.js';
 
 // Save: through the application's own path, with the draft's revision; what the other pages hear of it.
 test.describe('saving a shared draft', () => {
@@ -49,7 +49,7 @@ test.describe('saving a shared draft', () => {
     await alice.synchronized();
 
     const posted = alice.page.waitForRequest((request) => request.method() === 'POST' && request.isNavigationRequest());
-    const loaded = alice.page.waitForEvent('load');
+    const loaded = nextPage(alice.page);
     await alice.barSaveButton.click();
     await (await posted).response();
     await loaded;

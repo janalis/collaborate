@@ -118,8 +118,66 @@ test("without Drupal's editor build, the field takes Drupal's own editor and the
 
   await vi.waitFor(() => expect(attach).toHaveBeenCalledWith(body(), format));
   expect(session.editorFailed).toHaveBeenCalledOnce();
-  expect(errors).toHaveBeenCalledWith('Collaborate: the shared editors could not load.', expect.any(Error));
-  expect(errors).toHaveBeenCalledOnce();
+  // Said by the page's first load, then by the field's own attempt; nothing else.
+  expect(errors.mock.calls.map(([message]) => message)).toEqual([
+    'Collaborate: the shared editors could not load.',
+    'Collaborate: the shared editors could not load.',
+  ]);
+});
+
+test("Drupal's editor build arriving after the page loaded serves the next shared field", async () => {
+  const session = await load({ session: followed() });
+  await vi.waitFor(() => expect(errors).toHaveBeenCalledOnce());
+  const ckeditor = build();
+
+  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
+
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledOnce());
+  expect(attach.mock.calls[0][1].editorSettings.plugins).toContain('collaborate.Collaborate');
+  expect(ckeditor.collaborate.Collaborate).toBe('CollaboratePlugin');
+  expect(session.editorFailed).not.toHaveBeenCalled();
+});
+
+test('an attach Drupal replaced meanwhile, or of a field removed, creates nothing', async () => {
+  build();
+  /** @type {(configuration: object) => void} */
+  let answer;
+  const session = await load({
+    session: fakeSession({
+      editorConfiguration: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            answer = resolve;
+          })
+      ),
+    }),
+  });
+  const ckeditor5 = globalThis.Drupal.editors.ckeditor5;
+  ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(session.editorConfiguration).toHaveBeenCalledOnce());
+  // The text format switched: Drupal attaches again with the other format.
+  const other = { editorSettings: { plugins: [], config: {} } };
+  const first = answer;
+  ckeditor5.attach(body(), other);
+  await vi.waitFor(() => expect(session.editorConfiguration).toHaveBeenCalledTimes(2));
+  first({});
+  answer({});
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledOnce());
+  expect(attach).toHaveBeenCalledWith(body(), other);
+
+  // A field an AJAX rebuild removed.
+  const removed = body();
+  ckeditor5.attach(removed, format);
+  await vi.waitFor(() => expect(session.editorConfiguration).toHaveBeenCalledTimes(3));
+  removed.remove();
+  answer({});
+  // The live field attached next is answered after the removed one.
+  const alone = /** @type {HTMLTextAreaElement} */ (document.querySelector('[name="alone"]'));
+  ckeditor5.attach(alone, format);
+  expect(attach).toHaveBeenCalledTimes(2);
+  expect(attach).toHaveBeenLastCalledWith(alone, format);
+  await Promise.resolve();
+  expect(attach).toHaveBeenCalledTimes(2);
 });
 
 test('a plugin that does not load leaves a form whose draft follows no editor following it', async () => {

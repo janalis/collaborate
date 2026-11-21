@@ -39,7 +39,9 @@ versions follow [Semantic Versioning](https://semver.org/).
   the form stops following its draft with its controls released, where it
   stayed inert, and the console says why. The draft loads apart from the
   editor plugin: a form whose draft follows no rich-text field keeps
-  following it without Drupal's CKEditor build, and a rebuild no longer
+  following it without Drupal's CKEditor build, a build that arrives later
+  serves the next field, an attach Drupal replaced meanwhile (a text format
+  switched, an AJAX rebuild) creates no editor, and a rebuild no longer
   binds controls to a draft that stopped.
 - Drupal: the status report also names the options the module decides over
   every layer (`bridge`, `identity`, `access`, `role`, `notifications.role`,
@@ -94,7 +96,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 - A shared draft that stops while an editor is still awaited (access
   denied, the draft full or discarded) releases the form's controls, which
-  stayed inert until the page was reloaded.
+  stayed inert until the page was reloaded; one about to reload keeps them
+  inert, as what is typed would be lost. A collection entry added again
+  under the key of one removed awaits its own editor.
 - A new record whose identifier is a UUID or ULID (a Stringable `Uid`, or
   any value object) is recorded as created by its draft, and saved views of
   it are announced; `Draft\RecordId::string()` is the one conversion the

@@ -527,6 +527,26 @@ test('rejoins a page that shows exactly the saved draft when the generation chan
   expect(() => session.rejoin()).not.toThrow();
 });
 
+test('keeps the form inert while an editor is awaited and the page rejoins: what is typed would be lost', async () => {
+  const { session, form, state } = fixture('<input name="Record[name]"><textarea name="Record[body]"></textarea>', {
+    'Record[name]': { type: 'text', initial: '' },
+    'Record[body]': { type: 'rich', initial: 'Body' },
+  });
+  await session.ready;
+  vi.spyOn(session, 'rejoin').mockImplementation(() => {});
+  state.generation = 2;
+  await expect(session.pull()).rejects.toThrow('rebased');
+  expect(form.querySelector('input').hasAttribute('inert')).toBe(true);
+});
+
+test('awaits the editor of an entry added again under a key whose editor was detached', () => {
+  const { session } = fixture();
+  const detached = session.editorWaiter('Record[body]');
+  session.detachField('Record[body]');
+  expect(detached.ready).toBe(true);
+  expect(session.editorWaiter('Record[body]').ready).toBe(false);
+});
+
 test('rejoins without the unsaved-changes prompt EasyAdmin keeps for a form edited since it loaded', async () => {
   const { session } = fixture();
   await session.ready;

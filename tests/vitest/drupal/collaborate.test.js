@@ -334,6 +334,43 @@ test('an editor whose creation fails once it followed the draft stops it: Drupal
   await vi.waitFor(() => expect(session.handles[0].failed).toHaveBeenCalledOnce());
 });
 
+test("each attach hears its own editor's creation, in order, and a subclass of Drupal's class creates its kind", async () => {
+  build();
+  /** @type {((error: Error) => void)[]} */
+  const failures = [];
+  const create = vi.fn(
+    () =>
+      new Promise((_resolve, reject) => {
+        failures.push(reject);
+      })
+  );
+  globalThis.CKEditor5.editorClassic = { ClassicEditor: { create } };
+  const session = await load({ session: followed() });
+  /** @type {(() => void)[]} */
+  const later = [];
+  attach.mockImplementation((element) => {
+    later.push(() => globalThis.CKEditor5.editorClassic.ClassicEditor.create(element).catch(() => {}));
+  });
+  const ckeditor5 = globalThis.Drupal.editors.ckeditor5;
+  // Two attaches of the field (its format switched) whose editors Drupal creates late, in turn.
+  ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledOnce());
+  ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledTimes(2));
+  for (const each of later) each();
+  // The first's editor fails: its attach, replaced, only gives its wait back.
+  failures[0](new Error('Destroyed.'));
+  await vi.waitFor(() => expect(session.handles[0].release).toHaveBeenCalledOnce());
+  expect(session.handles[1].failed).not.toHaveBeenCalled();
+  // The second's fails too: its own attach hears it.
+  failures[1](new Error('A plugin failed.'));
+  await vi.waitFor(() => expect(session.handles[1].failed).toHaveBeenCalledOnce());
+  // A subclass inheriting `create` is the class `create` builds.
+  const Sub = Object.create(globalThis.CKEditor5.editorClassic.ClassicEditor);
+  Sub.create(document.createElement('textarea')).catch(() => {});
+  expect(create.mock.contexts.at(-1)).toBe(Sub);
+});
+
 test('an editor created while its attach is current gives nothing back', async () => {
   build();
   globalThis.CKEditor5.editorClassic = { ClassicEditor: { create: vi.fn(async () => {}) } };

@@ -82,9 +82,9 @@ if (editors?.ckeditor5 && shared()) {
   /** @type {WeakMap<HTMLTextAreaElement, Attach>} */
   const attaches = new WeakMap();
 
-  // The editor creations awaited, by the field they are for, and Drupal's editor class watched for them: once, for
-  // however late a creation comes.
-  /** @type {WeakMap<Element, (created: Promise<unknown>) => void>} */
+  // The editor creations awaited, by the field they are for, in the order its attaches asked for them, and Drupal's
+  // editor class watched for them: once, for however late a creation comes.
+  /** @type {WeakMap<Element, ((created: Promise<unknown>) => void)[]>} */
   const creating = new WeakMap();
   /** @type {WeakSet<object>} */
   const watched = new WeakSet();
@@ -93,14 +93,11 @@ if (editors?.ckeditor5 && shared()) {
     if (!classic || watched.has(classic)) return;
     watched.add(classic);
     const create = classic.create;
-    classic.create = (...args) => {
-      const created = create.apply(classic, args);
-      const field = /** @type {Element} */ (args[0]);
-      const heard = creating.get(field);
-      if (heard) {
-        creating.delete(field);
-        heard(created);
-      }
+    // A subclass inheriting `create` creates its own kind: `this` is kept.
+    /** @this {unknown} */
+    classic.create = function (/** @type {unknown[]} */ ...args) {
+      const created = create.apply(this, args);
+      creating.get(/** @type {Element} */ (args[0]))?.shift()?.(created);
       return created;
     };
   };
@@ -189,17 +186,19 @@ if (editors?.ckeditor5 && shared()) {
     if (typeof configuration.initialData === 'string') element.value = configuration.initialData;
     // Drupal creates the editor without handing its promise back, and only logs a failure: the draft waits for the
     // editor, its form inert, unless it is told. Its creation is heard whenever it comes, by the field it is for.
-    creating.set(element, (created) =>
-      // An editor Drupal does not keep (it failed, even once it followed the draft) stops it; a field replaced or
-      // gone meanwhile only gives its editor's wait back.
-      created.catch(() => (current() ? handle.failed() : giveBack(element, mine)))
-    );
+    // An editor Drupal does not keep (it failed, even once it followed the draft) stops it; a field replaced or gone
+    // meanwhile only gives its editor's wait back.
+    /** @param {Promise<unknown>} created */
+    const heard = (created) => created.catch(() => (current() ? handle.failed() : giveBack(element, mine)));
+    const awaited = creating.get(element) ?? [];
+    awaited.push(heard);
+    creating.set(element, awaited);
     watch();
     try {
       attach.call(ckeditor5, element, settings);
     } catch (error) {
       // The editor the draft waits for never comes: the form is released, the field left as Drupal left it.
-      creating.delete(element);
+      awaited.splice(awaited.indexOf(heard), 1);
       handle.failed();
       throw error;
     }

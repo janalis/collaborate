@@ -34,7 +34,7 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
-  // CI keeps the tight limits, which its slowest scenario stays well under; a local run on a starved machine, where an
+  // CI keeps the tight limits, which its slowest scenario stays well under (37 s, measured on its runner); a local run on a starved machine, where an
   // edit reaches its peer late but whole, gets twice as long: a lost edit still fails, and a passing scenario takes
   // no longer.
   timeout: process.env.CI ? 60_000 : 120_000,

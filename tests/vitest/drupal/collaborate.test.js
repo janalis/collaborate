@@ -29,6 +29,7 @@ const followed = (configuration = {}) =>
 
 let errors;
 let attach;
+let detach;
 
 /**
  * The page script, evaluated on the page each test sets.
@@ -47,7 +48,8 @@ async function load({ session = fakeSession(), drafts = true, plugin = true, dru
     return { default: 'CollaboratePlugin' };
   });
   attach = vi.fn();
-  if (drupal) globalThis.Drupal = { behaviors: {}, editors: { ckeditor5: { attach } } };
+  detach = vi.fn(() => 'detached');
+  if (drupal) globalThis.Drupal = { behaviors: {}, editors: { ckeditor5: { attach, detach } } };
   await import('../../../drupal/js/collaborate.js');
   return session;
 }
@@ -106,21 +108,19 @@ test("a shared field's editor follows the draft, created on its content with the
   expect(ckeditor.collaborate.Collaborate).toBe('CollaboratePlugin');
   const { CollaborateReady } = ckeditor.collaborate;
   expect(CollaborateReady.pluginName).toBe('CollaborateReady');
-  const on = vi.fn((_event, ready) => ready());
+  const on = vi.fn((_event, ready) => ready('event'));
   const heard = vi.fn();
   /** @param {Record<string, unknown>} config */
-  const editor = (config) => ({ config: { get: (key) => config[key] }, on, sourceElement: body() });
+  const editor = (config) => ({ config: { get: (key) => config[key] }, on });
   new CollaborateReady(editor({ collaborate: { getSession }, collaborateReady: heard })).init();
-  expect(heard).toHaveBeenCalledOnce();
+  expect(heard).toHaveBeenCalledWith();
   expect(editorReady).not.toHaveBeenCalled();
   // The attach that created it tells the session.
   attach.mock.calls[0][1].editorSettings.config.collaborateReady();
   expect(session.editorReady).toHaveBeenCalledWith('body');
-  // An editor this script did not attach tells the session itself.
+  // An editor this script did not attach has nothing to tell.
   new CollaborateReady(editor({ collaborate: { getSession } })).init();
-  expect(editorReady).toHaveBeenCalledWith('body');
-  new CollaborateReady(editor({})).init();
-  expect(on).toHaveBeenCalledTimes(2);
+  expect(on).toHaveBeenCalledOnce();
 });
 
 test("without Drupal's editor build, the field takes Drupal's own editor and the form stops following its draft", async () => {
@@ -137,8 +137,8 @@ test("without Drupal's editor build, the field takes Drupal's own editor and the
 test("Drupal's editor build arriving after the page loaded serves the next shared field", async () => {
   const session = await load({ session: followed() });
   await vi.waitFor(() => expect(errors).toHaveBeenCalledOnce());
-  // A build that comes broken fails otherwise: said too.
-  const broken = new Error('A broken build.');
+  // A build that comes broken fails otherwise, whatever it throws: said too.
+  const broken = 'A broken build.';
   globalThis.CKEditor5 = {
     dll: () => {
       throw broken;
@@ -146,8 +146,7 @@ test("Drupal's editor build arriving after the page loaded serves the next share
   };
   globalThis.Drupal.editors.ckeditor5.attach(body(), format);
   await vi.waitFor(() => expect(attach).toHaveBeenCalledOnce());
-  expect(errors).toHaveBeenLastCalledWith('Collaborate: the shared editors could not load.', broken);
-  expect(errors).toHaveBeenCalledTimes(2);
+  expect(errors).toHaveBeenCalledWith('Collaborate: the shared editors could not load.', broken);
   attach.mockClear();
   session.stopped = false;
   const ckeditor = build();
@@ -256,9 +255,89 @@ test('an editor whose field is gone says nothing to the draft, whether it is rea
   removed.remove();
   fail(new Error('A plugin failed.'));
   await created.catch(() => {});
+  // Nothing attached it again: nothing waits for its editor.
+  expect(session.detachField).toHaveBeenCalledWith('body');
   attach.mock.calls[0][1].editorSettings.config.collaborateReady();
   expect(session.editorFailed).not.toHaveBeenCalled();
   expect(session.editorReady).not.toHaveBeenCalled();
+  expect(session.detachField).toHaveBeenCalledOnce();
+});
+
+test('an editor whose field is gone before it is ready frees the draft of it, unless the field was attached again', async () => {
+  build();
+  const session = await load({ session: followed() });
+  const ckeditor5 = globalThis.Drupal.editors.ckeditor5;
+  const removed = body();
+  ckeditor5.attach(removed, format);
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledOnce());
+  const ready = attach.mock.calls[0][1].editorSettings.config.collaborateReady;
+  removed.remove();
+  ready();
+  expect(session.editorReady).not.toHaveBeenCalled();
+  expect(session.detachField).toHaveBeenCalledWith('body');
+
+  // The field rebuilt and attached again: its own editor is waited for.
+  const form = document.querySelector('form');
+  const first = document.createElement('textarea');
+  first.name = 'body';
+  form.append(first);
+  ckeditor5.attach(first, format);
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledTimes(2));
+  const stale = attach.mock.calls[1][1].editorSettings.config.collaborateReady;
+  const rebuilt = document.createElement('textarea');
+  rebuilt.name = 'body';
+  first.replaceWith(rebuilt);
+  ckeditor5.attach(rebuilt, format);
+  stale();
+  expect(session.editorReady).not.toHaveBeenCalled();
+  expect(session.detachField).toHaveBeenCalledOnce();
+});
+
+test("Drupal taking a field's editor off ends the attach on its way: no editor, nothing waited for", async () => {
+  build();
+  /** @type {(configuration: object) => void} */
+  let answer;
+  const session = await load({
+    session: fakeSession({
+      editorConfiguration: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            answer = resolve;
+          })
+      ),
+    }),
+  });
+  const ckeditor5 = globalThis.Drupal.editors.ckeditor5;
+  ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(session.editorConfiguration).toHaveBeenCalledOnce());
+  // Drupal reads the editor back into its field: the attach goes on.
+  expect(ckeditor5.detach(body(), format, 'serialize')).toBe('detached');
+  expect(detach).toHaveBeenCalledWith(body(), format, 'serialize');
+  answer({ collaborate: { field: 'body' } });
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledOnce());
+  // The text format switched to one without CKEditor.
+  ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(session.editorConfiguration).toHaveBeenCalledTimes(2));
+  ckeditor5.detach(body(), format, 'unload');
+  answer({ collaborate: { field: 'body' } });
+  await vi.waitFor(() => expect(session.detachField).toHaveBeenCalledWith('body'));
+  expect(attach).toHaveBeenCalledOnce();
+  // A field outside any form is Drupal's alone.
+  const alone = /** @type {HTMLTextAreaElement} */ (document.querySelector('[name="alone"]'));
+  ckeditor5.detach(alone, format, 'unload');
+  expect(detach).toHaveBeenLastCalledWith(alone, format, 'unload');
+});
+
+test('the fields of two shared forms, though named alike, attach apart', async () => {
+  build();
+  document.body.insertAdjacentHTML('beforeend', '<form data-collaborate="{}"><textarea name="body"></textarea></form>');
+  const session = await load({ session: followed() });
+  const [one, two] = /** @type {NodeListOf<HTMLTextAreaElement>} */ (document.querySelectorAll('[name="body"]'));
+  globalThis.Drupal.editors.ckeditor5.attach(one, format);
+  globalThis.Drupal.editors.ckeditor5.attach(two, format);
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledTimes(2));
+  expect(attach.mock.calls.map(([element]) => element)).toEqual([one, two]);
+  expect(session.detachField).not.toHaveBeenCalled();
 });
 
 test('a plugin that does not load leaves a form whose draft follows no editor following it', async () => {

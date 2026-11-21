@@ -16,7 +16,13 @@ export interface DrupalGlobals {
     behaviors: Record<string, { attach(context: Document | Element): void }>;
     /** Drupal's editors by name; `format` is its settings for a field's text format. */
     // biome-ignore lint/suspicious/noExplicitAny: Drupal's editor settings, which each text format shapes
-    editors?: { ckeditor5?: { attach(this: unknown, element: HTMLTextAreaElement, format: any): unknown } };
+    editors?: {
+      ckeditor5?: {
+        attach(this: unknown, element: HTMLTextAreaElement, format: any): unknown;
+        /** `trigger` is `serialize` when Drupal only reads the editor's data back into its field. */
+        detach(this: unknown, element: HTMLTextAreaElement, format: any, trigger?: string): unknown;
+      };
+    };
   };
   jQuery?: (element: Element) => { trigger(event: string): unknown };
   /** The DLL's modules are typed by the bundle's own `ckeditor5` imports, not here. */

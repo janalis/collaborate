@@ -19,17 +19,19 @@ if (document.querySelector('[data-collaborate-notifications]')) {
 
 // What a loader said already, which nothing says again: each failure once, a field's retry failing alike said
 // with the first.
-/** @type {Set<unknown>} */
-const said = new Set();
+/** @type {WeakSet<object>} */
+const said = new WeakSet();
+/** @type {Set<string>} */
+const failures = new Set();
 /**
  * @param {string} message
  * @param {unknown} error
  */
 const say = (message, error) => {
-  said.add(error);
-  const failure = `${message} ${String(error)}`;
-  if (said.has(failure)) return;
-  said.add(failure);
+  if (error instanceof Error) said.add(error);
+  const failure = `${message} ${error instanceof Error ? error.message : ''}`;
+  if (failures.has(failure)) return;
+  failures.add(failure);
   console.error(message, error);
 };
 
@@ -62,14 +64,9 @@ const loadPlugins = () => {
         }
 
         init() {
-          const configuration = this.editor.config.get('collaborate');
-          if (!configuration) return;
-          this.editor.on('ready', () => {
-            // The attach that created this editor tells the session, unless Drupal replaced it meanwhile.
-            const heard = this.editor.config.get('collaborateReady');
-            if (heard) heard();
-            else configuration.getSession().editorReady(this.editor.sourceElement.name);
-          });
+          // The attach that created this editor tells the session, unless Drupal replaced it meanwhile.
+          const heard = this.editor.config.get('collaborateReady');
+          if (heard) this.editor.on('ready', () => heard());
         }
       }
       // Drupal finds an editor's plugins as `CKEditor5.<package>.<plugin>`.
@@ -89,10 +86,16 @@ const editors = page.Drupal?.editors;
 if (editors?.ckeditor5 && shared()) {
   const ckeditor5 = editors.ckeditor5;
   const attach = ckeditor5.attach;
-  // The latest attach of each field: one Drupal replaced meanwhile (a text format switched, an AJAX rebuild)
-  // creates nothing, and an editor it created says nothing more to the draft.
-  /** @type {Map<string, object>} */
-  const latest = new Map();
+  const detach = ckeditor5.detach;
+  // The latest attach of each field of a form, until Drupal detaches it: one Drupal replaced meanwhile (a text
+  // format switched, an AJAX rebuild) creates nothing, and an editor it created says nothing more to the draft.
+  /** @type {WeakMap<HTMLFormElement, Map<string, object>>} */
+  const latest = new WeakMap();
+  /** @param {HTMLFormElement} form */
+  const owners = (form) => {
+    if (!latest.has(form)) latest.set(form, new Map());
+    return /** @type {Map<string, object>} */ (latest.get(form));
+  };
 
   /**
    * Attaches a shared field once: with the draft's editor, or with Drupal's own when anything before fails, the form
@@ -100,11 +103,20 @@ if (editors?.ckeditor5 && shared()) {
    *
    * @param {HTMLTextAreaElement} element
    * @param {any} format Drupal's editor settings for the field's text format
-   * @param {object} mine this attach's token, its field's latest until Drupal attaches the field again
+   * @param {HTMLFormElement} form
+   * @param {object} mine this attach's token, its field's latest until Drupal attaches or detaches the field again
    */
-  const attachShared = async (element, format, mine) => {
-    const newest = () => latest.get(element.name) === mine;
-    const current = () => newest() && element.isConnected;
+  const attachShared = async (element, format, form, mine) => {
+    const current = () => owners(form).get(element.name) === mine && element.isConnected;
+    // Nothing attached the field after this attach, and its editor never comes: no editor is waited for. Said once.
+    let given = false;
+    const abandoned = () => {
+      const owner = owners(form).get(element.name);
+      if (given || (owner !== mine && owner !== undefined)) return false;
+      owners(form).delete(element.name);
+      given = true;
+      return true;
+    };
     /** @type {import('@janalis/collaborate/draft/session.js').DraftSession | null | undefined} */
     let session = null;
     /** @type {{ collaborate?: { field: string }, initialData?: string }} */
@@ -117,18 +129,25 @@ if (editors?.ckeditor5 && shared()) {
         if (configuration.collaborate) await loadPlugins();
       }
     } catch (error) {
-      if (!said.has(error)) console.error(error);
+      if (!said.has(/** @type {object} */ (error))) console.error(error);
       session?.editorFailed();
       configuration = {};
     }
     if (!current()) {
-      // A field gone with no attach after it: nothing waits for its editor. A newer attach waits for its own.
-      if (newest() && configuration.collaborate) session?.detachField(configuration.collaborate.field);
+      // A field gone, or Drupal's editor taken off, with no attach after it: nothing waits for its editor. A newer
+      // attach waits for its own.
+      if (abandoned() && configuration.collaborate) session?.detachField(configuration.collaborate.field);
       return;
     }
     // Another field's editor may have failed meanwhile.
     if (!session || session.stopped || !configuration.collaborate) return attach.call(ckeditor5, element, format);
     const live = session;
+    const field = configuration.collaborate.field;
+    /** @param {() => void} settle what the draft hears of this attach's editor while the attach is current */
+    const tell = (settle) => {
+      if (current()) settle();
+      else if (abandoned()) live.detachField(field);
+    };
     if (!Array.isArray(format?.editorSettings?.plugins)) {
       // Settings the draft's editor cannot extend: Drupal's own editor.
       console.error(new TypeError("Collaborate: the text format's editor settings have no plugins to extend."));
@@ -147,7 +166,7 @@ if (editors?.ckeditor5 && shared()) {
           collaborate: configuration.collaborate,
           collaborateReady: () => {
             ready = true;
-            if (current()) live.editorReady(element.name);
+            tell(() => live.editorReady(element.name));
           },
         },
       },
@@ -161,7 +180,7 @@ if (editors?.ckeditor5 && shared()) {
       classic.create = (...args) => {
         const created = create.apply(classic, args);
         created.catch(() => {
-          if (!ready && current()) live.editorFailed();
+          if (!ready) tell(() => live.editorFailed());
         });
         return created;
       };
@@ -183,10 +202,21 @@ if (editors?.ckeditor5 && shared()) {
   ckeditor5.attach = (element, format) => {
     if (!element.form?.dataset.collaborate) return attach.call(ckeditor5, element, format);
     const mine = {};
-    latest.set(element.name, mine);
+    owners(element.form).set(element.name, mine);
     // Drupal's own failure, said as Drupal would.
-    attachShared(element, format, mine).catch((error) => console.error(error));
+    attachShared(element, format, element.form, mine).catch((error) => console.error(error));
     return true;
+  };
+
+  /**
+   * @param {HTMLTextAreaElement} element
+   * @param {any} format
+   * @param {string} [trigger]
+   */
+  ckeditor5.detach = (element, format, trigger) => {
+    // An attach still on its way creates no editor once Drupal took the field's off.
+    if (trigger !== 'serialize' && element.form) owners(element.form).delete(element.name);
+    return detach.call(ckeditor5, element, format, trigger);
   };
   loadPlugins().catch(() => {});
 }

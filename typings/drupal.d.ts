@@ -24,8 +24,8 @@ export interface DrupalGlobals {
       };
     };
   };
-  /** The text formats with an editor, by format ID. */
-  drupalSettings?: { editor?: { formats?: Record<string, unknown> } };
+  /** The text formats with an editor, by format ID, and the editor each uses (`ckeditor5`). */
+  drupalSettings?: { editor?: { formats?: Record<string, { editor?: string }> } };
   jQuery?: (element: Element) => { trigger(event: string): unknown };
   /** The DLL's modules are typed by the bundle's own `ckeditor5` imports, not here. */
   // biome-ignore lint/suspicious/noExplicitAny: a module of the DLL, whichever its path names

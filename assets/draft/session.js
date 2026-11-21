@@ -105,6 +105,10 @@ const grantScope = (grant) =>
   JSON.parse(
     new TextDecoder().decode(Uint8Array.from(atob(grant.split('.')[0]), (character) => character.charCodeAt(0)))
   );
+// How long a wait given back for a field still in the form awaits its next editor (Drupal's next format, after its
+// request; a rebuild): then the draft goes on without it.
+export const NEXT_EDITOR_GRACE = 10_000;
+
 /** @param {unknown} error */
 const messageOf = (error) => (error instanceof Error ? error.message : String(error));
 /** @param {string} text */
@@ -485,11 +489,18 @@ export class DraftSession {
       failed: () => {
         if (current()) this.editorFailed();
       },
-      // A field still in the form awaits its next editor (rebuilt, or of another format), which takes this wait.
+      // A field still in the form awaits its next editor (rebuilt, or of another format), which takes this wait, for
+      // a while: one that never comes holds nothing for good.
       release: () => {
-        if (!current() || this.form.elements.namedItem(this.formName(name))) return;
-        this.editorWaiters.delete(name);
-        waiter.resolve();
+        if (!current()) return;
+        const letGo = () => {
+          if (!current()) return;
+          this.editorWaiters.delete(name);
+          waiter.resolve();
+        };
+        if (this.form.isConnected && this.form.elements.namedItem(this.formName(name)))
+          setTimeout(letGo, NEXT_EDITOR_GRACE);
+        else letGo();
       },
     };
   }

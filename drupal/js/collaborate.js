@@ -78,23 +78,29 @@ if (editors?.ckeditor5 && shared()) {
   /** @typedef {import('@janalis/collaborate/draft/session.js').EditorHandle} EditorHandle */
   // Each field's latest attach, until Drupal detaches it: one Drupal replaced meanwhile (a text format switched)
   // creates nothing, and one detached gives its editor's wait back.
-  /** @type {WeakMap<HTMLTextAreaElement, { handle?: EditorHandle }>} */
+  /** @type {WeakMap<HTMLTextAreaElement, { handle?: EditorHandle, given?: boolean }>} */
   const attaches = new WeakMap();
 
   /**
-   * Gives an editor's wait back once Drupal is done (it detaches a field before it puts its rebuild in its place):
-   * the session lets it go if the field left the form, and otherwise waits for the field's next editor. A field
-   * whose format now has no editor cannot follow the draft: the form falls back to ordinary editing.
+   * Gives an attach's editor wait back, once, after Drupal is done (it detaches a field before it puts its rebuild
+   * in its place): the session lets it go if the field left the form, and otherwise waits a while for the field's
+   * next editor. A field whose format now has no CKEditor 5 cannot follow the draft: the form falls back to ordinary
+   * editing.
    *
    * @param {HTMLTextAreaElement} element
-   * @param {EditorHandle} handle
+   * @param {{ handle?: EditorHandle, given?: boolean }} ended
    */
-  const giveBack = (element, handle) =>
+  const giveBack = (element, ended) => {
+    const handle = ended.handle;
+    if (!handle || ended.given) return;
+    ended.given = true;
     setTimeout(() => {
+      const formats = page.drupalSettings?.editor?.formats;
       const active = element.getAttribute('data-editor-active-text-format');
-      if (element.isConnected && active && !page.drupalSettings?.editor?.formats?.[active]) handle.failed();
+      if (element.isConnected && formats && active && formats[active]?.editor !== 'ckeditor5') handle.failed();
       else handle.release();
     });
+  };
 
   /**
    * Attaches a shared field once: with the draft's editor, or with Drupal's own when anything before fails, the form
@@ -102,7 +108,7 @@ if (editors?.ckeditor5 && shared()) {
    *
    * @param {HTMLTextAreaElement} element
    * @param {any} format Drupal's editor settings for the field's text format
-   * @param {{ handle?: EditorHandle }} mine this attach, its field's latest until Drupal attaches or detaches it again
+   * @param {{ handle?: EditorHandle, given?: boolean }} mine this attach, its field's latest until Drupal attaches or detaches it again
    */
   const attachShared = async (element, format, mine) => {
     const current = () => attaches.get(element) === mine && element.isConnected;
@@ -125,7 +131,7 @@ if (editors?.ckeditor5 && shared()) {
       configuration = {};
     }
     // Replaced, detached or gone meanwhile: nothing waits for an editor this attach never creates.
-    if (!current()) return mine.handle && giveBack(element, mine.handle);
+    if (!current()) return giveBack(element, mine);
     const handle = configuration.collaborate;
     // Another field's editor may have failed meanwhile.
     if (!session || session.stopped || !handle) return attach.call(ckeditor5, element, format);
@@ -145,11 +151,7 @@ if (editors?.ckeditor5 && shared()) {
           // An editor ready once its attach was replaced, or its field gone, follows nothing.
           collaborate: {
             ...handle,
-            current: () => {
-              if (current()) return handle.current();
-              giveBack(element, handle);
-              return false;
-            },
+            current: () => current() && handle.current(),
           },
         },
       },
@@ -162,8 +164,11 @@ if (editors?.ckeditor5 && shared()) {
     if (classic && create)
       classic.create = (...args) => {
         const created = create.apply(classic, args);
-        // A field replaced or gone meanwhile only gives its editor's wait back.
-        created.catch(() => (current() ? handle.failed() : giveBack(element, handle)));
+        // A field replaced or gone meanwhile only gives its editor's wait back, its editor created or not.
+        created.then(
+          () => current() || giveBack(element, mine),
+          () => (current() ? handle.failed() : giveBack(element, mine))
+        );
         return created;
       };
     try {
@@ -199,7 +204,7 @@ if (editors?.ckeditor5 && shared()) {
     if (trigger !== 'serialize') {
       const ended = attaches.get(element);
       attaches.delete(element);
-      if (ended?.handle) giveBack(element, ended.handle);
+      if (ended) giveBack(element, ended);
     }
     return detach.call(ckeditor5, element, format, trigger);
   };

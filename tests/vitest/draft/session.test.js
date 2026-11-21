@@ -9,7 +9,7 @@ vi.mock('../../../assets/draft/bar.js', async (original) => ({
 
 import { Model } from 'ckeditor5';
 import { confirmAction } from '../../../assets/draft/bar.js';
-import { DraftSession, sessionFor } from '../../../assets/draft/session.js';
+import { DraftSession, NEXT_EDITOR_GRACE, sessionFor } from '../../../assets/draft/session.js';
 import { HttpError } from '../../../assets/http.js';
 
 const live = [];
@@ -587,15 +587,33 @@ test('each editor of a field settles its own wait: a later one replaces it, whoe
   // A third editor is awaited afresh.
   const third = (await session.editorConfiguration(field)).collaborate;
   expect(session.editorWaiters.get('Record[body]').ready).toBe(false);
-  // Its field still in the form awaits its next editor; once the field left, nothing waits for it.
+  // Its field still in the form awaits its next editor, which takes the wait.
+  vi.useFakeTimers();
   third.release();
   expect(session.editorWaiters.get('Record[body]').ready).toBe(false);
+  const next = (await session.editorConfiguration(field)).collaborate;
+  vi.advanceTimersByTime(NEXT_EDITOR_GRACE);
+  expect(session.editorWaiters.get('Record[body]').ready).toBe(false);
+  // One that never comes holds the draft only for a while.
+  next.release();
+  vi.advanceTimersByTime(NEXT_EDITOR_GRACE - 1);
+  expect(session.editorWaiters.has('Record[body]')).toBe(true);
+  vi.advanceTimersByTime(1);
+  expect(session.editorWaiters.has('Record[body]')).toBe(false);
+  vi.useRealTimers();
+  // Once the field left the form, or the form the page, nothing waits for it.
   const textarea = form.querySelector('textarea');
   textarea.remove();
-  third.release();
+  const removed = (await session.editorConfiguration(field)).collaborate;
+  removed.release();
   expect(session.editorWaiters.has('Record[body]')).toBe(false);
-  third.release();
+  removed.release();
   form.append(textarea);
+  const gone = (await session.editorConfiguration(field)).collaborate;
+  form.remove();
+  gone.release();
+  expect(session.editorWaiters.has('Record[body]')).toBe(false);
+  document.body.append(form);
   // An editor that cannot be created, or wired once ready, stops the draft.
   const fourth = (await session.editorConfiguration(field)).collaborate;
   fourth.ready();

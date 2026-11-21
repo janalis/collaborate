@@ -110,6 +110,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   delete globalThis.Drupal;
   delete globalThis.CKEditor5;
+  delete globalThis.drupalSettings;
 });
 
 const body = () => /** @type {HTMLTextAreaElement} */ (document.querySelector('[name="body"]'));
@@ -243,7 +244,14 @@ test('an editor ready once its field left follows nothing, and gives its wait ba
   build();
   // A field gone is given back, whatever format it had.
   globalThis.drupalSettings = { editor: { formats: {} } };
+  /** @type {() => void} */
+  let done;
+  const created = new Promise((resolve) => {
+    done = resolve;
+  });
+  globalThis.CKEditor5.editorClassic = { ClassicEditor: { create: vi.fn(() => created) } };
   const session = await load({ session: followed() });
+  attach.mockImplementation(() => globalThis.CKEditor5.editorClassic.ClassicEditor.create());
   const removed = body();
   removed.setAttribute('data-editor-active-text-format', 'plain_text');
   globalThis.Drupal.editors.ckeditor5.attach(removed, format);
@@ -251,9 +259,25 @@ test('an editor ready once its field left follows nothing, and gives its wait ba
   removed.remove();
   expect(attach.mock.calls[0][1].editorSettings.config.collaborate.current()).toBe(false);
   expect(session.handles[0].current).not.toHaveBeenCalled();
+  done();
   await vi.waitFor(() => expect(session.handles[0].release).toHaveBeenCalledOnce());
   expect(session.handles[0].failed).not.toHaveBeenCalled();
-  delete globalThis.drupalSettings;
+  // Given back once, however often it is asked.
+  globalThis.Drupal.editors.ckeditor5.detach(removed, format, 'unload');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(session.handles[0].release).toHaveBeenCalledOnce();
+});
+
+test('an editor created while its attach is current gives nothing back', async () => {
+  build();
+  globalThis.CKEditor5.editorClassic = { ClassicEditor: { create: vi.fn(async () => {}) } };
+  const session = await load({ session: followed() });
+  attach.mockImplementation(() => globalThis.CKEditor5.editorClassic.ClassicEditor.create());
+  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledOnce());
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(session.handles[0].release).not.toHaveBeenCalled();
+  expect(session.handles[0].failed).not.toHaveBeenCalled();
 });
 
 test('a field gone while its editor could not load stops nothing', async () => {
@@ -269,7 +293,9 @@ test('a field gone while its editor could not load stops nothing', async () => {
 
 test("Drupal taking a field's editor off gives its wait back, or stops the draft for a format without an editor", async () => {
   build();
-  globalThis.drupalSettings = { editor: { formats: { full: {} } } };
+  globalThis.drupalSettings = {
+    editor: { formats: { full: { editor: 'ckeditor5' }, code: { editor: 'codemirror' } } },
+  };
   const session = await load({ session: answered() });
   const ckeditor5 = globalThis.Drupal.editors.ckeditor5;
   body().setAttribute('data-editor-active-text-format', 'full');
@@ -294,11 +320,27 @@ test("Drupal taking a field's editor off gives its wait back, or stops the draft
   await vi.waitFor(() => expect(session.handles[1].failed).toHaveBeenCalled());
   expect(session.handles[1].release).not.toHaveBeenCalled();
   expect(attach).toHaveBeenCalledOnce();
+  // Nor one whose editor is not CKEditor 5.
+  session.stopped = false;
+  ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(session.editorConfiguration).toHaveBeenCalledTimes(3));
+  ckeditor5.detach(body(), format, 'unload');
+  body().setAttribute('data-editor-active-text-format', 'code');
+  session.answers.shift()();
+  await vi.waitFor(() => expect(session.handles[2].failed).toHaveBeenCalled());
+  // Without Drupal's format settings, nothing is known to stop for: the wait is given back.
+  delete globalThis.drupalSettings;
+  session.stopped = false;
+  ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(session.editorConfiguration).toHaveBeenCalledTimes(4));
+  ckeditor5.detach(body(), format, 'unload');
+  session.answers.shift()();
+  await vi.waitFor(() => expect(session.handles[3].release).toHaveBeenCalled());
+  expect(session.handles[3].failed).not.toHaveBeenCalled();
   // A field outside any form is Drupal's alone.
   const alone = /** @type {HTMLTextAreaElement} */ (document.querySelector('[name="alone"]'));
   ckeditor5.detach(alone, format, 'unload');
   expect(detach).toHaveBeenLastCalledWith(alone, format, 'unload');
-  delete globalThis.drupalSettings;
 });
 
 test('the fields of two shared forms, though named alike, attach apart', async () => {

@@ -40,8 +40,10 @@ versions follow [Semantic Versioning](https://semver.org/).
   stayed inert, and the console says why. The draft loads apart from the
   editor plugin: a form whose draft follows no rich-text field keeps
   following it without Drupal's CKEditor build, a build that arrives later
-  serves the next field, and a rebuild no longer binds controls to a draft
-  that stopped.
+  serves the next field, an attach Drupal replaced meanwhile (a text format
+  switched, an AJAX rebuild) creates no editor and tells the draft nothing,
+  the draft no longer waits for the editor of a field a rebuild removed, and
+  a rebuild no longer binds controls to a draft that stopped.
 - Drupal: the status report also names the options the module decides over
   every layer (`bridge`, `identity`, `access`, `role`, `notifications.role`,
   `cursors.regions`), and its services (`cursors.places`,

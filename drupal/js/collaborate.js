@@ -17,7 +17,8 @@ if (document.querySelector('[data-collaborate-notifications]')) {
   import('@janalis/collaborate/notifications/topics.js');
 }
 
-// What a loader said already, which nothing says again: each failure, once per message.
+// What a loader said already, which nothing says again: each failure once, a field's retry failing alike said
+// with the first.
 /** @type {Set<unknown>} */
 const said = new Set();
 /**
@@ -26,8 +27,9 @@ const said = new Set();
  */
 const say = (message, error) => {
   said.add(error);
-  if (said.has(message)) return;
-  said.add(message);
+  const failure = `${message} ${String(error)}`;
+  if (said.has(failure)) return;
+  said.add(failure);
   console.error(message, error);
 };
 
@@ -63,9 +65,10 @@ const loadPlugins = () => {
           const configuration = this.editor.config.get('collaborate');
           if (!configuration) return;
           this.editor.on('ready', () => {
-            configuration.getSession().editorReady(this.editor.sourceElement.name);
-            // The attach that created this editor hears it too.
-            this.editor.config.get('collaborateReady')?.();
+            // The attach that created this editor tells the session, unless Drupal replaced it meanwhile.
+            const heard = this.editor.config.get('collaborateReady');
+            if (heard) heard();
+            else configuration.getSession().editorReady(this.editor.sourceElement.name);
           });
         }
       }
@@ -86,14 +89,22 @@ const editors = page.Drupal?.editors;
 if (editors?.ckeditor5 && shared()) {
   const ckeditor5 = editors.ckeditor5;
   const attach = ckeditor5.attach;
+  // The latest attach of each field: one Drupal replaced meanwhile (a text format switched, an AJAX rebuild)
+  // creates nothing, and an editor it created says nothing more to the draft.
+  /** @type {Map<string, object>} */
+  const latest = new Map();
+
   /**
    * Attaches a shared field once: with the draft's editor, or with Drupal's own when anything before fails, the form
    * then no longer following its draft.
    *
    * @param {HTMLTextAreaElement} element
    * @param {any} format Drupal's editor settings for the field's text format
+   * @param {object} mine this attach's token, its field's latest until Drupal attaches the field again
    */
-  const attachShared = async (element, format) => {
+  const attachShared = async (element, format, mine) => {
+    const newest = () => latest.get(element.name) === mine;
+    const current = () => newest() && element.isConnected;
     /** @type {import('@janalis/collaborate/draft/session.js').DraftSession | null | undefined} */
     let session = null;
     /** @type {{ collaborate?: { field: string }, initialData?: string }} */
@@ -110,33 +121,37 @@ if (editors?.ckeditor5 && shared()) {
       session?.editorFailed();
       configuration = {};
     }
+    if (!current()) {
+      // A field gone with no attach after it: nothing waits for its editor. A newer attach waits for its own.
+      if (newest() && configuration.collaborate) session?.detachField(configuration.collaborate.field);
+      return;
+    }
     // Another field's editor may have failed meanwhile.
     if (!session || session.stopped || !configuration.collaborate) return attach.call(ckeditor5, element, format);
     const live = session;
-    // Whether the editor this attach creates said it was ready: a failure after that leaves the draft as it is.
-    let ready = false;
-    let settings;
-    try {
-      settings = {
-        ...format,
-        editorSettings: {
-          ...format.editorSettings,
-          plugins: [...format.editorSettings.plugins, 'collaborate.Collaborate', 'collaborate.CollaborateReady'],
-          config: {
-            ...format.editorSettings.config,
-            collaborate: configuration.collaborate,
-            collaborateReady: () => {
-              ready = true;
-            },
-          },
-        },
-      };
-    } catch (error) {
+    if (!Array.isArray(format?.editorSettings?.plugins)) {
       // Settings the draft's editor cannot extend: Drupal's own editor.
-      console.error(error);
+      console.error(new TypeError("Collaborate: the text format's editor settings have no plugins to extend."));
       live.editorFailed();
       return attach.call(ckeditor5, element, format);
     }
+    // Whether the editor this attach creates said it was ready: a failure after that leaves the draft as it is.
+    let ready = false;
+    const settings = {
+      ...format,
+      editorSettings: {
+        ...format.editorSettings,
+        plugins: [...format.editorSettings.plugins, 'collaborate.Collaborate', 'collaborate.CollaborateReady'],
+        config: {
+          ...format.editorSettings.config,
+          collaborate: configuration.collaborate,
+          collaborateReady: () => {
+            ready = true;
+            if (current()) live.editorReady(element.name);
+          },
+        },
+      },
+    };
     if (typeof configuration.initialData === 'string') element.value = configuration.initialData;
     // Drupal creates the editor without handing its promise back, and only logs a failure: the draft waits for the
     // editor, its form inert, unless it is told. Drupal core calls `create` before its attach returns.
@@ -146,7 +161,7 @@ if (editors?.ckeditor5 && shared()) {
       classic.create = (...args) => {
         const created = create.apply(classic, args);
         created.catch(() => {
-          if (!ready) live.editorFailed();
+          if (!ready && current()) live.editorFailed();
         });
         return created;
       };
@@ -167,8 +182,10 @@ if (editors?.ckeditor5 && shared()) {
    */
   ckeditor5.attach = (element, format) => {
     if (!element.form?.dataset.collaborate) return attach.call(ckeditor5, element, format);
+    const mine = {};
+    latest.set(element.name, mine);
     // Drupal's own failure, said as Drupal would.
-    attachShared(element, format).catch((error) => console.error(error));
+    attachShared(element, format, mine).catch((error) => console.error(error));
     return true;
   };
   loadPlugins().catch(() => {});

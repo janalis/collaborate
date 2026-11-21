@@ -34,8 +34,9 @@ versions follow [Semantic Versioning](https://semver.org/).
   `shared.collaborate?.failed()` (or still `session.editorFailed()` to stop
   the draft whatever the field), and `shared.collaborate?.release()` when the
   editor is gone without having been ready: the draft stops waiting for it at
-  once if the field left the form, or after 10 seconds unless a next editor of
-  the field takes the wait. Each editor settles its own wait: a
+  once if the field left the form; otherwise the field's next editor has 10
+  seconds (`nextEditorGrace` in the form's `config`) to take the wait, or the
+  draft, which cannot follow the field without one, stops. Each editor settles its own wait: a
   later editor of the field, or the field's removal, makes the earlier
   editor's ready or failure tell the draft nothing, and the earlier editor
   follows nothing: a removed entry's late editor no longer releases the form
@@ -44,8 +45,9 @@ versions follow [Semantic Versioning](https://semver.org/).
   removing an entry stops the wait for its editors still starting. An editor
   asks `collaborate.current()` before it follows the draft, and is said ready
   only once it registered. Drupal: a field whose text format is switched to
-  one without CKEditor 5 stops the draft, which cannot follow it; switched to
-  another CKEditor 5 format, the form waits for its editor.
+  one without CKEditor 5, or rebuilt with such a format, stops the draft,
+  which cannot follow it; switched to another CKEditor 5 format, the form
+  waits for its editor.
 - Drupal: a list set in a higher layer of the options (the form, then
   settings.php) replaces the one below whole: an `advanced` list no longer
   shows through a shorter one. So do the maps the bundle replaces whole from

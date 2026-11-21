@@ -268,6 +268,48 @@ test('an editor ready once its field left follows nothing, and gives its wait ba
   expect(session.handles[0].release).toHaveBeenCalledOnce();
 });
 
+test('an editor that finds its field gone gives its wait back, however it was created', async () => {
+  build();
+  const session = await load({ session: followed() });
+  const removed = body();
+  globalThis.Drupal.editors.ckeditor5.attach(removed, format);
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledOnce());
+  removed.remove();
+  const { collaborate } = attach.mock.calls[0][1].editorSettings.config;
+  expect(collaborate.current()).toBe(false);
+  expect(collaborate.current()).toBe(false);
+  await vi.waitFor(() => expect(session.handles[0].release).toHaveBeenCalledOnce());
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(session.handles[0].release).toHaveBeenCalledOnce();
+});
+
+test('a field rebuilt with a format without CKEditor 5 stops the draft; with one, its next editor is awaited', async () => {
+  build();
+  globalThis.drupalSettings = { editor: { formats: { full: { editor: 'ckeditor5' } } } };
+  const session = await load({ session: followed() });
+  session.form = document.querySelector('form');
+  const ckeditor5 = globalThis.Drupal.editors.ckeditor5;
+  /** Drupal's AJAX rebuild of the field: its editor detached, a new textarea of the format in its place. */
+  const rebuild = (active) => {
+    const old = body();
+    ckeditor5.detach(old, format, 'unload');
+    const rebuilt = document.createElement('textarea');
+    rebuilt.name = 'body';
+    rebuilt.setAttribute('data-editor-active-text-format', active);
+    old.replaceWith(rebuilt);
+  };
+  ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledOnce());
+  rebuild('full');
+  await vi.waitFor(() => expect(session.handles[0].release).toHaveBeenCalledOnce());
+  expect(session.handles[0].failed).not.toHaveBeenCalled();
+  ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledTimes(2));
+  rebuild('plain_text');
+  await vi.waitFor(() => expect(session.handles[1].failed).toHaveBeenCalledOnce());
+  expect(session.handles[1].release).not.toHaveBeenCalled();
+});
+
 test('an editor created while its attach is current gives nothing back', async () => {
   build();
   globalThis.CKEditor5.editorClassic = { ClassicEditor: { create: vi.fn(async () => {}) } };

@@ -76,9 +76,10 @@ if (editors?.ckeditor5 && shared()) {
   const ckeditor5 = editors.ckeditor5;
   const { attach, detach } = ckeditor5;
   /** @typedef {import('@janalis/collaborate/draft/session.js').EditorHandle} EditorHandle */
+  /** @typedef {{ handle?: EditorHandle, given?: boolean }} Attach an attach, and the draft's handle of its editor */
   // Each field's latest attach, until Drupal detaches it: one Drupal replaced meanwhile (a text format switched)
   // creates nothing, and one detached gives its editor's wait back.
-  /** @type {WeakMap<HTMLTextAreaElement, { handle?: EditorHandle, given?: boolean }>} */
+  /** @type {WeakMap<HTMLTextAreaElement, Attach>} */
   const attaches = new WeakMap();
 
   /**
@@ -88,16 +89,18 @@ if (editors?.ckeditor5 && shared()) {
    * editing.
    *
    * @param {HTMLTextAreaElement} element
-   * @param {{ handle?: EditorHandle, given?: boolean }} ended
+   * @param {Attach} ended
    */
   const giveBack = (element, ended) => {
     const handle = ended.handle;
     if (!handle || ended.given) return;
     ended.given = true;
     setTimeout(() => {
+      // The field as the form has it now: this one, or its rebuild.
+      const field = element.isConnected ? element : handle.getSession().form?.elements.namedItem(element.name);
       const formats = page.drupalSettings?.editor?.formats;
-      const active = element.getAttribute('data-editor-active-text-format');
-      if (element.isConnected && formats && active && formats[active]?.editor !== 'ckeditor5') handle.failed();
+      const active = field instanceof HTMLTextAreaElement && field.getAttribute('data-editor-active-text-format');
+      if (formats && active && formats[active]?.editor !== 'ckeditor5') handle.failed();
       else handle.release();
     });
   };
@@ -108,7 +111,7 @@ if (editors?.ckeditor5 && shared()) {
    *
    * @param {HTMLTextAreaElement} element
    * @param {any} format Drupal's editor settings for the field's text format
-   * @param {{ handle?: EditorHandle, given?: boolean }} mine this attach, its field's latest until Drupal attaches or detaches it again
+   * @param {Attach} mine this attach, its field's latest until Drupal attaches or detaches it again
    */
   const attachShared = async (element, format, mine) => {
     const current = () => attaches.get(element) === mine && element.isConnected;
@@ -151,7 +154,11 @@ if (editors?.ckeditor5 && shared()) {
           // An editor ready once its attach was replaced, or its field gone, follows nothing.
           collaborate: {
             ...handle,
-            current: () => current() && handle.current(),
+            current: () => {
+              if (current()) return handle.current();
+              giveBack(element, mine);
+              return false;
+            },
           },
         },
       },

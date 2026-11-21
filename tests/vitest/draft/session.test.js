@@ -9,7 +9,7 @@ vi.mock('../../../assets/draft/bar.js', async (original) => ({
 
 import { Model } from 'ckeditor5';
 import { confirmAction } from '../../../assets/draft/bar.js';
-import { DraftSession, NEXT_EDITOR_GRACE, sessionFor } from '../../../assets/draft/session.js';
+import { DraftSession, sessionFor } from '../../../assets/draft/session.js';
 import { HttpError } from '../../../assets/http.js';
 
 const live = [];
@@ -584,24 +584,61 @@ test('each editor of a field settles its own wait: a later one replaces it, whoe
   second.ready();
   await awaited.promise;
   expect(form.querySelector('input').hasAttribute('inert')).toBe(false);
+  // A ready editor taken off gives nothing back: its wait stays settled.
+  vi.useFakeTimers();
+  const timers = vi.getTimerCount();
+  second.release();
+  vi.advanceTimersByTime(10_000);
+  expect(session.stopped).toBeFalsy();
+  expect(session.editorWaiters.get('Record[body]').ready).toBe(true);
   // A third editor is awaited afresh.
   const third = (await session.editorConfiguration(field)).collaborate;
   expect(session.editorWaiters.get('Record[body]').ready).toBe(false);
-  // Its field still in the form awaits its next editor, which takes the wait.
-  vi.useFakeTimers();
+  // Gone before it was ready, its field still in the form: the field's next editor takes the wait in time, and
+  // the time given is counted once.
   third.release();
+  third.release();
+  expect(vi.getTimerCount()).toBe(timers + 1);
   expect(session.editorWaiters.get('Record[body]').ready).toBe(false);
   const next = (await session.editorConfiguration(field)).collaborate;
-  vi.advanceTimersByTime(NEXT_EDITOR_GRACE);
-  expect(session.editorWaiters.get('Record[body]').ready).toBe(false);
-  // One that never comes holds the draft only for a while.
+  expect(vi.getTimerCount()).toBe(timers);
+  vi.advanceTimersByTime(10_000);
+  expect(session.stopped).toBeFalsy();
+  // Nor does a field detached meanwhile (its entry removed).
   next.release();
-  vi.advanceTimersByTime(NEXT_EDITOR_GRACE - 1);
-  expect(session.editorWaiters.has('Record[body]')).toBe(true);
+  session.detachField('Record[body]');
+  vi.advanceTimersByTime(10_000);
+  expect(session.stopped).toBeFalsy();
+  const last = (await session.editorConfiguration(field)).collaborate;
+  // None in time: the draft, which cannot follow the field, stops.
+  last.release();
+  vi.advanceTimersByTime(9_999);
+  expect(session.stopped).toBeFalsy();
   vi.advanceTimersByTime(1);
-  expect(session.editorWaiters.has('Record[body]')).toBe(false);
+  expect(session.stopped).toBe(true);
   vi.useRealTimers();
-  // Once the field left the form, or the form the page, nothing waits for it.
+});
+
+test('a stopped draft forgets the editors it gave time to come', async () => {
+  const { session } = fixture('<textarea name="Record[body]"></textarea>', {
+    'Record[body]': { type: 'rich', initial: 'Body' },
+  });
+  await session.ready;
+  vi.useFakeTimers();
+  const editorFailed = vi.spyOn(session, 'editorFailed');
+  (await session.editorConfiguration({ name: 'Record[body]' })).collaborate.release();
+  session.stop();
+  vi.advanceTimersByTime(10_000);
+  expect(editorFailed).not.toHaveBeenCalled();
+  vi.useRealTimers();
+});
+
+test('nothing waits for the editor of a field gone from the form, or of a form gone from the page', async () => {
+  const { session, form } = fixture('<textarea name="Record[body]"></textarea>', {
+    'Record[body]': { type: 'rich', initial: 'Body' },
+  });
+  await session.ready;
+  const field = { name: 'Record[body]' };
   const textarea = form.querySelector('textarea');
   textarea.remove();
   const removed = (await session.editorConfiguration(field)).collaborate;

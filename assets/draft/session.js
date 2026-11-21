@@ -80,7 +80,10 @@ import { initializeText, initializeValue, valueAdapter } from './fields.js';
  * @property {() => void} [destroy]
  */
 
-/** @typedef {{ ready: boolean, claimed?: boolean, resolve: () => void, promise: Promise<void> }} EditorWaiter */
+/**
+ * @typedef {{ ready: boolean, claimed?: boolean, grace?: ReturnType<typeof setTimeout>, resolve: () => void,
+ *   promise: Promise<void> }} EditorWaiter
+ */
 /**
  * What `editorConfiguration()` hands one editor of a field, as `collaborate`: the `Collaborate` plugin follows the
  * draft only while `current` answers `true`, and calls `ready` once it does; the host calls `failed` when the editor
@@ -105,10 +108,6 @@ const grantScope = (grant) =>
   JSON.parse(
     new TextDecoder().decode(Uint8Array.from(atob(grant.split('.')[0]), (character) => character.charCodeAt(0)))
   );
-// How long a wait given back for a field still in the form awaits its next editor (Drupal's next format, after its
-// request; a rebuild): then the draft goes on without it.
-export const NEXT_EDITOR_GRACE = 10_000;
-
 /** @param {unknown} error */
 const messageOf = (error) => (error instanceof Error ? error.message : String(error));
 /** @param {string} text */
@@ -472,6 +471,7 @@ export class DraftSession {
    */
   editorHandle(name) {
     const previous = this.editorWaiters.get(name);
+    clearTimeout(previous?.grace);
     if (previous?.claimed) {
       this.editorWaiters.delete(name);
       if (!previous.ready) this.editorWaiter(name).promise.then(previous.resolve);
@@ -489,18 +489,23 @@ export class DraftSession {
       failed: () => {
         if (current()) this.editorFailed();
       },
-      // A field still in the form awaits its next editor (rebuilt, or of another format), which takes this wait, for
-      // a while: one that never comes holds nothing for good.
+      // An editor gone before it was ready: nothing waits for a field gone from the form. One still there awaits its
+      // next editor (rebuilt, or of another format), which takes this wait; none in time, and the draft, which
+      // cannot follow the field without one, stops.
       release: () => {
-        if (!current()) return;
-        const letGo = () => {
-          if (!current()) return;
+        if (!current() || waiter.ready) return;
+        if (!this.form.isConnected || !this.form.elements.namedItem(this.formName(name))) {
           this.editorWaiters.delete(name);
           waiter.resolve();
-        };
-        if (this.form.isConnected && this.form.elements.namedItem(this.formName(name)))
-          setTimeout(letGo, NEXT_EDITOR_GRACE);
-        else letGo();
+          return;
+        }
+        clearTimeout(waiter.grace);
+        waiter.grace = setTimeout(
+          () => {
+            if (current()) this.editorFailed();
+          },
+          this.setting('nextEditorGrace', 10_000)
+        );
       },
     };
   }
@@ -539,6 +544,11 @@ export class DraftSession {
     if (!this.initialized || this.stopped || Array.from(this.editorWaiters.values()).some((waiter) => !waiter.ready))
       return;
     this.releaseControls();
+  }
+
+  // A stopped draft awaits no editor: the time it gave each to come runs out on nothing.
+  forgetGraces() {
+    for (const waiter of this.editorWaiters.values()) clearTimeout(waiter.grace);
   }
 
   releaseControls() {
@@ -668,6 +678,7 @@ export class DraftSession {
   halt(status, release = true) {
     if (release) this.releaseControls();
     this.stopped = true;
+    this.forgetGraces();
     if (status) this.setStatus(status);
     this.disconnect();
     clearInterval(this.poll);
@@ -1364,6 +1375,7 @@ export class DraftSession {
   stop() {
     this.releaseControls();
     this.stopped = true;
+    this.forgetGraces();
     this.suspend();
     this.form.removeEventListener('submit', /** @type {(event: SubmitEvent) => Promise<void>} */ (this.onSubmit), true);
     this.form.removeEventListener('submit', this.earlySubmit, true);

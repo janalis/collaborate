@@ -668,6 +668,48 @@ test('a ready editor gone leaves its field to its next editor in time, or stops 
   vi.useRealTimers();
 });
 
+test('a rich field whose editor nobody asks for stops the draft in time, unless it left the form', async () => {
+  vi.useFakeTimers();
+  const { session, form } = fixture(
+    '<textarea name="Record[body]"></textarea><textarea name="Record[note]"></textarea>',
+    {
+      'Record[body]': { type: 'rich', initial: 'Body' },
+      'Record[note]': { type: 'rich', initial: 'Note' },
+    }
+  );
+  await vi.advanceTimersByTimeAsync(0);
+  await session.ready;
+  expect(session.editorWaiters.size).toBe(2);
+  // One field's editor is ready; the other's field left the form: nothing waits for it.
+  (await session.editorConfiguration({ name: 'Record[body]' })).collaborate.ready();
+  const note = form.querySelector('[name="Record[note]"]');
+  note.remove();
+  vi.advanceTimersByTime(10_000);
+  expect(session.editorWaiters.has('Record[note]')).toBe(false);
+  expect(session.stopped).toBeFalsy();
+  // Back, and still asked for by nobody: the draft stops.
+  form.append(note);
+  session.editorWaiter('Record[note]');
+  vi.advanceTimersByTime(10_000);
+  expect(session.stopped).toBe(true);
+  vi.useRealTimers();
+});
+
+test('a detached field forgets the time its editor was given', async () => {
+  const { session } = fixture('<textarea name="Record[body]"></textarea>', {
+    'Record[body]': { type: 'rich', initial: 'Body' },
+  });
+  await session.ready;
+  vi.useFakeTimers();
+  (await session.editorConfiguration({ name: 'Record[body]' })).collaborate;
+  const timers = vi.getTimerCount();
+  session.detachField('Record[body]');
+  expect(vi.getTimerCount()).toBe(timers - 1);
+  // A field no editor was awaited for (a text field) has nothing to forget.
+  expect(() => session.detachField('Record[name]')).not.toThrow();
+  vi.useRealTimers();
+});
+
 test('a stopped draft forgets the editors it gave time to come', async () => {
   const { session } = fixture('<textarea name="Record[body]"></textarea>', {
     'Record[body]': { type: 'rich', initial: 'Body' },

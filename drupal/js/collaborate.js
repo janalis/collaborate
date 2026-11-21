@@ -95,14 +95,10 @@ if (editors?.ckeditor5 && shared()) {
     const classic = page.CKEditor5?.editorClassic?.ClassicEditor;
     if (!classic || watchers.has(classic.create)) return;
     const create = classic.create;
-    // A subclass inheriting `create` creates its own kind; a call without a class is Drupal's class's of now.
+    // A subclass inheriting `create` creates its own kind; a call without a class makes Drupal's class of now.
     /** @this {unknown} */
     const watcher = function (/** @type {unknown[]} */ ...args) {
-      if (this === undefined) {
-        const now = page.CKEditor5?.editorClassic?.ClassicEditor ?? classic;
-        return now.create.apply(now, args);
-      }
-      const created = create.apply(this, args);
+      const created = create.apply(this ?? page.CKEditor5?.editorClassic?.ClassicEditor ?? classic, args);
       const pending = awaited;
       if (pending && pending.element === args[0]) {
         awaited = null;

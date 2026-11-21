@@ -471,32 +471,17 @@ export class DraftSession {
    */
   editorHandle(name) {
     const previous = this.editorWaiters.get(name);
-    clearTimeout(previous?.grace);
-    if (previous?.claimed) this.editorWaiters.delete(name);
+    if (previous?.claimed) {
+      clearTimeout(previous.grace);
+      this.editorWaiters.delete(name);
+    }
     const waiter = this.editorWaiter(name);
     // Whoever awaited the previous editor awaits this one.
     if (previous && previous !== waiter && !previous.ready) waiter.promise.then(previous.resolve);
     waiter.claimed = true;
     const current = () => this.editorWaiters.get(name) === waiter;
-    const gone = () => !this.form.isConnected || !this.form.elements.namedItem(this.formName(name));
-    // Its editor, or once it went away the field's next, has a while to come: then nothing waits for a field gone
-    // from the form, and the draft, which cannot follow a field still there without an editor, stops.
-    const deadline = () => {
-      clearTimeout(waiter.grace);
-      waiter.grace = setTimeout(
-        () => {
-          if (!current()) return;
-          if (!gone()) {
-            this.editorFailed();
-            return;
-          }
-          this.editorWaiters.delete(name);
-          waiter.resolve();
-        },
-        this.setting('nextEditorGrace', 10_000)
-      );
-    };
-    if (!this.stopped) deadline();
+    // The editor asked for now has the whole while to come.
+    this.awaitEditor(name, waiter);
     return {
       getSession: () => this,
       field: name,
@@ -513,17 +498,15 @@ export class DraftSession {
       // (rebuilt, or of another format), which takes this wait in time.
       release: () => {
         if (!current() || this.stopped) return;
-        if (gone()) {
-          this.editorWaiters.delete(name);
-          waiter.resolve();
-          return;
-        }
-        deadline();
+        if (this.fieldGone(name)) this.letGo(name);
+        else this.awaitEditor(name, waiter);
       },
     };
   }
 
   /**
+   * The wait for a field's editor, set up as the join or a host first asks for it: its editor has a while to come.
+   *
    * @param {string} name
    * @returns {EditorWaiter}
    */
@@ -542,8 +525,48 @@ export class DraftSession {
       );
       waiter.promise = promise;
       this.editorWaiters.set(name, waiter);
+      this.awaitEditor(name, waiter);
     }
     return /** @type {EditorWaiter} */ (this.editorWaiters.get(name));
+  }
+
+  /**
+   * Gives a field's editor `nextEditorGrace` to be ready: then nothing waits for a field gone from the form, and the
+   * draft, which cannot follow a field still there without an editor, stops.
+   *
+   * @param {string} name
+   * @param {EditorWaiter} waiter
+   */
+  awaitEditor(name, waiter) {
+    clearTimeout(waiter.grace);
+    if (this.stopped) return;
+    waiter.grace = setTimeout(
+      // Replaced, let go or ready, a wait has its time cleared: one that runs out is still the field's.
+      () => {
+        if (this.fieldGone(name)) this.letGo(name);
+        else this.editorFailed();
+      },
+      this.setting('nextEditorGrace', 10_000)
+    );
+  }
+
+  /** @param {string} name */
+  fieldGone(name) {
+    return !this.form.isConnected || !this.form.elements.namedItem(this.formName(name));
+  }
+
+  /**
+   * Nothing waits for the field's editor any more: its wait is settled for whoever awaits it, and forgotten, so an
+   * entry added again under its key awaits its own editor.
+   *
+   * @param {string} name
+   */
+  letGo(name) {
+    const waiter = this.editorWaiters.get(name);
+    if (!waiter) return;
+    clearTimeout(waiter.grace);
+    this.editorWaiters.delete(name);
+    waiter.resolve();
   }
 
   // Without every editor the draft cannot be followed; keep the ordinary submission path.
@@ -597,9 +620,7 @@ export class DraftSession {
   detachField(name) {
     this.adapters.get(name)?.destroy?.();
     this.adapters.delete(name);
-    // Resolved for whoever waits on it, and forgotten: an entry added again under its key awaits its own editor.
-    this.editorWaiters.get(name)?.resolve();
-    this.editorWaiters.delete(name);
+    this.letGo(name);
   }
 
   /**

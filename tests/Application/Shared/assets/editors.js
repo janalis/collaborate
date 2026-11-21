@@ -1,6 +1,6 @@
 // The host's CKEditor wiring, as the bundle's contract asks: each editor is created with
-// `session.editorConfiguration(field)` and the `Collaborate` plugin, then reports `editorReady(name)` or
-// `editorFailed()`. Rows a peer adds to a collection get their editors through `addRowInitializer()`.
+// `session.editorConfiguration(field)` and the `Collaborate` plugin, which tells the draft once the editor is ready;
+// an editor that cannot be created reports it with `collaborate.failed()`. Rows a peer adds to a collection get their editors through `addRowInitializer()`.
 //
 // A textarea marked `data-markdown` stores Markdown and offers a source view: radios named
 // `<textarea id>_view` choose the mode (the source one's value is `markdown`), the source is edited in the
@@ -74,11 +74,10 @@ export async function createEditor(textarea) {
     });
     if (markdown) bindMode(editor, textarea, radios);
     textarea.dataset.editor = 'ready';
-    session?.editorReady(textarea.name);
     return editor;
   } catch (error) {
     textarea.dataset.editor = 'failed';
-    session?.editorFailed();
+    shared.collaborate?.failed();
     throw error;
   }
 }

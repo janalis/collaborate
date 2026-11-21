@@ -27,6 +27,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **Breaking:** an editor's readiness is told by the `Collaborate` plugin,
+  through what `session.editorConfiguration(field)` hands it as
+  `collaborate`: the host no longer calls `session.editorReady(name)`, which
+  is removed. A host whose editor cannot be created calls
+  `shared.collaborate?.failed()` (or still `session.editorFailed()` to stop
+  the draft whatever the field), and `shared.collaborate?.release()` when the
+  field leaves the page without one. Each editor settles its own wait: a
+  later editor of the field, or the field's removal, makes the earlier
+  editor's ready or failure tell the draft nothing, so a removed entry's late
+  editor no longer releases the form for the entry added again under its
+  key, and an editor that fails once ready stops nothing.
 - Drupal: a list set in a higher layer of the options (the form, then
   settings.php) replaces the one below whole: an `advanced` list no longer
   shows through a shorter one. So do the maps the bundle replaces whole from
@@ -92,6 +103,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Removed
 
+- `DraftSession::editorReady()`: the `Collaborate` plugin tells the draft
+  its editor is ready.
 - `assets/drupal.js`: the Drupal module loads its own entry,
   `drupal/js/collaborate.js`, which registers the Drupal bridge.
 

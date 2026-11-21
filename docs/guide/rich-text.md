@@ -58,10 +58,9 @@ async function createEditor(textarea) {
       toolbar: ['bold', 'italic', '|', 'undo', 'redo'],
       ...shared,
     });
-    session?.editorReady(textarea.name);
     return editor;
   } catch (error) {
-    session?.editorFailed();
+    shared.collaborate?.failed();
     throw error;
   }
 }
@@ -76,9 +75,10 @@ addRowInitializer((row) => {
 | Call | What it does |
 |---|---|
 | `sessionFor(field)` | The draft session of the field's form, or `null` when the form is not shared. The first call creates it. |
-| `await session.editorConfiguration(field)` | Waits for the session to join the draft, then returns `{ initialData, collaborate }`: the field's content in the shared draft and what the `Collaborate` plugin needs. Spread it last into the editor configuration. It returns `{}` when the draft could not be joined or the field is not shared: the editor then starts from the textarea, without collaboration. |
-| `session.editorReady(field.name)` | Reports the editor as mounted. The form's controls stay inert until every rich-text field of the draft has reported; until then, edits wait to be sent (15 seconds at a time, then the session retries). |
-| `session.editorFailed()` | Reports an editor that could not be created. The session stops and the form falls back to ordinary editing: the bar says the shared draft is unavailable, and Save posts the form as usual. |
+| `await session.editorConfiguration(field)` | Waits for the session to join the draft, then returns `{ initialData, collaborate }`: the field's content in the shared draft and what the `Collaborate` plugin needs. Spread it last into the editor configuration. It returns `{}` when the draft could not be joined or the field is not shared: the editor then starts from the textarea, without collaboration. Each call awaits a new editor of the field: an earlier one's `collaborate` no longer tells the draft anything. |
+| (the `Collaborate` plugin) | Tells the draft once its editor is ready. The form's controls stay inert until every rich-text field of the draft has an editor ready; until then, edits wait to be sent (15 seconds at a time, then the session retries). |
+| `shared.collaborate.failed()` | Reports an editor that could not be created. The session stops and the form falls back to ordinary editing: the bar says the shared draft is unavailable, and Save posts the form as usual. An editor that was ready, or that a later one replaced, stops nothing. `session.editorFailed()` stops the session whatever the field. |
+| `shared.collaborate.release()` | The field left the page without its editor: the draft no longer waits for it. |
 | `addRowInitializer(fn)` | Runs `fn(row)` on every collection row the draft adds to the page; returns a function that unregisters it. One that throws does not keep the others from running. |
 
 The `Collaborate` plugin does nothing in an editor created without the

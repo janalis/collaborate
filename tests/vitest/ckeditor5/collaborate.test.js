@@ -17,6 +17,8 @@ const editors = [];
 
 async function peer(initial = '<p>abcd</p>', extraPlugins = []) {
   let buffer;
+  // Told once the editor follows the draft: its buffer registered.
+  const ready = vi.fn(() => expect(session.register).toHaveBeenCalledOnce());
   const session = {
     adapters: new Map(),
     applying: false,
@@ -49,14 +51,14 @@ async function peer(initial = '<p>abcd</p>', extraPlugins = []) {
       Collaborate,
       ...extraPlugins,
     ],
-    collaborate: { getSession: () => session, field: 'body' },
+    collaborate: { getSession: () => session, field: 'body', ready },
   });
   editors.push(editor);
   editor.model.document.createRoot();
   await editor.initPlugins();
   await editor.data.init(initial);
   editor.fire('ready');
-  return { editor, buffer, session };
+  return { editor, buffer, session, ready };
 }
 
 const insert = (peer, value, offset) =>
@@ -88,6 +90,7 @@ test('merges two simultaneous writers, undoes only local content and synchronize
   const a = await peer();
   const b = await peer();
   expect(a.session.adapters.get('body')).toBe(a.buffer);
+  expect(a.ready).toHaveBeenCalledOnce();
   insert(a, 'X', 2);
   insert(b, 'Y', 2);
   accept(a, [a, b]);

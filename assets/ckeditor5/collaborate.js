@@ -11,8 +11,11 @@ export default class Collaborate extends Plugin {
   }
 
   init() {
-    /** What `session.editorConfiguration(field)` hands the editor: the session's factory and the shared field. */
-    const configuration = /** @type {{ getSession: () => any, field: string } | undefined} */ (
+    /**
+     * What `session.editorConfiguration(field)` hands the editor: the session's factory, the shared field, and what
+     * tells the session this editor is ready.
+     */
+    const configuration = /** @type {{ getSession: () => any, field: string, ready?: () => void } | undefined} */ (
       this.editor.config.get('collaborate')
     );
     if (!configuration) return;
@@ -52,6 +55,8 @@ export default class Collaborate extends Plugin {
       };
       this.buffer.adopt = (source) => this.applySource(source);
       this.unregister = session.register(configuration.field, this.buffer);
+      // The draft follows this editor from now on: the form it waited for is released.
+      configuration.ready?.();
     });
   }
 

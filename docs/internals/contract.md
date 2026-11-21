@@ -108,4 +108,4 @@ Storage keys: `collaborate-notice:<draft id>`, `collaborate-update:<path><search
 
 Bare imports the host's importmap provides: `ckeditor5`, `bootstrap/js/src/modal.js`, and `@microsoft/fetch-event-source` with the Mercure transport (imported on demand by `hub/mercure.js`).
 
-A rich-text editor is created by the host. It passes `session.editorConfiguration(field)` into its configuration, calls `session.editorReady(name)` or `session.editorFailed()`, and names its Markdown mode radios `<field id>_view`. A host that builds editors for added collection rows registers them with `addRowInitializer(fn(row))`.
+A rich-text editor is created by the host. It passes `session.editorConfiguration(field)` into its configuration, whose `collaborate` the `Collaborate` plugin tells once the editor is ready; the host calls its `failed()` when the editor cannot be created, or its `release()` when the field leaves without one, and names its Markdown mode radios `<field id>_view`. A host that builds editors for added collection rows registers them with `addRowInitializer(fn(row))`.

@@ -80,7 +80,20 @@ import { initializeText, initializeValue, valueAdapter } from './fields.js';
  * @property {() => void} [destroy]
  */
 
-/** @typedef {{ ready: boolean, resolve: () => void, promise: Promise<void> }} EditorWaiter */
+/** @typedef {{ ready: boolean, claimed?: boolean, resolve: () => void, promise: Promise<void> }} EditorWaiter */
+/**
+ * What `editorConfiguration()` hands one editor of a field, as `collaborate`: the `Collaborate` plugin calls `ready`
+ * once the editor is; the host calls `failed` when the editor cannot be created, or `release` when the field leaves
+ * without one. Each settles this editor's wait only, and nothing once a later editor of the field or the field's
+ * removal replaced it.
+ *
+ * @typedef {object} EditorHandle
+ * @property {() => DraftSession} getSession
+ * @property {string} field
+ * @property {() => void} ready
+ * @property {() => void} failed
+ * @property {() => void} release
+ */
 
 /** @type {WeakMap<HTMLFormElement, DraftSession>} */
 const sessions = new WeakMap();
@@ -442,8 +455,40 @@ export class DraftSession {
     const name = this.fieldKey(field.name);
     const state = this.ensureField(name);
     if (!state) return {};
-    this.editorWaiter(name);
-    return { initialData: state.initial, collaborate: { getSession: () => this, field: name } };
+    return { initialData: state.initial, collaborate: this.editorHandle(name) };
+  }
+
+  /**
+   * The wait for the editor of a field asked for now: the one the join set up, or a new one once an editor claimed
+   * that, whoever awaited the previous one awaiting this one.
+   *
+   * @param {string} name
+   * @returns {EditorHandle}
+   */
+  editorHandle(name) {
+    const previous = this.editorWaiters.get(name);
+    if (previous?.claimed) {
+      this.editorWaiters.delete(name);
+      if (!previous.ready) this.editorWaiter(name).promise.then(previous.resolve);
+    }
+    const waiter = this.editorWaiter(name);
+    waiter.claimed = true;
+    const current = () => this.editorWaiters.get(name) === waiter;
+    return {
+      getSession: () => this,
+      field: name,
+      ready: () => {
+        if (current()) waiter.resolve();
+      },
+      failed: () => {
+        if (current() && !waiter.ready) this.editorFailed();
+      },
+      release: () => {
+        if (!current()) return;
+        this.editorWaiters.delete(name);
+        waiter.resolve();
+      },
+    };
   }
 
   /**
@@ -467,11 +512,6 @@ export class DraftSession {
       this.editorWaiters.set(name, waiter);
     }
     return /** @type {EditorWaiter} */ (this.editorWaiters.get(name));
-  }
-
-  /** @param {string} name */
-  editorReady(name) {
-    this.editorWaiter(this.fieldKey(name)).resolve();
   }
 
   // Without every editor the draft cannot be followed; keep the ordinary submission path.

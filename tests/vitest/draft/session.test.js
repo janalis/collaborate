@@ -138,7 +138,7 @@ test('keeps startup controls inert until Join and rich editor registration finis
   release();
   await session.ready;
   expect(form.querySelector('textarea').hasAttribute('inert')).toBe(true);
-  session.editorReady('Record[body]');
+  (await session.editorConfiguration(form.querySelector('textarea'))).collaborate.ready();
   expect(form.querySelector('input').hasAttribute('inert')).toBe(false);
   expect(form.querySelector('input').readOnly).toBe(true);
   expect(form.querySelector('select').disabled).toBe(true);
@@ -539,18 +539,62 @@ test('keeps the form inert while an editor is awaited and the page rejoins: what
   expect(form.querySelector('input').hasAttribute('inert')).toBe(true);
 });
 
-test('awaits the editor of an entry added again under a key whose editor was detached', () => {
-  const { session } = fixture();
-  const detached = session.editorWaiter('Record[body]');
+test('awaits the editor of an entry added again under a key whose editor was detached', async () => {
+  const { session } = fixture('<textarea name="Record[body]"></textarea>', {
+    'Record[body]': { type: 'rich', initial: 'Body' },
+  });
+  await session.ready;
+  const field = { name: 'Record[body]' };
+  const removed = (await session.editorConfiguration(field)).collaborate;
+  const detached = session.editorWaiters.get('Record[body]');
   session.detachField('Record[body]');
   expect(detached.ready).toBe(true);
-  expect(session.editorWaiter('Record[body]').ready).toBe(false);
+  const added = (await session.editorConfiguration(field)).collaborate;
+  // The removed entry's editor, late, settles nothing of the new entry's.
+  removed.ready();
+  removed.failed();
+  removed.release();
+  expect(session.editorWaiters.get('Record[body]').ready).toBe(false);
+  expect(session.stopped).toBeFalsy();
+  added.ready();
+  expect(session.editorWaiters.get('Record[body]').ready).toBe(true);
 });
 
-test('counts an editor that said it was ready before anything awaited it', () => {
-  const { session } = fixture();
-  session.editorReady('Record[body]');
-  expect(session.editorWaiter('Record[body]').ready).toBe(true);
+test('each editor of a field settles its own wait: a later one replaces it, whoever awaited the first awaiting it', async () => {
+  const { session, form } = fixture('<input name="Record[name]"><textarea name="Record[body]"></textarea>', {
+    'Record[name]': { type: 'text', initial: '' },
+    'Record[body]': { type: 'rich', initial: 'Body' },
+  });
+  await session.ready;
+  const field = { name: 'Record[body]' };
+  // The join awaits the field's editor: the first editor takes that wait.
+  const awaited = session.editorWaiters.get('Record[body]');
+  const first = (await session.editorConfiguration(field)).collaborate;
+  expect(session.editorWaiters.get('Record[body]')).toBe(awaited);
+  expect(first.getSession()).toBe(session);
+  expect(first.field).toBe('Record[body]');
+  // A second editor of the field (its text format switched): the first's say nothing more.
+  const second = (await session.editorConfiguration(field)).collaborate;
+  first.ready();
+  first.failed();
+  expect(awaited.ready).toBe(false);
+  expect(form.querySelector('input').hasAttribute('inert')).toBe(true);
+  second.ready();
+  await awaited.promise;
+  expect(form.querySelector('input').hasAttribute('inert')).toBe(false);
+  // A ready editor's late failure stops nothing; a third editor is awaited afresh.
+  second.failed();
+  expect(session.stopped).toBeFalsy();
+  const third = (await session.editorConfiguration(field)).collaborate;
+  expect(session.editorWaiters.get('Record[body]').ready).toBe(false);
+  // Its field taken off without an editor: nothing waits for it.
+  third.release();
+  expect(session.editorWaiters.has('Record[body]')).toBe(false);
+  third.release();
+  // An editor that cannot be created stops the draft.
+  const fourth = (await session.editorConfiguration(field)).collaborate;
+  fourth.failed();
+  expect(session.stopped).toBe(true);
 });
 
 test('rejoins without the unsaved-changes prompt EasyAdmin keeps for a form edited since it loaded', async () => {
@@ -735,7 +779,7 @@ test('waits for rich editors, checks initial versions and releases registration 
   remove();
   expect(session.adapters.has('body')).toBe(false);
   const waiter = session.editorWaiter('body');
-  session.editorReady('body');
+  waiter.resolve();
   await expect(waiter.promise).resolves.toBeUndefined();
 });
 
@@ -1116,7 +1160,7 @@ test('shares source mode while preserving pending local choices and locking sour
   const configuration = await session.editorConfiguration(field);
   expect(configuration.collaborate.getSession()).toBe(session);
   expect(await session.editorConfiguration({ name: 'Unknown' })).toEqual({});
-  session.editorReady(name);
+  configuration.collaborate.ready();
   const model = new Model();
   const root = model.document.createRoot();
   model.schema.register('paragraph', { inheritAllFrom: '$block' });
@@ -1163,7 +1207,7 @@ test('applies typed Markdown source once typing settles, on blur, before a flush
     }
   );
   await session.ready;
-  session.editorReady(name);
+  (await session.editorConfiguration(form.querySelector('textarea'))).collaborate.ready();
   const field = form.querySelector('textarea');
   const model = new Model();
   model.document.createRoot();
@@ -2366,7 +2410,7 @@ test('registers no shared mode for a rich field whose grant shares none, and app
     { [name]: { type: 'rich', initial: 'Body' } }
   );
   await session.ready;
-  session.editorReady(name);
+  (await session.editorConfiguration(form.querySelector('textarea'))).collaborate.ready();
   const field = form.querySelector('textarea');
   const model = new Model();
   model.document.createRoot();

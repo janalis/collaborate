@@ -694,6 +694,51 @@ test('rejoins without the unsaved-changes prompt EasyAdmin keeps for a form edit
   expect(window.onbeforeunload).toBeNull();
 });
 
+test('a page whose own prompt keeps it from reloading goes on with ordinary editing', async () => {
+  const { session, form } = fixture('<input name="Record[name]">', {
+    'Record[name]': { type: 'text', initial: '' },
+  });
+  await session.ready;
+  vi.useFakeTimers();
+  // A page that asks nothing reloads: nothing waits for it to stay.
+  const timers = vi.getTimerCount();
+  session.rejoin();
+  expect(vi.getTimerCount()).toBe(timers);
+  // One that asks, and leaves.
+  /** @param {Event} event */
+  const prompt = (event) => event.preventDefault();
+  window.addEventListener('beforeunload', prompt);
+  session.halt('connecting', false);
+  session.rejoin();
+  window.dispatchEvent(new Event('pagehide'));
+  vi.advanceTimersByTime(10_000);
+  expect(form.dataset.collaborateState).toBe('connecting');
+  window.removeEventListener('beforeunload', prompt);
+  // One whose prompt sets a message, as a browser's BeforeUnloadEvent carries it, and whose user stays: its
+  // controls are released.
+  vi.spyOn(document, 'createEvent').mockImplementation(() => {
+    const event = new Event('beforeunload');
+    Object.defineProperty(event, 'returnValue', { value: '', writable: true });
+    return event;
+  });
+  /** @param {Event} event */
+  const message = (event) => {
+    /** @type {{ returnValue?: string }} */ (event).returnValue = 'Changes may not be saved.';
+  };
+  window.addEventListener('beforeunload', message);
+  form.querySelector('input').setAttribute('inert', '');
+  session.startupControls = [form.querySelector('input')];
+  session.rejoin();
+  vi.advanceTimersByTime(9_999);
+  expect(form.querySelector('input').hasAttribute('inert')).toBe(true);
+  vi.advanceTimersByTime(1);
+  expect(form.dataset.collaborateState).toBe('unavailable');
+  expect(form.querySelector('input').hasAttribute('inert')).toBe(false);
+  expect(form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }))).toBe(true);
+  window.removeEventListener('beforeunload', message);
+  vi.useRealTimers();
+});
+
 test('a confirmed Discard or use of the saved record reloads by rejoining', async () => {
   const { session, fetcher } = fixture();
   await session.ready;

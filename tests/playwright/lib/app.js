@@ -201,12 +201,18 @@ export class Editor {
       .first();
   }
 
-  /** Submits the form with the page's main save button (EasyAdmin's sit outside the form) and waits for the page it leads to. */
-  async save() {
+  /**
+   * Submits the form with the page's main save button (EasyAdmin's sit outside the form) and waits for the page it
+   * leads to.
+   *
+   * @param {{ force?: boolean }} [options] `force` for a page without JavaScript, whose button Playwright never sees
+   *   as stable (its check stalls there until a retry, 30 seconds on)
+   */
+  async save({ force = false } = {}) {
     const posted = this.page.waitForRequest((request) => request.method() === 'POST' && request.isNavigationRequest());
     // The page the save answers: a redirect still under way would interrupt the next navigation.
     const loaded = nextPage(this.page);
-    await this.saveButton.click();
+    await this.saveButton.click({ force });
     // The save checkpoints the draft before it answers: a page opened before the answer would read the draft
     // as it was, and leaving earlier aborts the request while the server still saves.
     await (await posted).response();
@@ -407,7 +413,7 @@ export const test = base.extend({
       const carol = await editor('carol', { javaScriptEnabled: false });
       await carol.page.goto(carol.routes.edit(id));
       await fill(carol);
-      await carol.save();
+      await carol.save({ force: true });
       await expect(carol.page.locator('.invalid-feedback, .form-error-message')).toHaveCount(0);
       return carol;
     });

@@ -17,7 +17,7 @@ if (document.querySelector('[data-collaborate-notifications]')) {
   import('@janalis/collaborate/notifications/topics.js');
 }
 
-// Failures a loader said already, which nothing says again: a page has one or two.
+// What a loader said already, which nothing says again: each failure, once per message.
 /** @type {Set<unknown>} */
 const said = new Set();
 /**
@@ -26,6 +26,8 @@ const said = new Set();
  */
 const say = (message, error) => {
   said.add(error);
+  if (said.has(message)) return;
+  said.add(message);
   console.error(message, error);
 };
 
@@ -60,7 +62,11 @@ const loadPlugins = () => {
         init() {
           const configuration = this.editor.config.get('collaborate');
           if (!configuration) return;
-          this.editor.on('ready', () => configuration.getSession().editorReady(this.editor.sourceElement.name));
+          this.editor.on('ready', () => {
+            configuration.getSession().editorReady(this.editor.sourceElement.name);
+            // The attach that created this editor hears it too.
+            this.editor.config.get('collaborateReady')?.();
+          });
         }
       }
       // Drupal finds an editor's plugins as `CKEditor5.<package>.<plugin>`.
@@ -80,20 +86,14 @@ const editors = page.Drupal?.editors;
 if (editors?.ckeditor5 && shared()) {
   const ckeditor5 = editors.ckeditor5;
   const attach = ckeditor5.attach;
-  // The latest attach of each field: one Drupal replaced meanwhile (a text format switched, an AJAX rebuild)
-  // creates nothing.
-  /** @type {WeakMap<HTMLTextAreaElement, object>} */
-  const latest = new WeakMap();
-
   /**
    * Attaches a shared field once: with the draft's editor, or with Drupal's own when anything before fails, the form
    * then no longer following its draft.
    *
    * @param {HTMLTextAreaElement} element
    * @param {any} format Drupal's editor settings for the field's text format
-   * @param {() => boolean} current whether this attach is still the field's latest
    */
-  const attachShared = async (element, format, current) => {
+  const attachShared = async (element, format) => {
     /** @type {import('@janalis/collaborate/draft/session.js').DraftSession | null | undefined} */
     let session = null;
     /** @type {{ collaborate?: { field: string }, initialData?: string }} */
@@ -110,35 +110,48 @@ if (editors?.ckeditor5 && shared()) {
       session?.editorFailed();
       configuration = {};
     }
-    if (!current()) return;
     // Another field's editor may have failed meanwhile.
     if (!session || session.stopped || !configuration.collaborate) return attach.call(ckeditor5, element, format);
     const live = session;
+    // Whether the editor this attach creates said it was ready: a failure after that leaves the draft as it is.
+    let ready = false;
+    let settings;
+    try {
+      settings = {
+        ...format,
+        editorSettings: {
+          ...format.editorSettings,
+          plugins: [...format.editorSettings.plugins, 'collaborate.Collaborate', 'collaborate.CollaborateReady'],
+          config: {
+            ...format.editorSettings.config,
+            collaborate: configuration.collaborate,
+            collaborateReady: () => {
+              ready = true;
+            },
+          },
+        },
+      };
+    } catch (error) {
+      // Settings the draft's editor cannot extend: Drupal's own editor.
+      console.error(error);
+      live.editorFailed();
+      return attach.call(ckeditor5, element, format);
+    }
     if (typeof configuration.initialData === 'string') element.value = configuration.initialData;
-    const waiter = live.editorWaiters.get(configuration.collaborate.field);
-    const settings = format.editorSettings;
     // Drupal creates the editor without handing its promise back, and only logs a failure: the draft waits for the
-    // editor, its form inert, unless it is told. Drupal core calls `create` before its attach returns; a failure
-    // once this editor said it was ready leaves the draft as it is.
+    // editor, its form inert, unless it is told. Drupal core calls `create` before its attach returns.
     const classic = page.CKEditor5?.editorClassic?.ClassicEditor;
     const create = classic?.create;
     if (classic && create)
       classic.create = (...args) => {
         const created = create.apply(classic, args);
         created.catch(() => {
-          if (!waiter?.ready) live.editorFailed();
+          if (!ready) live.editorFailed();
         });
         return created;
       };
     try {
-      attach.call(ckeditor5, element, {
-        ...format,
-        editorSettings: {
-          ...settings,
-          plugins: [...settings.plugins, 'collaborate.Collaborate', 'collaborate.CollaborateReady'],
-          config: { ...settings.config, collaborate: configuration.collaborate },
-        },
-      });
+      attach.call(ckeditor5, element, settings);
     } catch (error) {
       // The editor the draft waits for never comes: the form is released, the field left as Drupal left it.
       live.editorFailed();
@@ -154,12 +167,8 @@ if (editors?.ckeditor5 && shared()) {
    */
   ckeditor5.attach = (element, format) => {
     if (!element.form?.dataset.collaborate) return attach.call(ckeditor5, element, format);
-    const token = {};
-    latest.set(element, token);
     // Drupal's own failure, said as Drupal would.
-    attachShared(element, format, () => latest.get(element) === token && element.isConnected).catch((error) =>
-      console.error(error)
-    );
+    attachShared(element, format).catch((error) => console.error(error));
     return true;
   };
   loadPlugins().catch(() => {});

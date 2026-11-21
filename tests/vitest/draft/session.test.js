@@ -544,6 +544,9 @@ test('awaits the editor of an entry added again under a key whose editor was det
   const detached = session.editorWaiter('Record[body]');
   session.detachField('Record[body]');
   expect(detached.ready).toBe(true);
+  // The removed entry's editor says it is ready late: it answers for no editor to come.
+  session.editorReady('Record[body]');
+  expect(session.editorWaiters.has('Record[body]')).toBe(false);
   expect(session.editorWaiter('Record[body]').ready).toBe(false);
 });
 

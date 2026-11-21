@@ -471,7 +471,8 @@ export class DraftSession {
 
   /** @param {string} name */
   editorReady(name) {
-    this.editorWaiter(this.fieldKey(name)).resolve();
+    // A removed entry's editor may say so late: its key awaits whichever editor comes next.
+    this.editorWaiters.get(this.fieldKey(name))?.resolve();
   }
 
   // Without every editor the draft cannot be followed; keep the ordinary submission path.

@@ -25,19 +25,18 @@ const routes = {
   },
 };
 
-/** An editor of the application: a browser context signed in as `username`. */
 /**
- * The page a navigation leads to, loaded: its document committed, a redirect's target included, then its load
- * event. The page before it may still be loading, and its own load would pass for the next one's.
+ * The page a navigation leads to, loaded: a new document, a redirect's target included, then its load event. Only a
+ * new document fires DOMContentLoaded (the current one fired it before anything was clicked), and the page before
+ * may still be loading, its own load passing for the next one's.
  *
  * @param {import('@playwright/test').Page} page
  */
 export function nextPage(page) {
-  return page
-    .waitForEvent('framenavigated', (frame) => frame === page.mainFrame())
-    .then(() => page.waitForLoadState('load'));
+  return page.waitForEvent('domcontentloaded').then(() => page.waitForLoadState('load'));
 }
 
+/** An editor of the application: a browser context signed in as `username`. */
 export class Editor {
   constructor(context, page, routes, project) {
     this.context = context;

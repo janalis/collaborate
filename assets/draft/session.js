@@ -402,7 +402,7 @@ export class DraftSession {
           }
           // An editor that never came stopped the draft meanwhile: the Save posts the form as usual.
           if (this.ordinary) {
-            if (!this.post(event.submitter)) console.error('Collaborate: the form could not be saved; save again.');
+            this.post(event.submitter);
             return;
           }
           if (failure) throw failure;
@@ -426,7 +426,7 @@ export class DraftSession {
           };
           window.addEventListener('submit', posted);
           try {
-            if (!this.post(event.submitter)) this.setStatus('failed');
+            this.post(event.submitter);
           } finally {
             window.removeEventListener('submit', posted);
             this.submitting = false;
@@ -461,8 +461,8 @@ export class DraftSession {
    * @param {string} value
    */
   hidden(name, value) {
-    // The hidden inputs this session added, or the host's of the same name.
-    let control = /** @type {HTMLInputElement | null} */ (this.form.elements.namedItem(name));
+    // The hidden inputs this session added: a host's own control of the name, or the id, is not the session's.
+    let control = this.added.find((added) => added.name === name);
     if (!control) {
       control = document.createElement('input');
       control.type = 'hidden';
@@ -473,26 +473,25 @@ export class DraftSession {
     control.value = value;
   }
 
-  // The save fields this page added: a form left to ordinary saving posts none of them.
+  // The save fields this page added: a form left to ordinary saving posts none of them. (A draft stopped otherwise
+  // keeps them: a host posting the form later posts the revision it was saved at.)
   forgetSaveFields() {
     for (const control of this.added.splice(0)) control.remove();
   }
 
   /**
    * Posts the form with the button the user pressed. One gone from the form meanwhile (its actions rendered again)
-   * posts nothing, the browser refusing it: another button would run another action.
+   * posts nothing, the browser refusing it: another button would run another action. The page stays as it was, its
+   * Save there to press again.
    *
    * @param {HTMLElement | null} [submitter]
-   * @returns {boolean} whether the form was submitted
    */
   post(submitter) {
     try {
       if (submitter) this.form.requestSubmit(submitter);
       else this.form.requestSubmit();
-      return true;
     } catch (error) {
-      console.error(error);
-      return false;
+      console.error('Collaborate: the form could not be saved; save again.', error);
     }
   }
 
@@ -649,8 +648,10 @@ export class DraftSession {
   // Without every editor the draft cannot be followed; keep the ordinary submission path.
   editorFailed() {
     if (this.stopped) return;
-    // Its form is edited and saved as usual from now on: a Save under way posts it so.
+    // Its form is edited and saved as usual from now on, without the save fields a Save of this page added: a Save
+    // under way posts it so.
     this.ordinary = true;
+    this.forgetSaveFields();
     this.setStatus('unavailable');
     this.stop();
   }
@@ -1492,7 +1493,6 @@ export class DraftSession {
     this.releaseControls();
     this.stopped = true;
     this.forgetGraces();
-    this.forgetSaveFields();
     this.suspend();
     this.form.removeEventListener('submit', /** @type {(event: SubmitEvent) => Promise<void>} */ (this.onSubmit), true);
     this.form.removeEventListener('submit', this.earlySubmit, true);

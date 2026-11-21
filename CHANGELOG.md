@@ -63,9 +63,10 @@ versions follow [Semantic Versioning](https://semver.org/).
   with its format, its summary in it, and another editor taking a field the
   draft follows stops the draft. A save waits for editors at least as long as
   they are given to come; one under way as the draft stops for an editor posts
-  the form as usual, and a stopped draft leaves none of the save fields an
+  the form as usual, and a draft stopped so leaves none of the save fields an
   earlier Save added. A Save whose button left the form meanwhile (its actions
-  rendered again) posts nothing and says so, rather than run another button.
+  rendered again) posts nothing and says so in the console, rather than run
+  another button: pressing Save again posts it.
 - Drupal: a list set in a higher layer of the options (the form, then
   settings.php) replaces the one below whole: an `advanced` list no longer
   shows through a shorter one. So do the maps the bundle replaces whole from

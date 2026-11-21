@@ -701,24 +701,27 @@ test('a rich field whose editor nobody asks for stops the draft in time, unless 
   vi.useRealTimers();
 });
 
-test('a field followed as text that gets an editor stops the draft: what is typed there would not be shared', async () => {
-  const { session, form } = fixture('<input name="Record[name]">', { 'Record[name]': { type: 'text', initial: '' } });
+test('a field followed as text gets no editor handle, and the host can ask whether the draft follows a field', async () => {
+  const { session } = fixture('<input name="Record[name]">', { 'Record[name]': { type: 'text', initial: '' } });
   await session.ready;
-  expect(await session.editorConfiguration({ name: 'Unknown' })).toEqual({});
-  expect(session.stopped).toBeFalsy();
   expect(await session.editorConfiguration({ name: 'Record[name]' })).toEqual({});
-  expect(session.stopped).toBe(true);
-  expect(form.dataset.collaborateState).toBe('unavailable');
+  expect(session.stopped).toBeFalsy();
+  expect(await session.follows({ name: 'Record[name]' })).toBe(true);
+  expect(await session.follows({ name: 'Unknown' })).toBe(false);
+  const refused = fixture(undefined, undefined, { failJoin: true, joinStatus: 403 });
+  await expect(refused.session.ready).rejects.toThrow();
+  expect(await refused.session.follows({ name: 'Record[name]' })).toBe(false);
 });
 
 test('a save awaits editors at least as long as they are given to come', async () => {
+  vi.useFakeTimers();
   const { session } = fixture(
     '<textarea name="Record[body]"></textarea>',
     { 'Record[body]': { type: 'rich', initial: 'Body' } },
     { configuration: { config: { nextEditorGrace: 30_000 } } }
   );
+  await vi.advanceTimersByTimeAsync(0);
   await session.ready;
-  vi.useFakeTimers();
   const flushed = session.flush().catch((error) => error);
   await vi.advanceTimersByTimeAsync(15_000);
   (await session.editorConfiguration({ name: 'Record[body]' })).collaborate.ready();
@@ -1850,15 +1853,35 @@ test('allows an explicit discard while synchronization is stopped and handles a 
   expect(fetcher.mock.calls.some(([url]) => url === '/reconcile')).toBe(true);
 });
 
-test('waits for rich editor initialization and rejects an editor that never becomes ready', async () => {
+test('waits for rich editor initialization, no more once the draft stops for an editor that never comes', async () => {
   vi.useFakeTimers();
   const { session } = fixture('<textarea name="Record[body]"></textarea>', {
     'Record[body]': { type: 'rich', initial: 'Body' },
   });
   await session.ready;
   const pending = session.flush();
+  const rejected = expect(pending).rejects.toThrow('Collaborate draft stopped.');
+  await vi.advanceTimersByTimeAsync(10_000);
+  await rejected;
+  expect(session.stopped).toBe(true);
+});
+
+test('a save gives up on editors that take longer than they are given', async () => {
+  vi.useFakeTimers();
+  const { session } = fixture(
+    '<textarea name="Record[body]"></textarea>',
+    { 'Record[body]': { type: 'rich', initial: 'Body' } },
+    { configuration: { config: { nextEditorGrace: 30_000 } } }
+  );
+  await vi.advanceTimersByTimeAsync(0);
+  await session.ready;
+  // The editor is asked for again and again: its own time keeps starting over, the save's does not.
+  const pending = session.flush();
   const rejected = expect(pending).rejects.toThrow('editors are not ready');
-  await vi.advanceTimersByTimeAsync(15_000);
+  for (let elapsed = 0; elapsed < 30_000; elapsed += 10_000) {
+    await session.editorConfiguration({ name: 'Record[body]' });
+    await vi.advanceTimersByTimeAsync(10_000);
+  }
   await rejected;
 });
 

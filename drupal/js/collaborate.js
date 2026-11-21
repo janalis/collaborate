@@ -67,6 +67,21 @@ const loadPlugins = () => {
   return plugins;
 };
 
+/**
+ * Stops a draft that follows a field Drupal hides behind an editor it cannot follow: what is typed there would not
+ * be shared, and a peer's edits would be lost.
+ *
+ * @param {import('@janalis/collaborate/draft/session.js').DraftSession} session
+ * @param {HTMLTextAreaElement} element
+ */
+const stopFor = (session, element) =>
+  session.follows(element).then(
+    (followed) => {
+      if (followed) session.editorFailed();
+    },
+    (error) => console.error(error)
+  );
+
 // Drupal attaches its editors once the page is parsed, through `Drupal.editors.ckeditor5`: an editor of a shared
 // field is created once the draft is joined, on its content, with the bundle's plugin, which tells the draft once
 // it is ready. The draft's handle of each editor settles that editor's wait only: one Drupal replaced, or whose
@@ -164,6 +179,9 @@ if (editors?.ckeditor5 && shared()) {
     // Replaced, detached or gone meanwhile: nothing waits for an editor this attach never creates.
     if (!current()) return giveBack(element, mine);
     const handle = configuration.collaborate;
+    // A field the draft follows as text, hidden behind Drupal's editor (its format switched to CKEditor 5): the draft
+    // cannot follow it there.
+    if (session && !session.stopped && !handle) stopFor(session, element);
     // Another field's editor may have failed meanwhile.
     if (!session || session.stopped || !handle) return attach.call(ckeditor5, element, format);
     if (!Array.isArray(format?.editorSettings?.plugins)) {
@@ -256,13 +274,15 @@ if (editors && shared()) {
      */
     editor.attach = (element, format) => {
       if (element.form?.dataset.collaborate)
-        loadDrafts().then(
-          ({ sessionFor }) =>
-            sessionFor(element)
-              ?.editorConfiguration(element)
-              .then((configuration) => configuration.collaborate?.failed()),
-          () => {}
-        );
+        loadDrafts()
+          .then(({ sessionFor }) => {
+            const session = sessionFor(element);
+            if (session && !session.stopped) stopFor(session, element);
+          })
+          // The drafts' own failure is said once already.
+          .catch((error) => {
+            if (!said.has(/** @type {object} */ (error))) console.error(error);
+          });
       return attachOther.call(editor, element, format);
     };
   }

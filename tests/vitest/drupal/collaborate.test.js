@@ -8,6 +8,8 @@ function fakeSession(overrides = {}) {
     initialized: true,
     stopped: false,
     editorConfiguration: vi.fn(async () => ({})),
+    // Whether the draft follows a field: none, unless a test says.
+    follows: vi.fn(async () => false),
     // As the session does: it stops following the draft.
     editorFailed: vi.fn(() => {
       session.stopped = true;
@@ -387,22 +389,47 @@ test("a creation Drupal began is the editor's outcome, whatever Drupal's attach 
 test("Drupal's other editors stop the draft on a field it follows, which it cannot follow there", async () => {
   const own = vi.fn(() => 'attached');
   const codemirror = { attach: own };
-  const session = await load({ session: followed(), others: { codemirror, broken: null } });
+  const session = await load({ session: fakeSession(), others: { codemirror, broken: null } });
+  // A field the draft does not follow is the editor's alone.
+  globalThis.Drupal.editors.codemirror.attach(body(), {});
+  await vi.waitFor(() => expect(session.follows).toHaveBeenCalledWith(body()));
+  expect(session.editorFailed).not.toHaveBeenCalled();
+  // One it follows stops it.
+  session.follows.mockResolvedValue(true);
   expect(globalThis.Drupal.editors.codemirror.attach(body(), {})).toBe('attached');
   expect(own).toHaveBeenCalledWith(body(), {});
-  await vi.waitFor(() => expect(session.handles[0].failed).toHaveBeenCalledOnce());
-  // A field outside the shared form is the editor's alone.
+  await vi.waitFor(() => expect(session.editorFailed).toHaveBeenCalledOnce());
+  // A stopped draft, or a field outside the shared form, is asked nothing more.
+  globalThis.Drupal.editors.codemirror.attach(body(), {});
   const alone = /** @type {HTMLTextAreaElement} */ (document.querySelector('[name="alone"]'));
   globalThis.Drupal.editors.codemirror.attach(alone, {});
   await new Promise((resolve) => setTimeout(resolve, 0));
-  expect(session.editorConfiguration).toHaveBeenCalledOnce();
+  expect(session.follows).toHaveBeenCalledTimes(2);
+  // A failure to read the form is said.
+  session.stopped = false;
+  session.follows.mockRejectedValueOnce(new Error('No join.'));
+  globalThis.Drupal.editors.codemirror.attach(body(), {});
+  await vi.waitFor(() => expect(errors).toHaveBeenCalledWith(new Error('No join.')));
+  const { sessionFor } = await import('@janalis/collaborate/draft/session.js');
+  sessionFor.mockImplementationOnce(() => {
+    throw new Error('No session.');
+  });
+  globalThis.Drupal.editors.codemirror.attach(body(), {});
+  await vi.waitFor(() => expect(errors).toHaveBeenCalledWith(new Error('No session.')));
   // Without the drafts, nothing to stop.
+  errors.mockClear();
   vi.resetModules();
   await load({ drafts: false, others: { codemirror: { attach: own } } });
   globalThis.Drupal.editors.codemirror.attach(body(), {});
   await vi.waitFor(() =>
     expect(errors).toHaveBeenCalledWith('Collaborate: the shared draft could not load.', expect.any(Error))
   );
+  // Said once.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(
+    errors.mock.calls.filter(([message]) => message === 'Collaborate: the shared draft could not load.')
+  ).toHaveLength(1);
+  expect(errors.mock.calls.filter(([message]) => message instanceof Error)).toHaveLength(0);
   // A form without a session either.
   vi.resetModules();
   await load({ session: null, others: { codemirror: { attach: own } } });
@@ -592,6 +619,14 @@ test('a field the draft does not follow takes Drupal’s editor at once, or once
   globalThis.Drupal.editors.ckeditor5.attach(body(), format);
   await vi.waitFor(() => expect(attach).toHaveBeenCalledWith(body(), format));
   expect(session.editorFailed).toHaveBeenCalledOnce();
+});
+
+test('CKEditor 5 on a field the draft follows as text stops it: its format switched, what is typed there is lost', async () => {
+  build();
+  const session = await load({ session: fakeSession({ follows: vi.fn(async () => true) }) });
+  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledWith(body(), format));
+  await vi.waitFor(() => expect(session.editorFailed).toHaveBeenCalledOnce());
 });
 
 test("an editor Drupal fails to create as it attaches tells its handle; Drupal's class is watched once", async () => {

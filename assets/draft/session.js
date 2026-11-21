@@ -174,6 +174,10 @@ export class DraftSession {
     this.abort = new AbortController();
     /** @type {(() => void)[]} */
     this.removers = [];
+    // Settled once the draft stops: a save awaiting editors then waits no more.
+    const end = Promise.withResolvers();
+    this.end = end.promise;
+    this.ended = () => end.resolve(undefined);
     /** @type {WeakSet<Element>} */
     this.bound = new WeakSet();
     // Set by the modules sharing the session: a received value being written to a control (fields.js and the
@@ -458,14 +462,25 @@ export class DraftSession {
     }
     const name = this.fieldKey(field.name);
     const state = this.ensureField(name);
-    if (!state) return {};
-    // A field the draft follows as text gets an editor it cannot follow (a Drupal format switched to CKEditor 5):
-    // what is typed there would not be shared, and a peer's edits would be lost, so the draft stops.
-    if (state.type !== 'rich') {
-      this.editorFailed();
-      return {};
-    }
+    // A field the draft does not follow, or follows as text, gets no editor handle: the editor starts from the
+    // textarea (see follows() for a host that would hide a followed field behind one).
+    if (state?.type !== 'rich') return {};
     return { initialData: state.initial, collaborate: this.editorHandle(name) };
+  }
+
+  /**
+   * Whether the draft follows a field, once joined, without taking it on: a host hiding a followed field behind an
+   * editor the draft cannot follow (one on a field followed as text, another than CKEditor 5) stops the draft.
+   *
+   * @param {{ name: string }} field
+   */
+  async follows(field) {
+    try {
+      await this.ready;
+    } catch {
+      return false;
+    }
+    return Boolean(this.state?.fields[this.fieldKey(field.name)]);
   }
 
   /**
@@ -590,9 +605,11 @@ export class DraftSession {
     this.releaseControls();
   }
 
-  // A stopped draft awaits no editor: the time it gave each to come runs out on nothing.
+  // A stopped draft awaits no editor: the time it gave each to come runs out on nothing, and a save awaiting them
+  // waits no more.
   forgetGraces() {
     for (const waiter of this.editorWaiters.values()) clearTimeout(waiter.grace);
+    this.ended();
   }
 
   releaseControls() {
@@ -1221,6 +1238,7 @@ export class DraftSession {
             // At least as long as an editor is given to come.
             const wait = Math.max(15_000, this.setting('nextEditorGrace', 10_000));
             editorTimeout = setTimeout(() => reject(new Error('Collaborate editors are not ready.')), wait);
+            this.end.then(() => reject(new Error('Collaborate draft stopped.')));
           }),
         ]);
       } finally {

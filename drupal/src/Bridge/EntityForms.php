@@ -441,11 +441,14 @@ final class EntityForms
             $type = \is_string($child['#type'] ?? null) ? $child['#type'] : null;
             $name = \is_string($child['#name'] ?? null) ? $child['#name'] : null;
             if ('text_format' === $type) {
-                $fields += $this->fields(
-                    $child,
-                    \in_array('text_format', $this->rich, true) && self::editor($child),
-                    $fresh,
-                );
+                $editor = self::editor($child);
+                // A format edited in an editor the draft does not follow (another than CKEditor 5, or CKEditor 5 with
+                // rich text not shared) hides the field's textarea: what is typed there would not be shared, and a
+                // peer's edits would be lost, so the field stays out of the draft.
+                if (null !== $editor && ('ckeditor5' !== $editor || !\in_array('text_format', $this->rich, true))) {
+                    continue;
+                }
+                $fields += $this->fields($child, null !== $editor, $fresh);
                 continue;
             }
             if (null !== $name && null !== $type && !$this->excluded($name)) {
@@ -669,21 +672,22 @@ final class EntityForms
         return \in_array((string) strtok($name, '['), self::INTERNAL, true) || \in_array($base, $this->sensitive, true);
     }
 
-    /** Whether a formatted text's format is edited with CKEditor 5. */
-    private static function editor(array $element): bool
+    /** The editor a formatted text's format is edited with (`ckeditor5`), or null for a plain textarea. */
+    private static function editor(array $element): ?string
     {
         $format = $element['format']['format']['#default_value'] ?? $element['#format'] ?? null;
         if (!\is_string($format)) {
-            return false;
+            return null;
         }
         $entities = \Drupal::entityTypeManager();
         // A site without the Editor module edits every format in a plain textarea.
         if (!$entities->hasDefinition('editor')) {
-            return false;
+            return null;
         }
-        $editor = $entities->getStorage('editor')->load($format);
+        // @mago-expect analysis:mixed-assignment a config entity's value: checked right below
+        $editor = $entities->getStorage('editor')->load($format)?->get('editor');
 
-        return null !== $editor && 'ckeditor5' === $editor->get('editor');
+        return \is_string($editor) ? $editor : null;
     }
 
     /** Marks every item of the form, the element a peer's field mark outlines. */

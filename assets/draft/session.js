@@ -511,8 +511,9 @@ export class DraftSession {
       return {};
     }
     const name = this.fieldKey(field.name);
+    if (this.stopped) return {};
     const state = this.ensureField(name);
-    if (!state || this.stopped) return {};
+    if (!state) return {};
     // A field the draft follows as text gets an editor it cannot follow (a Drupal format switched to CKEditor 5):
     // what is typed there would not be shared, and a peer's edits would be lost, so the draft stops.
     if (state.type !== 'rich') {

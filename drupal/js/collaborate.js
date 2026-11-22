@@ -100,26 +100,31 @@ const stopFor = (session, element) =>
 const hooked = new WeakSet();
 /** @type {WeakSet<object>} */
 const unhookable = new WeakSet();
+/** @param {unknown} target */
+const watched = (target) =>
+  (typeof target === 'object' || typeof target === 'function') &&
+  target !== null &&
+  (hooked.has(target) || unhookable.has(target));
 /**
- * Hooks a target once, or says once that it cannot.
+ * Hooks a target not watched yet, or says once that it cannot.
  *
  * @param {object} target
+ * @param {string} label what the target is, in what is said
  * @param {() => void} install
  */
-const hookOnce = (target, install) => {
-  if (hooked.has(target) || unhookable.has(target)) return;
+const hookOnce = (target, label, install) => {
   try {
     install();
     hooked.add(target);
   } catch (error) {
     unhookable.add(target);
-    console.error(error);
+    say(`Collaborate: ${label} cannot be watched; a field it takes stops the draft.`, error);
   }
 };
 const watchCkeditor5 = () => {
   const ckeditor5 = page.Drupal?.editors?.ckeditor5;
   // On every page: a shared form may come later (a dialog's), and each field's attach asks whether its form is shared.
-  if (!ckeditor5 || hooked.has(ckeditor5) || unhookable.has(ckeditor5)) return;
+  if (typeof ckeditor5 !== 'object' || ckeditor5 === null || watched(ckeditor5)) return;
   const { attach, detach } = ckeditor5;
   /** @typedef {import('@janalis/collaborate/draft/session.js').EditorHandle} EditorHandle */
   /**
@@ -287,11 +292,17 @@ const watchCkeditor5 = () => {
     }
     return detach.call(ckeditor5, element, format, trigger);
   };
-  hookOnce(ckeditor5, () => {
-    ckeditor5.attach = attaching;
+  hookOnce(ckeditor5, "Drupal's CKEditor 5", () => {
     ckeditor5.detach = detaching;
+    try {
+      ckeditor5.attach = attaching;
+    } catch (error) {
+      // Half hooked is not hooked: its detach is Drupal's again.
+      ckeditor5.detach = detach;
+      throw error;
+    }
   });
-  if (hooked.has(ckeditor5) && document.querySelector('form[data-collaborate]')) loadPlugins().catch(() => {});
+  if (hooked.has(ckeditor5) && shared()) loadPlugins().catch(() => {});
 };
 
 // Drupal's other editors (CodeMirror, a contrib one) hide a field behind one the draft cannot follow: what is typed
@@ -313,7 +324,8 @@ const watchOthers = () => {
   const drupal = page.Drupal;
   if (!drupal) return;
   const editorAttach = drupal.editorAttach;
-  if (typeof editorAttach === 'function') {
+  // The watcher only is remembered: Drupal's dispatcher put back is watched again.
+  if (typeof editorAttach === 'function' && !watched(editorAttach)) {
     // Drupal attaches every editor through it: one whose library came later (a dialog's) is watched before it is
     // attached, Drupal's editor behavior running before the module's.
     /**
@@ -322,23 +334,25 @@ const watchOthers = () => {
      */
     const watcher = (element, format) => {
       const editors = /** @type {Record<string, object | undefined>} */ (drupal.editors ?? {});
-      const name = String(format?.editor);
-      if (!hooked.has(/** @type {object} */ (editors[name]))) watchEditors();
-      const editor = editors[name];
+      const name = format?.editor;
+      if (typeof name === 'string' && !watched(editors[name])) watchEditors();
       // An editor the module could not hook takes a field it cannot follow.
-      if (editor && !hooked.has(editor)) otherEditor(element);
+      if (typeof name === 'string' && unhookable.has(/** @type {object} */ (editors[name]))) otherEditor(element);
       return editorAttach.call(drupal, element, format);
     };
-    hookOnce(editorAttach, () => {
+    try {
       drupal.editorAttach = watcher;
       hooked.add(watcher);
-    });
+    } catch (error) {
+      unhookable.add(editorAttach);
+      say("Collaborate: Drupal's editor dispatcher cannot be watched.", error);
+    }
   }
   // Each editor tells the draft, through the dispatcher or called directly.
   for (const [name, editor] of Object.entries(drupal.editors ?? {})) {
-    if (name === 'ckeditor5' || typeof editor?.attach !== 'function') continue;
+    if (name === 'ckeditor5' || typeof editor?.attach !== 'function' || watched(editor)) continue;
     const attachOther = editor.attach;
-    hookOnce(editor, () => {
+    hookOnce(editor, `Drupal's ${name} editor`, () => {
       /**
        * @param {HTMLTextAreaElement} element
        * @param {any} format
@@ -351,8 +365,14 @@ const watchOthers = () => {
   }
 };
 const watchEditors = () => {
-  watchCkeditor5();
-  watchOthers();
+  // Whatever Drupal's globals turn out to be, Drupal's own work goes on.
+  for (const watch of [watchCkeditor5, watchOthers]) {
+    try {
+      watch();
+    } catch (error) {
+      say("Collaborate: Drupal's editors cannot be watched.", error);
+    }
+  }
 };
 watchEditors();
 
@@ -417,6 +437,12 @@ if (page.Drupal) {
         context.closest('form[data-collaborate]') ?? context.querySelector('form[data-collaborate]')
       );
       if (!form) return;
+      // A form with formatted text, come in a dialog's, loads the bundle's plugin beside its draft.
+      if (
+        hooked.has(/** @type {object} */ (page.Drupal?.editors?.ckeditor5)) &&
+        form.querySelector('[data-editor-for]')
+      )
+        loadPlugins().catch(() => {});
       loadDrafts().then(
         ({ sessionFor }) => {
           const session = sessionFor({ form });

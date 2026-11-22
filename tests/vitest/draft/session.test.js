@@ -2110,6 +2110,7 @@ test('an editor asked for again and again, none ever ready, stops the draft: a s
   vi.useFakeTimers();
   const { session, form } = fixture('<textarea name="Record[body]"></textarea>', {
     'Record[body]': { type: 'rich', initial: 'Body' },
+    'Record[items][__name__][title]': { type: 'text', initial: '' },
   });
   await vi.advanceTimersByTimeAsync(0);
   await session.ready;
@@ -2123,7 +2124,10 @@ test('an editor asked for again and again, none ever ready, stops the draft: a s
   expect(session.stopped).toBe(true);
   expect(form.dataset.collaborateState).toBe('unavailable');
   await rejected;
-  // A stopped draft takes on no editor more.
+  // A stopped draft takes on no editor more, nor any field.
+  const fields = { ...session.state.fields };
+  expect(await session.editorConfiguration({ name: 'Record[items][n9][title]' })).toEqual({});
+  expect(session.state.fields).toEqual(fields);
   const waiters = new Map(session.editorWaiters);
   expect(await session.editorConfiguration({ name: 'Record[body]' })).toEqual({});
   expect(session.editorWaiters).toEqual(waiters);

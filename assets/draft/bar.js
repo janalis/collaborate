@@ -9,7 +9,7 @@ import Modal from 'bootstrap/js/src/modal.js';
  * whether Discard can succeed from it. An action a state does not offer is hidden, not just disabled: the only
  * button of a bar saying "unsaved changes" must never be the one that erases them.
  */
-/** @type {Record<string, { variant: string, icon: string | null, announce: boolean, save: boolean, discard: boolean }>} */
+/** @type {Record<string, { variant: string, icon: string | null, announce: boolean, save: boolean, discard: boolean, message?: string }>} */
 export const STATES = {
   connecting: { variant: 'secondary', icon: null, announce: true, save: false, discard: false },
   saved: { variant: 'success', icon: 'fa-circle-check', announce: true, save: false, discard: false },
@@ -22,7 +22,14 @@ export const STATES = {
   created: { variant: 'success', icon: 'fa-circle-check', announce: true, save: false, discard: false },
   failed: { variant: 'danger', icon: 'fa-triangle-exclamation', announce: true, save: false, discard: false },
   notSaved: { variant: 'warning', icon: 'fa-triangle-exclamation', announce: true, save: true, discard: true },
-  notPosted: { variant: 'warning', icon: 'fa-triangle-exclamation', announce: true, save: true, discard: false },
+  notPosted: {
+    variant: 'warning',
+    icon: 'fa-triangle-exclamation',
+    announce: true,
+    save: true,
+    discard: false,
+    message: 'notSaved',
+  },
   reloading: { variant: 'secondary', icon: 'fa-rotate', announce: true, save: false, discard: false },
   full: { variant: 'danger', icon: 'fa-database', announce: true, save: false, discard: true },
   denied: { variant: 'danger', icon: 'fa-lock', announce: true, save: false, discard: false },

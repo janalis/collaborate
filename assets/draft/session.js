@@ -2,7 +2,7 @@ import { bridge } from '../bridge.js';
 import { hasPendingUpload } from '../ckeditor5/source.js';
 import { backgroundFetch, HttpError, isAccepted, isDenied, postJson, statusOf } from '../http.js';
 import { hubFor } from '../hub.js';
-import { CollaborateBar, confirmAction } from './bar.js';
+import { CollaborateBar, confirmAction, STATES } from './bar.js';
 import { initializeCollections } from './collections.js';
 import { renderConflicts } from './conflicts.js';
 import { initializeText, initializeValue, valueAdapter } from './fields.js';
@@ -279,6 +279,8 @@ export class DraftSession {
    * @param {string | null} [name]
    */
   setStatus(key, name = null) {
+    // A draft back on its feet says the next failure of its network again.
+    if (key === 'saved' || key === 'draft') this.said.clear();
     this.form.dataset.collaborateState = key;
     this.bar.setState(key, this.message(key, name));
   }
@@ -290,8 +292,8 @@ export class DraftSession {
   message(key, name = null) {
     const messages = this.configuration.messages;
     if (name && messages[`${key}By`]) return messages[`${key}By`].replace('%name%', name);
-    // A Save the stopped draft could not post says what any Save that could not post says.
-    const text = key === 'notPosted' ? 'notSaved' : key;
+    // A state may say another's message (a Save the stopped draft could not post says any such Save's).
+    const text = STATES[key]?.message ?? key;
     return messages[text] || text;
   }
 
@@ -458,8 +460,12 @@ export class DraftSession {
     // A form that can save has joined: its conflicts are known.
     if (Object.keys(/** @type {Record<string, unknown>} */ (this.conflicts)).length) {
       this.setStatus('conflict');
-      this.conflictPanel.scrollIntoView?.({ block: 'nearest' });
-      this.conflictPanel.querySelector('h2')?.focus();
+      try {
+        this.conflictPanel.scrollIntoView?.({ block: 'nearest' });
+        this.conflictPanel.querySelector('h2')?.focus();
+      } catch {
+        // The review stays where it is: the bar says there are conflicts.
+      }
       return;
     }
     try {
@@ -1030,12 +1036,12 @@ export class DraftSession {
     if (this.stopped || !this.initialized) return false;
     if (this.configuration.grant !== grant) return true;
     // The request it failed may be the replay a pull waits for: the retry, or the next replay, reads the draft.
-    // A refresh that stopped the draft (a sign-in page, a form no longer shared) renews nothing; one the network
-    // failed is the network's failure, the request said offline and retried.
+    // A refresh that fails renews nothing: a sign-in on another origin fails as the network would, and the draft
+    // stops as denied rather than retrying for good.
     this.renewal ??= this.refreshRecord(false)
       .then(
         () => true,
-        (error) => (this.stopped ? false : Promise.reject(error))
+        () => false
       )
       .finally(() => {
         /** @type {Promise<boolean> | null} */
@@ -1162,10 +1168,11 @@ export class DraftSession {
     }
     window.onbeforeunload = null;
     // Stopped meanwhile, its requests aborted, and said: a page that stays (its own prompt answered by staying)
-    // tells its user to reload it, nothing of the draft it left saying otherwise. Its controls stay as they were and
-    // its Save posts nothing: the form shows a draft the reload replaces.
-    this.halt('reloading', false);
-    this.abort.abort();
+    // tells its user to reload it, nothing of the draft it left saying otherwise. Its form, no longer the draft's,
+    // saves the ordinary way should its user choose to, without the save fields of the draft it left.
+    this.stop();
+    this.forgetSaveFields();
+    this.setStatus('reloading');
     location.reload();
   }
 
@@ -1184,6 +1191,10 @@ export class DraftSession {
     }
     // Said by the reload it announced: a page that stayed instead, opened again later, says nothing stale.
     if (typeof notice?.at === 'number' && Date.now() - notice.at > NOTICE_AGE) return;
+    const navigation = /** @type {PerformanceNavigationTiming | undefined} */ (
+      performance.getEntriesByType?.('navigation')[0]
+    );
+    if (navigation && navigation.type !== 'reload') return;
     if (typeof notice?.key === 'string' && this.configuration.messages[notice.key])
       this.bar.notice(this.message(notice.key, typeof notice.name === 'string' ? notice.name : null));
   }

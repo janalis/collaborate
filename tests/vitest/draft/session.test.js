@@ -958,21 +958,19 @@ test('a Save failing on the page itself says to save again; one the network fail
 test('a draft reloading its page says so: a page that stays tells its user to reload it', async () => {
   const { session, form } = fixture();
   await session.ready;
+  // A Save added the draft's save fields, then was held back (the browser's validation, say).
+  session.hidden('_collaborate_grant', 'grant');
   session.rejoin();
   expect(form.dataset.collaborateState).toBe('reloading');
-  // Stopped: nothing of the draft it left says otherwise, its requests aborted. Its Save posts nothing, its save
-  // fields neither: the form shows a draft the reload replaces.
+  // Stopped: nothing of the draft it left says otherwise, its requests aborted. A Save its user chooses posts the
+  // form the ordinary way, without the draft's save fields.
   expect(session.stopped).toBe(true);
   expect(session.live).toBe(false);
   expect(session.abort.signal.aborted).toBe(true);
-  const native = vi.fn();
-  form.addEventListener('submit', native);
+  expect(form.querySelector('input[name="_collaborate_grant"]')).toBeNull();
   const event = new SubmitEvent('submit', { cancelable: true });
   form.dispatchEvent(event);
-  expect(event.defaultPrevented).toBe(true);
-  expect(native).not.toHaveBeenCalled();
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  expect(form.dataset.collaborateState).toBe('reloading');
+  expect(event.defaultPrevented).toBe(false);
 });
 
 test("a conflict's review that throws as it is brought into view is still a conflict, not a Save to press again", async () => {
@@ -984,36 +982,33 @@ test("a conflict's review that throws as it is brought into view is still a conf
   vi.spyOn(session.conflictPanel, 'querySelector').mockImplementation(() => {
     throw new Error('Replaced.');
   });
-  const errors = [];
-  const handler = (/** @type {PromiseRejectionEvent} */ event) => {
-    errors.push(event.reason);
-    event.preventDefault?.();
-  };
-  process.on('unhandledRejection', handler);
   form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
-  await new Promise((resolve) => setTimeout(resolve, 10));
-  process.off('unhandledRejection', handler);
-  expect(form.dataset.collaborateState).toBe('conflict');
+  await vi.waitFor(() => expect(form.dataset.collaborateState).toBe('conflict'));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(session.saving).toBe(false);
 });
 
-test("a grant renewal the network failed is the network's failure; the network failing again is said once", async () => {
+test('a grant renewal that fails stops the draft as denied; a failure of the network is said once until the draft is back', async () => {
   const { session, form, fetcher } = fixture();
   await session.ready;
   const said = vi.spyOn(console, 'error').mockImplementation(() => {});
+  session.failed(new TypeError('Failed to fetch'));
+  session.failed(new TypeError('Failed to fetch'));
+  expect(form.dataset.collaborateState).toBe('offline');
+  const logged = () => said.mock.calls.filter(([prefix]) => prefix === 'Collaborate:').length;
+  expect(logged()).toBe(1);
+  session.setStatus('saved');
+  session.failed(new TypeError('Failed to fetch'));
+  expect(logged()).toBe(2);
+  // A sign-in on another origin fails as the network would: denied, not retried for good.
   const transport = fetcher.getMockImplementation();
-  // The grant expired: the server refuses it, and the refresh that would renew it is cut by the network.
   fetcher.mockImplementation(async (url, options) => {
     if (url === form.action) throw new TypeError('Failed to fetch');
     if (url === '/replay') return new Response('', { status: 403 });
     return transport(url, options);
   });
-  await expect(session.pull()).rejects.toThrow('Failed to fetch');
-  expect(session.stopped).toBeFalsy();
-  // Said offline, and in the console once however often.
-  session.failed(new TypeError('Failed to fetch'));
-  session.failed(new TypeError('Failed to fetch'));
-  expect(form.dataset.collaborateState).toBe('offline');
-  expect(said.mock.calls.filter(([prefix]) => prefix === 'Collaborate:')).toHaveLength(1);
+  await expect(session.pull()).rejects.toThrow('permission');
+  expect(form.dataset.collaborateState).toBe('denied');
 });
 
 test('a draft stopped for an editor while no Save is under way leaves none of its save fields to the next Save', async () => {
@@ -2749,10 +2744,18 @@ test('shows the notice its previous load left once, then forgets it', async () =
   await fifth.session.ready;
   expect(fifth.form.querySelector('[data-collaborate-notice]')?.textContent).toBe('Alice discarded, reloaded');
   later.mockRestore();
+  // A load that is not a reload (a link followed on a page that stayed) says nothing of it.
+  sessionStorage.setItem(fifth.session.noticeKey(), JSON.stringify({ key: 'noticeDiscarded', name: 'Bob' }));
+  const navigation = vi.spyOn(performance, 'getEntriesByType').mockReturnValue([{ type: 'navigate' }]);
+  const linked = fixture();
+  await linked.session.ready;
+  expect(linked.form.querySelector('[data-collaborate-notice]')).toBeNull();
+  navigation.mockReturnValue([{ type: 'reload' }]);
   sessionStorage.setItem(fifth.session.noticeKey(), JSON.stringify({ key: 'noticeDiscarded', name: 'Bob' }));
   const sixth = fixture();
   await sixth.session.ready;
   expect(sixth.form.querySelector('[data-collaborate-notice]')?.textContent).toBe('Bob discarded, reloaded');
+  navigation.mockRestore();
 });
 
 test('reloads without a notice where storage is unavailable or holds something else', async () => {

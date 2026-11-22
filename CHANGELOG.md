@@ -147,14 +147,19 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- A Save that cannot post (its button left the form, a failure of the page
-  itself) says in the bar to save again, instead of only in the console or as
-  "connection interrupted"; one the network failed still says offline. A
-  draft reloading its page says so, telling its user to reload a page that
-  stays.
+- A Save that cannot post (its button left the form, or the draft's save
+  fields could not be written) says in the bar to save again, instead of only
+  in the console; a failure of the server's part of a Save (the network, the
+  server) says offline as before, and one without an HTTP status is said once
+  in the console. A record refresh whose JSON the network cut says offline
+  instead of stopping the draft as denied; a grant renewal that fails, a
+  sign-in on another origin included, still stops it as denied.
+- A draft reloading its page stops and says so. A page that stays (a
+  leave-page prompt answered by staying) keeps telling its user to reload, and
+  its Save posts the form the ordinary way, without the draft's save fields.
 - The notice a draft leaves for the reload it asks for is said by that reload
-  only, within a minute: a page that stayed, opened again later, says
-  nothing stale.
+  only (a reload, within a minute): a page that stayed, opened again later,
+  says nothing stale.
 - A shared draft that stops while an editor is still awaited (access
   denied, the draft full or discarded) releases the form's controls, which
   stayed inert until the page was reloaded; one about to reload keeps them

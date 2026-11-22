@@ -508,6 +508,31 @@ test('a shared form that came after the page loaded makes a typed empty row an i
   expect(session.scanCollections).toHaveBeenCalledOnce();
 });
 
+test("a shared form that comes in a dialog has its CKEditor 5 follow the draft, Drupal's editors watched from the first", async () => {
+  build();
+  const form = document.querySelector('form');
+  form.remove();
+  const session = await load({ session: followed() });
+  document.body.prepend(form);
+  globalThis.Drupal.editors.ckeditor5.attach(body(), format);
+  await vi.waitFor(() => expect(attach).toHaveBeenCalledOnce());
+  expect(session.editorConfiguration).toHaveBeenCalledWith(body());
+  expect(attach.mock.calls[0][1].editorSettings.plugins).toContain('collaborate.Collaborate');
+});
+
+test("an editor the module cannot watch is still attached by Drupal's dispatcher", async () => {
+  const dispatch = vi.fn(() => 'attached');
+  globalThis.Drupal = undefined;
+  for (const path of ['bridges/drupal.js', 'cursors/cursors.js', 'updates.js'])
+    vi.doMock(`@janalis/collaborate/${path}`, () => ({}));
+  vi.doMock('@janalis/collaborate/draft/session.js', () => ({ sessionFor: vi.fn(() => null) }));
+  globalThis.Drupal = { behaviors: {}, editors: {}, editorAttach: dispatch };
+  await import('../../../drupal/js/collaborate.js');
+  globalThis.Drupal.editors.frozen = Object.freeze({ attach: vi.fn() });
+  expect(globalThis.Drupal.editorAttach(body(), { editor: 'frozen' })).toBe('attached');
+  expect(errors).toHaveBeenCalledWith(expect.any(TypeError));
+});
+
 test('a Drupal page without editors has none to watch', async () => {
   for (const path of ['bridges/drupal.js', 'cursors/cursors.js', 'updates.js'])
     vi.doMock(`@janalis/collaborate/${path}`, () => ({}));
@@ -918,9 +943,20 @@ test('a page without a shared form or without Drupal loads no draft', async () =
   document.body.innerHTML = '<div data-collaborate-notifications></div>';
   for (const path of ['bell.js', 'page.js', 'topics.js'])
     vi.doMock(`@janalis/collaborate/notifications/${path}`, () => ({}));
+  const imported = vi.fn();
   const session = await load();
-  expect(globalThis.Drupal.editors.ckeditor5.attach).toBe(attach);
+  vi.doMock('@janalis/collaborate/draft/session.js', () => {
+    imported();
+    return { sessionFor: vi.fn(() => session) };
+  });
+  // Its editors are watched, for a shared form that may come later: a field of no shared form is Drupal's.
+  const field = document.createElement('textarea');
+  document.body.append(field);
+  globalThis.Drupal.editors.ckeditor5.attach(field, format);
+  expect(attach).toHaveBeenCalledWith(field, format);
   globalThis.Drupal.behaviors.collaborate.attach(document.body);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(imported).not.toHaveBeenCalled();
 
   vi.resetModules();
   delete globalThis.Drupal;

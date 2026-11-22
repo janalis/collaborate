@@ -41,8 +41,14 @@ let drafts = null;
 const loadDrafts = () => {
   if (!drafts) {
     drafts = import('@janalis/collaborate/draft/session.js');
-    // Said once: every caller then goes on without the drafts.
-    drafts.catch((error) => say('Collaborate: the shared draft could not load.', error));
+    // Said once: every caller then goes on without the drafts. Loaded, they serve the typed rows of every shared form.
+    drafts.then(
+      (module) => {
+        sessions = module;
+        listen();
+      },
+      (error) => say('Collaborate: the shared draft could not load.', error)
+    );
   }
   return drafts;
 };
@@ -98,7 +104,8 @@ const hook = (target) => {
 };
 const watchCkeditor5 = () => {
   const ckeditor5 = page.Drupal?.editors?.ckeditor5;
-  if (!ckeditor5 || !shared() || !hook(ckeditor5)) return;
+  // On every page: a shared form may come later (a dialog's), and each field's attach asks whether its form is shared.
+  if (!ckeditor5 || !hook(ckeditor5)) return;
   const { attach, detach } = ckeditor5;
   /** @typedef {import('@janalis/collaborate/draft/session.js').EditorHandle} EditorHandle */
   /**
@@ -266,7 +273,7 @@ const watchCkeditor5 = () => {
     }
     return detach.call(ckeditor5, element, format, trigger);
   };
-  loadPlugins().catch(() => {});
+  if (shared()) loadPlugins().catch(() => {});
 };
 
 // Drupal's other editors (CodeMirror, a contrib one) hide a field behind one the draft cannot follow: what is typed
@@ -286,7 +293,7 @@ const otherEditor = (element) => {
 };
 const watchOthers = () => {
   const drupal = page.Drupal;
-  if (!drupal || !shared()) return;
+  if (!drupal) return;
   const editorAttach = drupal.editorAttach;
   if (typeof editorAttach === 'function' && hook(editorAttach)) {
     // Drupal attaches every editor through it: one whose library came later (a dialog's) is watched before it is
@@ -296,7 +303,12 @@ const watchOthers = () => {
      * @param {any} format
      */
     const watcher = (element, format) => {
-      watchEditors();
+      try {
+        watchEditors();
+      } catch (error) {
+        // An editor the module cannot watch is Drupal's still.
+        console.error(error);
+      }
       return editorAttach.call(drupal, element, format);
     };
     hooked.add(watcher);
@@ -364,19 +376,12 @@ const touch = (event) => {
   session.scanCollections();
   for (const restore of restores) restore();
 };
-if (shared()) {
-  loadDrafts().then(
-    (session) => {
-      sessions = session;
-    },
-    () => {}
-  );
-}
-// On every Drupal page: a shared form may come later (a dialog's), its drafts loaded by the module's behavior.
-if (page.Drupal) {
+// Listened to once the drafts are loaded (once) for a shared form, on the page at first or come later (a dialog's).
+const listen = () => {
   document.addEventListener('input', touch, true);
   document.addEventListener('change', touch, true);
-}
+};
+if (shared()) loadDrafts().catch(() => {});
 
 // Form API's AJAX ("Add another item", a widget's rebuild) replaces part of a shared form: its controls follow the
 // draft again, and its collections are scanned for their entries.
@@ -391,9 +396,8 @@ if (page.Drupal) {
       );
       if (!form) return;
       loadDrafts().then(
-        (drafts) => {
-          sessions = drafts;
-          const session = drafts.sessionFor({ form });
+        ({ sessionFor }) => {
+          const session = sessionFor({ form });
           if (!session?.initialized || session.stopped) return;
           session.initializeControls();
           document.dispatchEvent(new Event('collaborate:rows-changed'));

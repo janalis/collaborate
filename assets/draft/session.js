@@ -558,6 +558,11 @@ export class DraftSession {
     if (previous && previous !== waiter && !previous.ready) waiter.promise.then(previous.resolve);
     waiter.claimed = true;
     const current = () => this.editorWaiters.get(name) === waiter;
+    // A field asked an editor for again and again, none ever ready (a host re-creating it in a loop), cannot be
+    // followed either.
+    const asked = (this.asked.get(name) ?? 0) + 1;
+    this.asked.set(name, asked);
+    if (asked > 4) this.editorFailed();
     // The editor asked for now has the whole while to come: the join's wait, taken, starts again (a wait made now
     // started with it).
     if (waiter === previous) this.awaitEditor(name, waiter);
@@ -621,14 +626,6 @@ export class DraftSession {
   awaitEditor(name, waiter) {
     clearTimeout(waiter.grace);
     if (this.stopped) return;
-    // A field asked an editor for again and again, none ever ready (a host re-creating it in a loop), cannot be
-    // followed either.
-    const asked = (this.asked.get(name) ?? 0) + 1;
-    this.asked.set(name, asked);
-    if (asked > 5) {
-      this.editorFailed();
-      return;
-    }
     waiter.grace = setTimeout(
       // Replaced, let go or ready, a wait has its time cleared: one that runs out is still the field's.
       () => {
@@ -1475,9 +1472,10 @@ export class DraftSession {
 
   resume() {
     if (!this.suspended || this.stopped) return;
-    if (this.resuming) return this.resuming.then(() => this.resume());
-    // Its editors have their time again from now: a save they hold settles before the page goes on.
+    // Its editors have their time again from now, a resume waiting on another included: a save they hold settles
+    // before the page goes on.
     for (const [name, waiter] of this.editorWaiters) if (!waiter.ready) this.awaitEditor(name, waiter);
+    if (this.resuming) return this.resuming.then(() => this.resume());
     this.resuming = (async () => {
       // Aborted requests must settle before replacing their shared transport.
       await Promise.allSettled([this.ready, this.running, this.pulling]);

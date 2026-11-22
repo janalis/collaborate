@@ -837,6 +837,42 @@ test('an editor still awaited once the page is back has its whole time, then sto
   vi.useRealTimers();
 });
 
+test('a page frozen twice in a row while a save waits on an editor still gives it its time, then stops', async () => {
+  vi.useFakeTimers();
+  const { session } = fixture('<textarea name="Record[body]"></textarea>', {
+    'Record[body]': { type: 'rich', initial: 'Body' },
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  await session.ready;
+  const flushed = session.flush().catch((error) => error);
+  for (let frozen = 0; frozen < 2; frozen += 1) {
+    window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+  }
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(session.stopped).toBe(true);
+  expect(await flushed).toEqual(new Error('Collaborate draft stopped.'));
+  vi.useRealTimers();
+});
+
+test('only an editor asked for counts: its field leaving and coming back, or the page, do not', async () => {
+  vi.useFakeTimers();
+  const { session } = fixture('<textarea name="Record[body]"></textarea>', {
+    'Record[body]': { type: 'rich', initial: 'Body' },
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  await session.ready;
+  const editor = (await session.editorConfiguration({ name: 'Record[body]' })).collaborate;
+  for (let times = 0; times < 6; times += 1) {
+    editor.release();
+    window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+    await vi.advanceTimersByTimeAsync(0);
+  }
+  expect(session.stopped).toBeFalsy();
+  vi.useRealTimers();
+});
+
 test('a save field a host took out of the form is added again', async () => {
   const { session, form } = fixture();
   await session.ready;

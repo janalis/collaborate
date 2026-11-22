@@ -68,13 +68,13 @@ versions follow [Semantic Versioning](https://semver.org/).
   rendered again) posts nothing and says so in the console, rather than run
   another button: pressing Save again posts it. A save waits for editors as
   long as each is given, never less; a page restored from the back/forward
-  cache gives them their whole time again. A field asked an editor for five
-  times, none ready, stops the draft (a host re-creating it in a loop). Drupal:
-  its editors are watched whenever they come, through `Drupal.editorAttach`
-  before it attaches one (an AJAX response's libraries included), the format a
-  rebuilt form shows decides how a value is shared when the field offers it,
-  and a shared form that comes in a dialog has its typed empty rows made items
-  too.
+  cache gives them their whole time again. A field whose editor is asked for
+  five times, none ready, stops the draft (a host re-creating it in a loop).
+  Drupal: its editors are watched on every page, whenever they come, through
+  `Drupal.editorAttach` before it attaches one (an AJAX response's libraries
+  included), so a shared form that comes in a dialog follows its draft, typed
+  empty rows included; the format a rebuilt form shows decides how a value is
+  shared when the field offers it.
 - Drupal: a list set in a higher layer of the options (the form, then
   settings.php) replaces the one below whole: an `advanced` list no longer
   shows through a shorter one. So do the maps the bundle replaces whole from

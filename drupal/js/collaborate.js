@@ -124,9 +124,20 @@ const through = (key, call) => {
     inside.delete(key);
   }
 };
-// Editors' names whose getter threw: not read again.
-/** @type {Set<string>} */
-const unlisted = new Set();
+/**
+ * Puts a property back to what it was: a write may have gone through a setter whose getter answers otherwise.
+ *
+ * @param {object} target
+ * @param {string} property
+ * @param {unknown} was
+ */
+const putBack = (target, property, was) => {
+  try {
+    /** @type {any} */ (target)[property] = was;
+  } catch {
+    // As it is: Drupal's called through the module's.
+  }
+};
 /**
  * Says once that a target cannot be watched, and passes it over since.
  *
@@ -151,19 +162,6 @@ const attachOf = (editor) => {
     return typeof attach === 'function' ? attach : undefined;
   } catch {
     return undefined;
-  }
-};
-/**
- * Whether an editor's attach cannot be read: one throwing as its library loads, say.
- *
- * @param {object} editor
- */
-const unreadable = (editor) => {
-  try {
-    void (/** @type {any} */ (editor).attach);
-    return false;
-  } catch {
-    return true;
   }
 };
 /**
@@ -364,20 +362,27 @@ const watchCkeditor5 = () => {
     return through(ckeditor5, () => detach?.call(ckeditor5, element, format, trigger));
   };
   wrappers.add(attaching);
-  const own = Object.getOwnPropertyDescriptor(ckeditor5, 'detach');
+  /** @type {PropertyDescriptor | undefined} */
+  let own;
   try {
+    own = Object.getOwnPropertyDescriptor(ckeditor5, 'detach');
     ckeditor5.detach = detaching;
     ckeditor5.attach = attaching;
     // A write ignored (a setter keeping its own), or a getter answering another function, is no hook.
     if (attachOf(ckeditor5) !== attaching) throw new Error("Collaborate: Drupal's CKEditor 5 keeps its own attach.");
   } catch (error) {
-    // Half hooked is not hooked: its detach is Drupal's again, as it was.
+    // Half hooked is not hooked: its attach and detach are Drupal's again, as they were.
+    putBack(ckeditor5, 'attach', attach);
     try {
-      if (!own) Reflect.deleteProperty(ckeditor5, 'detach');
-      else if ('value' in own) Object.defineProperty(ckeditor5, 'detach', own);
-      else ckeditor5.detach = detach;
+      if (own && 'value' in own) Object.defineProperty(ckeditor5, 'detach', own);
+      else if (!own) Reflect.deleteProperty(ckeditor5, 'detach');
     } catch {
-      // As it is: Drupal's called through the module's.
+      // Put back below, if it can be.
+    }
+    try {
+      if (ckeditor5.detach === detaching) putBack(ckeditor5, 'detach', detach);
+    } catch {
+      // As it is.
     }
     refuse(ckeditor5, "Drupal's CKEditor 5", error);
     return;
@@ -412,16 +417,21 @@ const unwatched = (editors, name) => {
   if (typeof name !== 'string') return false;
   const editor = editors[name];
   if (!objectLike(editor)) return false;
-  // One whose attach cannot be read now may be read by Drupal next: the draft stops, the safe side.
-  if (unreadable(editor)) return true;
-  const attach = attachOf(editor);
-  return Boolean(attach) && !wrappers.has(/** @type {Function} */ (attach));
+  /** @type {unknown} */
+  let attach;
+  try {
+    attach = /** @type {any} */ (editor).attach;
+  } catch {
+    // One whose attach cannot be read now may be read by Drupal next: the draft stops, the safe side.
+    return true;
+  }
+  return typeof attach === 'function' && !wrappers.has(attach);
 };
 const watchOthers = () => {
   const drupal = page.Drupal;
   if (!drupal) return;
   const editorAttach = drupal.editorAttach;
-  if (typeof editorAttach === 'function' && !wrappers.has(editorAttach) && !refused.has(editorAttach)) {
+  if (typeof editorAttach === 'function' && !wrappers.has(editorAttach) && !refused.has(drupal)) {
     // Drupal attaches every editor through it: one whose library came later (a dialog's) is watched before it is
     // attached, Drupal's editor behavior running before the module's. Whatever the module meets there, Drupal's own
     // attach goes on.
@@ -430,6 +440,8 @@ const watchOthers = () => {
      * @param {any} format
      */
     const watcher = (element, format) => {
+      // A script's chain around the module's watcher: the outer one watched already.
+      if (inside.has(drupal)) return through(drupal, () => editorAttach.call(drupal, element, format));
       try {
         const editors = drupal.editors ?? {};
         if (unwatched(editors, format?.editor)) watchEditors();
@@ -445,19 +457,20 @@ const watchOthers = () => {
       drupal.editorAttach = watcher;
       if (drupal.editorAttach !== watcher) throw new Error("Collaborate: Drupal's editor dispatcher keeps its own.");
     } catch (error) {
-      refuse(editorAttach, "Drupal's editor dispatcher", error);
+      putBack(drupal, 'editorAttach', editorAttach);
+      refuse(drupal, "Drupal's editor dispatcher", error);
     }
   }
   // Each editor tells the draft, through the dispatcher or called directly. Editors are listed without running
-  // their getters; one whose getter throws as it is read is said once and not read again.
+  // their getters; one whose getter throws as it is read is said once, and read again on the next look.
   const editors = /** @type {Record<string, unknown>} */ (drupal.editors ?? {});
   for (const name of Object.keys(editors)) {
-    if (name === 'ckeditor5' || unlisted.has(name)) continue;
+    if (name === 'ckeditor5') continue;
     let editor;
     try {
       editor = editors[name];
     } catch (error) {
-      unlisted.add(name);
+      // Read again on the next look: one whose library is still loading may be readable then.
       say(`Collaborate: Drupal's ${name} editor cannot be watched.`, error);
       continue;
     }
@@ -478,6 +491,7 @@ const watchOthers = () => {
       /** @type {any} */ (editor).attach = wrapper;
       if (attachOf(editor) !== wrapper) throw new Error(`Collaborate: Drupal's ${name} editor keeps its own attach.`);
     } catch (error) {
+      putBack(editor, 'attach', attachOther);
       refuse(editor, `Drupal's ${name} editor`, error);
     }
   }

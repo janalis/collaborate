@@ -747,10 +747,12 @@ test('a hook refused once is not tried again, however often the module looks', a
   });
   globalThis.Drupal = drupal;
   await import('../../../drupal/js/collaborate.js');
-  expect(tries).toBe(3);
+  // Each tried once, and put back once.
+  const tried = tries;
+  expect(tried).toBeGreaterThanOrEqual(3);
   globalThis.Drupal.behaviors.collaborate.attach(document);
   globalThis.Drupal.behaviors.collaborate.attach(document);
-  expect(tries).toBe(3);
+  expect(tries).toBe(tried);
   // A CKEditor 5 that cannot be read is not read again either.
   vi.resetModules();
   for (const path of ['bridges/drupal.js', 'cursors/cursors.js', 'updates.js'])
@@ -846,7 +848,9 @@ test('a hook the editor ignores, names that throw, and a shared attach are each 
     new Error("Collaborate: Drupal's bound editor keeps its own attach.")
   );
   expect(Object.hasOwn(writable, 'attach')).toBe(true);
-  expect(reads).toBe(1);
+  // A name whose getter throws is read again on each look, a library still loading readable later; said once.
+  expect(reads).toBe(2);
+  expect(errors.mock.calls.filter(([message]) => message.includes('listed'))).toHaveLength(1);
   expect(errors.mock.calls.filter(([message]) => message.includes('bound'))).toHaveLength(1);
 });
 
@@ -912,6 +916,118 @@ test('a CKEditor 5 or a dispatcher keeping its own is refused; a format naming n
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(plugin).not.toHaveBeenCalled();
   expect(session.follows).not.toHaveBeenCalled();
+});
+
+test('what the review reproduced: told once, put back, read again, refused once per dispatcher', async () => {
+  /** @param {object} drupal @param {object} [session] */
+  const loadWith = async (drupal, session = fakeSession({ follows: vi.fn(async () => true) })) => {
+    vi.resetModules();
+    for (const path of ['bridges/drupal.js', 'cursors/cursors.js', 'updates.js'])
+      vi.doMock(`@janalis/collaborate/${path}`, () => ({}));
+    vi.doMock('@janalis/collaborate/draft/session.js', () => ({ sessionFor: vi.fn(() => session) }));
+    globalThis.Drupal = drupal;
+    await import('../../../drupal/js/collaborate.js');
+    return session;
+  };
+  // A frozen editor under a dispatcher a script chains around: the draft told once.
+  const told = await loadWith({
+    behaviors: {},
+    editors: { codemirror: Object.freeze({ attach: vi.fn() }) },
+    editorAttach: vi.fn(),
+  });
+  const inner = globalThis.Drupal.editorAttach;
+  globalThis.Drupal.editorAttach = (element, settings) => inner(element, settings);
+  globalThis.Drupal.behaviors.collaborate.attach(document);
+  globalThis.Drupal.editorAttach(body(), { editor: 'codemirror' });
+  await vi.waitFor(() => expect(told.editorFailed).toHaveBeenCalled());
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(told.follows).toHaveBeenCalledOnce();
+  // A half hooked CKEditor 5 whose detach is an inherited accessor: Drupal's detach put back through it.
+  const detach = vi.fn();
+  let stored = detach;
+  const accessor = Object.create({
+    get detach() {
+      return stored;
+    },
+    set detach(value) {
+      stored = value;
+    },
+  });
+  Object.defineProperty(accessor, 'attach', { value: vi.fn(), writable: false, enumerable: true });
+  await loadWith({ behaviors: {}, editors: { ckeditor5: accessor } });
+  expect(stored).toBe(detach);
+  // A CKEditor 5 whose getter answers a bound copy of what its setter stored: Drupal's attach put back.
+  const original = vi.fn();
+  let attachStored = original;
+  const bound = { detach: vi.fn() };
+  Object.defineProperty(bound, 'attach', {
+    get: () => attachStored.bind(bound),
+    set(value) {
+      attachStored = value;
+    },
+  });
+  await loadWith({ behaviors: {}, editors: { ckeditor5: bound } });
+  // What it stores calls Drupal's own again, not the module's.
+  attachStored(body(), format);
+  expect(original).toHaveBeenCalledWith(body(), format);
+  expect(attach).not.toHaveBeenCalled();
+  // An editor whose getter throws while its library loads is hooked once it is readable.
+  let ready = false;
+  const lazyAttach = vi.fn();
+  const editors = {};
+  Object.defineProperty(editors, 'lazy', {
+    get() {
+      if (!ready) throw new Error('Loading.');
+      return lazy;
+    },
+    enumerable: true,
+  });
+  const lazy = { attach: lazyAttach };
+  const later = await loadWith({ behaviors: {}, editors });
+  ready = true;
+  globalThis.Drupal.behaviors.collaborate.attach(document);
+  expect(lazy.attach).not.toBe(lazyAttach);
+  lazy.attach(body(), {});
+  await vi.waitFor(() => expect(later.follows).toHaveBeenCalled());
+  // A dispatcher whose getter answers a fresh copy is refused once, not wrapped again on every look.
+  let dispatchStored = vi.fn();
+  let writes = 0;
+  const drupal = { behaviors: {}, editors: {} };
+  Object.defineProperty(drupal, 'editorAttach', {
+    get: () => dispatchStored.bind(null),
+    set(value) {
+      writes += 1;
+      dispatchStored = value;
+    },
+  });
+  await loadWith(drupal);
+  const written = writes;
+  globalThis.Drupal.behaviors.collaborate.attach(document);
+  globalThis.Drupal.behaviors.collaborate.attach(document);
+  expect(writes).toBe(written);
+  // What a dispatcher or an editor so stores is Drupal's own again: calling it tells no draft.
+  const quiet = fakeSession({ follows: vi.fn(async () => true) });
+  let otherStored = vi.fn();
+  const other = {};
+  Object.defineProperty(other, 'attach', {
+    get: () => otherStored.bind(other),
+    set(value) {
+      otherStored = value;
+    },
+  });
+  let dispatcherStored = vi.fn();
+  const storing = { behaviors: {}, editors: { other, frozen: Object.freeze({ attach: vi.fn() }) } };
+  Object.defineProperty(storing, 'editorAttach', {
+    get: () => dispatcherStored.bind(null),
+    set(value) {
+      dispatcherStored = value;
+    },
+  });
+  await loadWith(storing, quiet);
+  otherStored(body(), {});
+  dispatcherStored(body(), { editor: 'frozen' });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(quiet.follows).not.toHaveBeenCalled();
 });
 
 test("a dispatcher the module cannot hook leaves Drupal's editors hooked", async () => {

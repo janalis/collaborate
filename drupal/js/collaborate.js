@@ -94,30 +94,39 @@ const stopFor = (session, element) =>
 // field left, settles nothing of the next.
 // Drupal's editors and its dispatcher, watched once each, whenever they come: on the page at first, or later with an
 // AJAX response's libraries (the module's behavior runs before the behaviors those bring).
-// One the module cannot hook (a frozen object, one throwing as it is read) is said once and the others hooked still:
-// the dispatcher, which sees every attach, stops a draft following a field an editor not hooked takes.
+// An editor is watched while its attach is one of the module's wrappers: one whose attach Drupal or a script
+// replaced is wrapped again, and the dispatcher, which sees every attach, stops a draft following a field an editor
+// not watched takes. One the module cannot hook (a frozen object) is said once, and passed over since.
+/** @type {WeakSet<Function>} */
+const wrappers = new WeakSet();
 /** @type {WeakSet<object>} */
-const hooked = new WeakSet();
-/** @type {WeakSet<object>} */
-const unhookable = new WeakSet();
+const refused = new WeakSet();
 /** @param {unknown} target @returns {target is object} */
 const objectLike = (target) => (typeof target === 'object' || typeof target === 'function') && target !== null;
-/** @param {unknown} target */
-const watched = (target) => objectLike(target) && (hooked.has(target) || unhookable.has(target));
 /**
- * Hooks a target not watched yet, or says once that it cannot.
+ * Says once that a target cannot be watched, and passes it over since.
  *
  * @param {object} target
- * @param {string} label what the target is, in what is said
- * @param {() => void} install
+ * @param {string} label what the target is
+ * @param {unknown} error
  */
-const hookOnce = (target, label, install) => {
+const refuse = (target, label, error) => {
+  refused.add(target);
+  say(`Collaborate: ${label} cannot be watched.`, error);
+};
+/**
+ * An editor's attach, or undefined when it has none it can be read for.
+ *
+ * @param {unknown} editor
+ * @returns {Function | undefined}
+ */
+const attachOf = (editor) => {
+  if (!objectLike(editor)) return undefined;
   try {
-    install();
-    hooked.add(target);
-  } catch (error) {
-    unhookable.add(target);
-    say(`Collaborate: ${label} cannot be watched.`, error);
+    const attach = /** @type {any} */ (editor).attach;
+    return typeof attach === 'function' ? attach : undefined;
+  } catch {
+    return undefined;
   }
 };
 /**
@@ -127,8 +136,8 @@ const hookOnce = (target, label, install) => {
  */
 const preload = (root) => {
   try {
-    if (hooked.has(/** @type {object} */ (page.Drupal?.editors?.ckeditor5)) && root.querySelector('[data-editor-for]'))
-      loadPlugins().catch(() => {});
+    const attach = attachOf(page.Drupal?.editors?.ckeditor5);
+    if (attach && wrappers.has(attach) && root.querySelector('[data-editor-for]')) loadPlugins().catch(() => {});
   } catch {
     // Drupal's globals that cannot be read leave the plugin to the field's own attach.
   }
@@ -136,7 +145,7 @@ const preload = (root) => {
 const watchCkeditor5 = () => {
   const ckeditor5 = page.Drupal?.editors?.ckeditor5;
   // On every page: a shared form may come later (a dialog's), and each field's attach asks whether its form is shared.
-  if (!objectLike(ckeditor5) || watched(ckeditor5)) return;
+  if (!objectLike(ckeditor5) || refused.has(ckeditor5)) return;
   /** @type {any} */
   let attach;
   /** @type {any} */
@@ -144,10 +153,11 @@ const watchCkeditor5 = () => {
   try {
     ({ attach, detach } = ckeditor5);
   } catch (error) {
-    unhookable.add(ckeditor5);
-    say("Collaborate: Drupal's CKEditor 5 cannot be watched.", error);
+    refuse(ckeditor5, "Drupal's CKEditor 5", error);
     return;
   }
+  // Not one yet without its attach; one watched already, or refused, as it is.
+  if (typeof attach !== 'function' || wrappers.has(attach) || refused.has(attach)) return;
   /** @typedef {import('@janalis/collaborate/draft/session.js').EditorHandle} EditorHandle */
   /**
    * @typedef {{ handle?: EditorHandle, given?: boolean, created?: boolean }} Attach an attach, the draft's handle of
@@ -312,24 +322,22 @@ const watchCkeditor5 = () => {
       attaches.delete(element);
       if (ended) giveBack(element, ended);
     }
-    return detach.call(ckeditor5, element, format, trigger);
+    return detach?.call(ckeditor5, element, format, trigger);
   };
-  hookOnce(ckeditor5, "Drupal's CKEditor 5", () => {
-    const own = Object.getOwnPropertyDescriptor(ckeditor5, 'detach');
+  wrappers.add(attaching);
+  try {
     ckeditor5.detach = detaching;
+    ckeditor5.attach = attaching;
+  } catch (error) {
+    // Half hooked is not hooked: its detach is Drupal's again, Drupal's called through the module's otherwise.
     try {
-      ckeditor5.attach = attaching;
-    } catch (error) {
-      // Half hooked is not hooked: its detach is Drupal's again, as it was.
-      try {
-        if (own) Object.defineProperty(ckeditor5, 'detach', own);
-        else Reflect.deleteProperty(ckeditor5, 'detach');
-      } catch {
-        // One that cannot be put back stays the module's, Drupal's called through it.
-      }
-      throw error;
+      ckeditor5.detach = detach;
+    } catch {
+      // As it is.
     }
-  });
+    refuse(attach, "Drupal's CKEditor 5", error);
+    return;
+  }
   const form = shared();
   if (form) preload(form);
 };
@@ -349,34 +357,23 @@ const otherEditor = (element) => {
       if (!said.has(/** @type {object} */ (error))) console.error(error);
     });
 };
-// The Drupal objects whose dispatcher the module wraps, and Drupal's own dispatchers it wrapped: one put back is
-// wrapped again, one another script wrapped around the module's is left as it is.
-/** @type {WeakSet<object>} */
-const dispatching = new WeakSet();
-/** @type {WeakSet<Function>} */
-const dispatchers = new WeakSet();
 /**
- * Whether an editor not hooked (one the module could not hook, or did not get to) is about to take a field.
+ * Whether an editor the module does not watch (one it could not hook, or did not get to) is about to take a field:
+ * one without an attach it can be read for is no editor Drupal can attach either.
  *
- * @param {Record<string, any>} editors
+ * @param {Record<string, unknown>} editors
  * @param {unknown} name
  */
 const unwatched = (editors, name) => {
   if (typeof name !== 'string') return false;
-  const editor = editors[name];
-  if (!objectLike(editor) || hooked.has(editor)) return false;
-  // Not one yet without its attach (a library still setting it up); one that cannot be read is not hooked.
-  try {
-    return typeof (/** @type {any} */ (editor).attach) === 'function';
-  } catch {
-    return true;
-  }
+  const attach = attachOf(editors[name]);
+  return Boolean(attach) && !wrappers.has(/** @type {Function} */ (attach));
 };
 const watchOthers = () => {
   const drupal = page.Drupal;
   if (!drupal) return;
   const editorAttach = drupal.editorAttach;
-  if (typeof editorAttach === 'function' && (!dispatching.has(drupal) || dispatchers.has(editorAttach))) {
+  if (typeof editorAttach === 'function' && !wrappers.has(editorAttach) && !refused.has(editorAttach)) {
     // Drupal attaches every editor through it: one whose library came later (a dialog's) is watched before it is
     // attached, Drupal's editor behavior running before the module's. Whatever the module meets there, Drupal's own
     // attach goes on.
@@ -388,42 +385,47 @@ const watchOthers = () => {
       try {
         const editors = drupal.editors ?? {};
         if (unwatched(editors, format?.editor)) watchEditors();
-        // An editor the module did not hook takes a field it cannot follow.
+        // An editor the module does not watch takes a field it cannot follow.
         if (unwatched(editors, format?.editor)) otherEditor(element);
       } catch (error) {
         say("Collaborate: Drupal's editors cannot be watched.", error);
       }
       return editorAttach.call(drupal, element, format);
     };
+    wrappers.add(watcher);
     try {
       drupal.editorAttach = watcher;
-      dispatching.add(drupal);
-      dispatchers.add(editorAttach);
     } catch (error) {
-      say("Collaborate: Drupal's editor dispatcher cannot be watched.", error);
+      refuse(editorAttach, "Drupal's editor dispatcher", error);
     }
   }
-  // Each editor tells the draft, through the dispatcher or called directly; one that cannot be read is passed over.
-  for (const [name, editor] of Object.entries(drupal.editors ?? {})) {
-    if (name === 'ckeditor5' || !objectLike(editor) || watched(editor)) continue;
+  // Each editor tells the draft, through the dispatcher or called directly; its name read without running getters.
+  const editors = /** @type {Record<string, unknown>} */ (drupal.editors ?? {});
+  for (const name of Object.keys(editors)) {
+    if (name === 'ckeditor5') continue;
+    let editor;
     try {
-      if (typeof editor.attach !== 'function') continue;
+      editor = editors[name];
     } catch (error) {
-      unhookable.add(editor);
       say(`Collaborate: Drupal's ${name} editor cannot be watched.`, error);
       continue;
     }
-    const attachOther = editor.attach;
-    hookOnce(editor, `Drupal's ${name} editor`, () => {
-      /**
-       * @param {HTMLTextAreaElement} element
-       * @param {any} format
-       */
-      editor.attach = (element, format) => {
-        otherEditor(element);
-        return attachOther.call(editor, element, format);
-      };
-    });
+    const attachOther = attachOf(editor);
+    if (!attachOther || wrappers.has(attachOther) || refused.has(attachOther)) continue;
+    /**
+     * @param {HTMLTextAreaElement} element
+     * @param {any} format
+     */
+    const wrapper = (element, format) => {
+      otherEditor(element);
+      return attachOther.call(editor, element, format);
+    };
+    wrappers.add(wrapper);
+    try {
+      /** @type {any} */ (editor).attach = wrapper;
+    } catch (error) {
+      refuse(attachOther, `Drupal's ${name} editor`, error);
+    }
   }
 };
 const watchEditors = () => {

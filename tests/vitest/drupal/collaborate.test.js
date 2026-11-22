@@ -747,9 +747,9 @@ test('a hook refused once is not tried again, however often the module looks', a
   });
   globalThis.Drupal = drupal;
   await import('../../../drupal/js/collaborate.js');
-  // Each tried once, and put back once.
+  // Each written once, a write refused leaving nothing to undo: CKEditor 5, the dispatcher, CodeMirror.
   const tried = tries;
-  expect(tried).toBeGreaterThanOrEqual(3);
+  expect(tried).toBe(3);
   globalThis.Drupal.behaviors.collaborate.attach(document);
   globalThis.Drupal.behaviors.collaborate.attach(document);
   expect(tries).toBe(tried);
@@ -893,7 +893,7 @@ test('a CKEditor 5 or a dispatcher keeping its own is refused; a format naming n
   );
   expect(errors).toHaveBeenCalledWith(
     "Collaborate: Drupal's editor dispatcher cannot be watched.",
-    new Error("Collaborate: Drupal's editor dispatcher keeps its own.")
+    new Error("Collaborate: Drupal's editor dispatcher keeps its own editorAttach.")
   );
   // A dialog's shared form with formatted text on a page without CKEditor 5 loads no plugin.
   vi.resetModules();
@@ -1028,6 +1028,69 @@ test('what the review reproduced: told once, put back, read again, refused once 
   dispatcherStored(body(), { editor: 'frozen' });
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(quiet.follows).not.toHaveBeenCalled();
+});
+
+test('a hook undoes only what it wrote, a dispatcher put later is hooked, a nested attach of another field watched', async () => {
+  /** @param {object} drupal @param {object} [session] */
+  const loadWith = async (drupal, session = fakeSession({ follows: vi.fn(async () => true) })) => {
+    vi.resetModules();
+    for (const path of ['bridges/drupal.js', 'cursors/cursors.js', 'updates.js'])
+      vi.doMock(`@janalis/collaborate/${path}`, () => ({}));
+    vi.doMock('@janalis/collaborate/draft/session.js', () => ({ sessionFor: vi.fn(() => session) }));
+    globalThis.Drupal = drupal;
+    await import('../../../drupal/js/collaborate.js');
+    return session;
+  };
+  // A CKEditor 5 whose descriptors cannot be read: nothing written, its detach left as it is.
+  const detach = vi.fn();
+  const target = { attach: vi.fn(), detach };
+  const proxied = new Proxy(target, {
+    getOwnPropertyDescriptor() {
+      throw new Error('No descriptors.');
+    },
+  });
+  await loadWith({ behaviors: {}, editors: { ckeditor5: proxied } });
+  expect(target.detach).toBe(detach);
+  // A detach accessor answering a bound copy of what it stores: Drupal's put back through it.
+  let stored = detach;
+  const accessor = {};
+  Object.defineProperty(accessor, 'detach', {
+    get: () => stored.bind(accessor),
+    set(value) {
+      stored = value;
+    },
+  });
+  Object.defineProperty(accessor, 'attach', { value: vi.fn(), writable: false, enumerable: true });
+  await loadWith({ behaviors: {}, editors: { ckeditor5: accessor } });
+  stored(body(), format, 'unload');
+  expect(detach).toHaveBeenCalledWith(body(), format, 'unload');
+  // A dispatcher refused, then a plain one put in its place: that one is hooked.
+  const drupal = { behaviors: {}, editors: {} };
+  Object.defineProperty(drupal, 'editorAttach', { get: () => vi.fn(), set() {}, configurable: true });
+  await loadWith(drupal);
+  const plain = vi.fn();
+  Object.defineProperty(drupal, 'editorAttach', { value: plain, writable: true, configurable: true });
+  drupal.behaviors.collaborate.attach(document);
+  expect(drupal.editorAttach).not.toBe(plain);
+  // An editor attaching another field inside its own attach (nested behaviors): that field is watched too.
+  const nested = document.createElement('textarea');
+  nested.name = 'nested';
+  document.querySelector('form').append(nested);
+  /** @type {any} */
+  let dispatching;
+  const inner = {
+    attach: vi.fn((element) => {
+      if (element === body()) dispatching(nested, { editor: 'frozen' });
+    }),
+  };
+  const session = await loadWith({
+    behaviors: {},
+    editors: { inner, frozen: Object.freeze({ attach: vi.fn() }) },
+    editorAttach: (element, settings) => globalThis.Drupal.editors[settings.editor].attach(element, settings),
+  });
+  dispatching = globalThis.Drupal.editorAttach;
+  dispatching(body(), { editor: 'inner' });
+  await vi.waitFor(() => expect(session.follows).toHaveBeenCalledWith(nested));
 });
 
 test("a dispatcher the module cannot hook leaves Drupal's editors hooked", async () => {

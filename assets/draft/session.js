@@ -176,6 +176,8 @@ export class DraftSession {
     this.removers = [];
     /** @type {HTMLInputElement[]} the save fields this session added to the form */
     this.added = [];
+    /** @type {Map<string, number>} how many times each field's editor was given its time, none ready since */
+    this.asked = new Map();
     // Settled once the draft stops: a save awaiting editors then waits no more. One rejection serves every save.
     /** @type {(value: unknown) => void} */
     let end;
@@ -566,6 +568,7 @@ export class DraftSession {
       ready: () => {
         if (!current()) return;
         clearTimeout(waiter.grace);
+        this.asked.delete(name);
         waiter.resolve();
       },
       failed: () => {
@@ -618,6 +621,14 @@ export class DraftSession {
   awaitEditor(name, waiter) {
     clearTimeout(waiter.grace);
     if (this.stopped) return;
+    // A field asked an editor for again and again, none ever ready (a host re-creating it in a loop), cannot be
+    // followed either.
+    const asked = (this.asked.get(name) ?? 0) + 1;
+    this.asked.set(name, asked);
+    if (asked > 5) {
+      this.editorFailed();
+      return;
+    }
     waiter.grace = setTimeout(
       // Replaced, let go or ready, a wait has its time cleared: one that runs out is still the field's.
       () => {
@@ -643,6 +654,7 @@ export class DraftSession {
     const waiter = this.editorWaiters.get(name);
     if (!waiter) return;
     clearTimeout(waiter.grace);
+    this.asked.delete(name);
     this.editorWaiters.delete(name);
     waiter.resolve();
   }
@@ -1289,21 +1301,12 @@ export class DraftSession {
     if (this.running) return this.running;
     this.running = (async () => {
       await this.ready;
-      // Every editor awaited has its own time to come, past which the draft stops: a save waits that long.
-      let editorTimeout;
-      try {
-        await Promise.race([
-          Promise.all(Array.from(this.editorWaiters.values(), (waiter) => waiter.promise)),
-          this.stopping,
-          // A host asking for an editor again and again would hold it for good: past a few graces, it gives up.
-          new Promise((_resolve, reject) => {
-            const wait = Math.max(15_000, 3 * this.setting('nextEditorGrace', 10_000));
-            editorTimeout = setTimeout(() => reject(new Error('Collaborate editors are not ready.')), wait);
-          }),
-        ]);
-      } finally {
-        clearTimeout(editorTimeout);
-      }
+      // Every editor awaited has its own time to come, past which, or past a few times asked for again without
+      // coming, the draft stops: a save waits that long.
+      await Promise.race([
+        Promise.all(Array.from(this.editorWaiters.values(), (waiter) => waiter.promise)),
+        this.stopping,
+      ]);
       await this.pull();
       for (const settle of this.sources.values()) settle();
       for (;;) {

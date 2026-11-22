@@ -289,19 +289,20 @@ const watchOthers = () => {
   if (!drupal || !shared()) return;
   const editorAttach = drupal.editorAttach;
   if (typeof editorAttach === 'function' && hook(editorAttach)) {
-    // Drupal attaches every editor through it, one whose library came later (a dialog's) included.
+    // Drupal attaches every editor through it: one whose library came later (a dialog's) is watched before it is
+    // attached, Drupal's editor behavior running before the module's.
     /**
      * @param {HTMLTextAreaElement} element
      * @param {any} format
      */
     const watcher = (element, format) => {
-      if (format?.editor && format.editor !== 'ckeditor5') otherEditor(element);
+      watchEditors();
       return editorAttach.call(drupal, element, format);
     };
     hooked.add(watcher);
     drupal.editorAttach = watcher;
   }
-  // And each editor, for a script calling one directly.
+  // Each editor tells the draft, through the dispatcher or called directly.
   for (const [name, editor] of Object.entries(drupal.editors ?? {})) {
     if (name === 'ckeditor5' || typeof editor?.attach !== 'function' || !hook(editor)) continue;
     const attachOther = editor.attach;
@@ -370,6 +371,9 @@ if (shared()) {
     },
     () => {}
   );
+}
+// On every Drupal page: a shared form may come later (a dialog's), its drafts loaded by the module's behavior.
+if (page.Drupal) {
   document.addEventListener('input', touch, true);
   document.addEventListener('change', touch, true);
 }
@@ -387,8 +391,9 @@ if (page.Drupal) {
       );
       if (!form) return;
       loadDrafts().then(
-        ({ sessionFor }) => {
-          const session = sessionFor({ form });
+        (drafts) => {
+          sessions = drafts;
+          const session = drafts.sessionFor({ form });
           if (!session?.initialized || session.stopped) return;
           session.initializeControls();
           document.dispatchEvent(new Event('collaborate:rows-changed'));

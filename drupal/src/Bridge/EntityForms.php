@@ -679,7 +679,15 @@ final class EntityForms
     /** The editor a formatted text's format is edited with (`ckeditor5`), or null for a plain textarea. */
     private static function editor(array $element): ?string
     {
-        $format = $element['format']['format']['#default_value'] ?? $element['#format'] ?? null;
+        // @mago-expect analysis:mixed-assignment a render array's element, checked right below
+        $select = $element['format']['format'] ?? [];
+        // The format the form shows (chosen anew in a rebuilt form), when it is one the field offers; else its own.
+        // @mago-expect analysis:mixed-assignment a submitted value, checked right below
+        $shown = \is_array($select) ? $select['#value'] ?? null : null;
+        // @mago-expect analysis:mixed-assignment a render array's value, checked right below
+        $format = \is_string($shown) && \is_array($select['#options'] ?? null) && isset($select['#options'][$shown])
+            ? $shown
+            : $element['format']['format']['#default_value'] ?? $element['#format'] ?? null;
         if (!\is_string($format)) {
             return null;
         }

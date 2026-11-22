@@ -2058,7 +2058,7 @@ test('a save waits for an editor asked for again as long as its time runs, never
     settled = true;
   });
   let editor;
-  for (let elapsed = 0; elapsed < 27_000; elapsed += 9_000) {
+  for (let elapsed = 0; elapsed < 36_000; elapsed += 9_000) {
     editor = (await session.editorConfiguration({ name: 'Record[body]' })).collaborate;
     await vi.advanceTimersByTimeAsync(9_000);
   }
@@ -2070,22 +2070,35 @@ test('a save waits for an editor asked for again as long as its time runs, never
   expect(settled).toBe(true);
 });
 
-test('a save gives up on an editor asked for again and again, past a few of its graces', async () => {
+test('an editor asked for again and again, none ever ready, stops the draft: a save under way posts as usual', async () => {
   vi.useFakeTimers();
-  const { session } = fixture('<textarea name="Record[body]"></textarea>', {
+  const { session, form } = fixture('<textarea name="Record[body]"></textarea>', {
     'Record[body]': { type: 'rich', initial: 'Body' },
   });
   await vi.advanceTimersByTimeAsync(0);
   await session.ready;
-  const rejected = expect(session.flush()).rejects.toThrow('editors are not ready');
-  for (let elapsed = 0; elapsed < 30_000; elapsed += 9_000) {
+  const rejected = expect(session.flush()).rejects.toThrow('Collaborate draft stopped.');
+  // The join's time, then four editors asked for in turn: the fifth stops the draft.
+  for (let asked = 0; asked < 4; asked += 1) {
     await session.editorConfiguration({ name: 'Record[body]' });
-    await vi.advanceTimersByTimeAsync(9_000);
+    expect(session.stopped).toBeFalsy();
   }
+  await session.editorConfiguration({ name: 'Record[body]' });
+  expect(session.stopped).toBe(true);
+  expect(form.dataset.collaborateState).toBe('unavailable');
   await rejected;
-  expect(session.stopped).toBeFalsy();
+  // One ready meanwhile starts the count again.
+  const other = fixture('<textarea name="Record[body]"></textarea>', {
+    'Record[body]': { type: 'rich', initial: 'Body' },
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  await other.session.ready;
+  for (let asked = 0; asked < 4; asked += 1)
+    (await other.session.editorConfiguration({ name: 'Record[body]' })).collaborate.ready();
+  for (let asked = 0; asked < 4; asked += 1) await other.session.editorConfiguration({ name: 'Record[body]' });
+  expect(other.session.stopped).toBeFalsy();
+  vi.useRealTimers();
 });
-
 test('falls back to ordinary editing when a rich editor fails to mount', async () => {
   const { session, form } = fixture('<input name="Record[name]"><textarea name="Record[body]"></textarea>', {
     'Record[name]': { type: 'text', initial: '' },

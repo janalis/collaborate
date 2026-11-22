@@ -436,29 +436,35 @@ test("Drupal's other editors stop the draft on a field it follows, which it cann
   expect(() => globalThis.Drupal.editors.codemirror.attach(body(), {})).not.toThrow();
 });
 
-test("Drupal's editor attach for another editor than CKEditor 5, one registered later included, stops the draft", async () => {
-  const own = vi.fn(() => 'attached');
-  globalThis.Drupal = undefined;
-  const session = await load({ session: fakeSession({ follows: vi.fn(async () => true) }) });
-  // The script ran before Drupal's dispatcher existed: the editors it found are wrapped.
-  expect(globalThis.Drupal.editorAttach).toBeUndefined();
-  vi.resetModules();
-  vi.doMock('@janalis/collaborate/draft/session.js', () => ({ sessionFor: vi.fn(() => session) }));
+test("Drupal's editor dispatcher watches an editor that came after the page loaded before it attaches it", async () => {
+  const session = fakeSession({ follows: vi.fn(async () => true) });
   for (const path of ['bridges/drupal.js', 'cursors/cursors.js', 'updates.js'])
     vi.doMock(`@janalis/collaborate/${path}`, () => ({}));
-  globalThis.Drupal = {
-    behaviors: {},
-    editors: { ckeditor5: { attach: vi.fn(), detach: vi.fn() } },
-    editorAttach: own,
-  };
+  vi.doMock('@janalis/collaborate/draft/session.js', () => ({ sessionFor: vi.fn(() => session) }));
+  // Drupal's dispatcher, as core's: the editor its format names attaches the field.
+  /**
+   * @param {HTMLTextAreaElement} element
+   * @param {{ editor?: string }} format
+   */
+  const dispatch = vi.fn((element, format) =>
+    format.editor ? globalThis.Drupal.editors[format.editor].attach(element, format) : undefined
+  );
+  globalThis.Drupal = { behaviors: {}, editors: {}, editorAttach: dispatch };
   await import('../../../drupal/js/collaborate.js');
-  expect(globalThis.Drupal.editorAttach(body(), { editor: 'ckeditor5' })).toBe('attached');
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  expect(session.follows).not.toHaveBeenCalled();
-  globalThis.Drupal.editorAttach(body(), { editor: 'codemirror' });
+  // A response brings CodeMirror and CKEditor 5; Drupal's editor behavior attaches them before the module's runs.
+  const own = vi.fn(() => 'attached');
+  const ckeditor = vi.fn(() => true);
+  globalThis.Drupal.editors.codemirror = { attach: own };
+  globalThis.Drupal.editors.ckeditor5 = { attach: ckeditor, detach: vi.fn() };
+  expect(globalThis.Drupal.editorAttach(body(), { editor: 'codemirror' })).toBe('attached');
+  expect(own).toHaveBeenCalledWith(body(), { editor: 'codemirror' });
+  // Told once, though both the dispatcher and the editor are watched.
   await vi.waitFor(() => expect(session.editorFailed).toHaveBeenCalledOnce());
-  expect(own).toHaveBeenLastCalledWith(body(), { editor: 'codemirror' });
-  // A format without an editor, or a field outside the shared form, says nothing.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(session.follows).toHaveBeenCalledOnce();
+  // CKEditor 5 is the module's before Drupal attaches it.
+  expect(globalThis.Drupal.editors.ckeditor5.attach).not.toBe(ckeditor);
+  // A field outside the shared form, or a format without an editor, says nothing.
   const alone = /** @type {HTMLTextAreaElement} */ (document.querySelector('[name="alone"]'));
   globalThis.Drupal.editorAttach(alone, { editor: 'codemirror' });
   globalThis.Drupal.editorAttach(body(), {});
@@ -488,6 +494,18 @@ test("Drupal's editors coming later with an AJAX response are watched, once, as 
   globalThis.Drupal.editors.codemirror.attach(body(), {});
   expect(own).toHaveBeenCalledOnce();
   await vi.waitFor(() => expect(session.editorFailed).toHaveBeenCalledOnce());
+});
+
+test('a shared form that came after the page loaded makes a typed empty row an item too', async () => {
+  const form = document.querySelector('form');
+  form.remove();
+  const session = await load();
+  // A dialog brings the shared form; the module's behavior loads its drafts.
+  document.body.prepend(form);
+  globalThis.Drupal.behaviors.collaborate.attach(form);
+  await vi.waitFor(() => expect(session.initializeControls).toHaveBeenCalled());
+  document.querySelector('[name="notes[t0][value]"]').dispatchEvent(new Event('input', { bubbles: true }));
+  expect(session.scanCollections).toHaveBeenCalledOnce();
 });
 
 test('a Drupal page without editors has none to watch', async () => {

@@ -60,6 +60,14 @@ final class FormattedTextTest extends BrowserTestBase
         self::assertSame('text', $this->fields($this->article('plain'))['body[0][value]']['type'] ?? null);
     }
 
+    public function testARebuiltFormSharesItsValueAsTheFormatItShows(): void
+    {
+        // A format chosen anew, the form rebuilt by a validation error: shared as that format's.
+        $this->drupalGet($this->article('plain')->toUrl('edit-form'));
+        $this->submitForm(['title[0][value]' => '', 'body[0][format]' => 'full'], 'Save');
+        self::assertSame('rich', $this->shown()['body[0][value]']['type'] ?? null);
+    }
+
     private function article(string $format): NodeInterface
     {
         return $this->drupalCreateNode([
@@ -73,6 +81,13 @@ final class FormattedTextTest extends BrowserTestBase
     private function fields(NodeInterface $node): array
     {
         $this->drupalGet($node->toUrl('edit-form'));
+
+        return $this->shown();
+    }
+
+    /** @return array<array-key, mixed> the fields the form on the page shares, by name */
+    private function shown(): array
+    {
         $form = $this->assertSession()->elementExists('css', 'form[data-collaborate]');
         // @mago-expect analysis:mixed-assignment the page's configuration, checked right below
         $configuration = json_decode(

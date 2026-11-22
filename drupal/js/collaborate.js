@@ -103,6 +103,30 @@ const wrappers = new WeakSet();
 const refused = new WeakSet();
 /** @param {unknown} target @returns {target is object} */
 const objectLike = (target) => (typeof target === 'object' || typeof target === 'function') && target !== null;
+// The editors (and dispatchers) a module wrapper is calling down to: one wrapped again around another of the module's
+// (a script chaining around it) goes straight through, so a field is attached, and its draft told, once.
+/** @type {Set<object>} */
+const inside = new Set();
+/**
+ * Calls down to what a wrapper wraps, the module's wrappers for the same key passing straight through meanwhile.
+ *
+ * @template T
+ * @param {object} key
+ * @param {() => T} call
+ * @returns {T}
+ */
+const through = (key, call) => {
+  if (inside.has(key)) return call();
+  inside.add(key);
+  try {
+    return call();
+  } finally {
+    inside.delete(key);
+  }
+};
+// Editors' names whose getter threw: not read again.
+/** @type {Set<string>} */
+const unlisted = new Set();
 /**
  * Says once that a target cannot be watched, and passes it over since.
  *
@@ -127,6 +151,19 @@ const attachOf = (editor) => {
     return typeof attach === 'function' ? attach : undefined;
   } catch {
     return undefined;
+  }
+};
+/**
+ * Whether an editor's attach cannot be read: one throwing as its library loads, say.
+ *
+ * @param {object} editor
+ */
+const unreadable = (editor) => {
+  try {
+    void (/** @type {any} */ (editor).attach);
+    return false;
+  } catch {
+    return true;
   }
 };
 /**
@@ -156,8 +193,8 @@ const watchCkeditor5 = () => {
     refuse(ckeditor5, "Drupal's CKEditor 5", error);
     return;
   }
-  // Not one yet without its attach; one watched already, or refused, as it is.
-  if (typeof attach !== 'function' || wrappers.has(attach) || refused.has(attach)) return;
+  // Not one yet without its attach; one watched already as it is.
+  if (typeof attach !== 'function' || wrappers.has(attach)) return;
   /** @typedef {import('@janalis/collaborate/draft/session.js').EditorHandle} EditorHandle */
   /**
    * @typedef {{ handle?: EditorHandle, given?: boolean, created?: boolean }} Attach an attach, the draft's handle of
@@ -248,12 +285,13 @@ const watchCkeditor5 = () => {
     if (!current()) return giveBack(element, mine);
     const handle = configuration.collaborate;
     // Another field's editor may have failed meanwhile.
-    if (!session || session.stopped || !handle) return attach.call(ckeditor5, element, format);
+    if (!session || session.stopped || !handle)
+      return through(ckeditor5, () => attach.call(ckeditor5, element, format));
     if (!Array.isArray(format?.editorSettings?.plugins)) {
       // Settings the draft's editor cannot extend: Drupal's own editor.
       console.error(new TypeError("Collaborate: the text format's editor settings have no plugins to extend."));
       session.editorFailed();
-      return attach.call(ckeditor5, element, format);
+      return through(ckeditor5, () => attach.call(ckeditor5, element, format));
     }
     const settings = {
       ...format,
@@ -287,7 +325,7 @@ const watchCkeditor5 = () => {
       },
     };
     try {
-      attach.call(ckeditor5, element, settings);
+      through(ckeditor5, () => attach.call(ckeditor5, element, settings));
     } catch (error) {
       // The editor the draft waits for never comes, unless Drupal began creating it: the form is released, the field
       // left as Drupal left it.
@@ -303,7 +341,8 @@ const watchCkeditor5 = () => {
    * @param {any} format Drupal's editor settings for the field's text format
    */
   const attaching = (element, format) => {
-    if (!element.form?.dataset.collaborate) return attach.call(ckeditor5, element, format);
+    if (inside.has(ckeditor5) || !element.form?.dataset.collaborate)
+      return through(ckeditor5, () => attach.call(ckeditor5, element, format));
     const mine = {};
     attaches.set(element, mine);
     // Drupal's own failure, said as Drupal would.
@@ -322,20 +361,25 @@ const watchCkeditor5 = () => {
       attaches.delete(element);
       if (ended) giveBack(element, ended);
     }
-    return detach?.call(ckeditor5, element, format, trigger);
+    return through(ckeditor5, () => detach?.call(ckeditor5, element, format, trigger));
   };
   wrappers.add(attaching);
+  const own = Object.getOwnPropertyDescriptor(ckeditor5, 'detach');
   try {
     ckeditor5.detach = detaching;
     ckeditor5.attach = attaching;
+    // A write ignored (a setter keeping its own), or a getter answering another function, is no hook.
+    if (attachOf(ckeditor5) !== attaching) throw new Error("Collaborate: Drupal's CKEditor 5 keeps its own attach.");
   } catch (error) {
-    // Half hooked is not hooked: its detach is Drupal's again, Drupal's called through the module's otherwise.
+    // Half hooked is not hooked: its detach is Drupal's again, as it was.
     try {
-      ckeditor5.detach = detach;
+      if (!own) Reflect.deleteProperty(ckeditor5, 'detach');
+      else if ('value' in own) Object.defineProperty(ckeditor5, 'detach', own);
+      else ckeditor5.detach = detach;
     } catch {
-      // As it is.
+      // As it is: Drupal's called through the module's.
     }
-    refuse(attach, "Drupal's CKEditor 5", error);
+    refuse(ckeditor5, "Drupal's CKEditor 5", error);
     return;
   }
   const form = shared();
@@ -366,7 +410,11 @@ const otherEditor = (element) => {
  */
 const unwatched = (editors, name) => {
   if (typeof name !== 'string') return false;
-  const attach = attachOf(editors[name]);
+  const editor = editors[name];
+  if (!objectLike(editor)) return false;
+  // One whose attach cannot be read now may be read by Drupal next: the draft stops, the safe side.
+  if (unreadable(editor)) return true;
+  const attach = attachOf(editor);
   return Boolean(attach) && !wrappers.has(/** @type {Function} */ (attach));
 };
 const watchOthers = () => {
@@ -390,41 +438,47 @@ const watchOthers = () => {
       } catch (error) {
         say("Collaborate: Drupal's editors cannot be watched.", error);
       }
-      return editorAttach.call(drupal, element, format);
+      return through(drupal, () => editorAttach.call(drupal, element, format));
     };
     wrappers.add(watcher);
     try {
       drupal.editorAttach = watcher;
+      if (drupal.editorAttach !== watcher) throw new Error("Collaborate: Drupal's editor dispatcher keeps its own.");
     } catch (error) {
       refuse(editorAttach, "Drupal's editor dispatcher", error);
     }
   }
-  // Each editor tells the draft, through the dispatcher or called directly; its name read without running getters.
+  // Each editor tells the draft, through the dispatcher or called directly. Editors are listed without running
+  // their getters; one whose getter throws as it is read is said once and not read again.
   const editors = /** @type {Record<string, unknown>} */ (drupal.editors ?? {});
   for (const name of Object.keys(editors)) {
-    if (name === 'ckeditor5') continue;
+    if (name === 'ckeditor5' || unlisted.has(name)) continue;
     let editor;
     try {
       editor = editors[name];
     } catch (error) {
+      unlisted.add(name);
       say(`Collaborate: Drupal's ${name} editor cannot be watched.`, error);
       continue;
     }
+    if (!objectLike(editor) || refused.has(editor)) continue;
     const attachOther = attachOf(editor);
-    if (!attachOther || wrappers.has(attachOther) || refused.has(attachOther)) continue;
+    if (!attachOther || wrappers.has(attachOther)) continue;
+    const key = editor;
     /**
      * @param {HTMLTextAreaElement} element
      * @param {any} format
      */
     const wrapper = (element, format) => {
-      otherEditor(element);
-      return attachOther.call(editor, element, format);
+      if (!inside.has(key)) otherEditor(element);
+      return through(key, () => attachOther.call(key, element, format));
     };
     wrappers.add(wrapper);
     try {
       /** @type {any} */ (editor).attach = wrapper;
+      if (attachOf(editor) !== wrapper) throw new Error(`Collaborate: Drupal's ${name} editor keeps its own attach.`);
     } catch (error) {
-      refuse(attachOther, `Drupal's ${name} editor`, error);
+      refuse(editor, `Drupal's ${name} editor`, error);
     }
   }
 };

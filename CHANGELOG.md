@@ -152,6 +152,9 @@ versions follow [Semantic Versioning](https://semver.org/).
   "connection interrupted"; one the network failed still says offline. A
   draft reloading its page says so, telling its user to reload a page that
   stays.
+- The notice a draft leaves for the reload it asks for is said by that reload
+  only, within a minute: a page that stayed, opened again later, says
+  nothing stale.
 - A shared draft that stops while an editor is still awaited (access
   denied, the draft full or discarded) releases the form's controls, which
   stayed inert until the page was reloaded; one about to reload keeps them

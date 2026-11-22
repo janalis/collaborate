@@ -2682,6 +2682,25 @@ test('shows the notice its previous load left once, then forgets it', async () =
   const third = fixture();
   await third.session.ready;
   expect(third.form.querySelector('[data-collaborate-notice]')).toBeNull();
+  // A page that stayed instead of reloading, opened again a while later: its notice is no longer said.
+  third.session.rejoin({ key: 'noticeDiscarded', name: 'Alice' });
+  const now = Date.now();
+  const later = vi.spyOn(Date, 'now').mockReturnValue(now + 61_000);
+  const fourth = fixture();
+  await fourth.session.ready;
+  expect(fourth.form.querySelector('[data-collaborate-notice]')).toBeNull();
+  // Within its time, said; one stored before notices were stamped, said too.
+  later.mockReturnValue(now + 59_000);
+  third.session.rejoin({ key: 'noticeDiscarded', name: 'Alice' });
+  later.mockReturnValue(now + 59_000 + 59_000);
+  const fifth = fixture();
+  await fifth.session.ready;
+  expect(fifth.form.querySelector('[data-collaborate-notice]')?.textContent).toBe('Alice discarded, reloaded');
+  later.mockRestore();
+  sessionStorage.setItem(fifth.session.noticeKey(), JSON.stringify({ key: 'noticeDiscarded', name: 'Bob' }));
+  const sixth = fixture();
+  await sixth.session.ready;
+  expect(sixth.form.querySelector('[data-collaborate-notice]')?.textContent).toBe('Bob discarded, reloaded');
 });
 
 test('reloads without a notice where storage is unavailable or holds something else', async () => {

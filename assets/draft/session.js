@@ -112,6 +112,9 @@ const grantScope = (grant) =>
 // re-creating it in a loop: enough for slow plugin loading and a few rebuilds of a widget meanwhile.
 const EDITOR_ASKS = 10;
 
+/** How long a notice stored as the page reloads stays for the reload to say, in milliseconds. */
+const NOTICE_AGE = 60_000;
+
 /** @param {unknown} error */
 const messageOf = (error) => (error instanceof Error ? error.message : String(error));
 /** @param {string} text */
@@ -1141,7 +1144,7 @@ export class DraftSession {
   rejoin(notice = null) {
     if (notice) {
       try {
-        sessionStorage.setItem(this.noticeKey(), JSON.stringify(notice));
+        sessionStorage.setItem(this.noticeKey(), JSON.stringify({ ...notice, at: Date.now() }));
       } catch {
         // Without storage the page reloads without saying why.
       }
@@ -1167,6 +1170,8 @@ export class DraftSession {
     } catch {
       return;
     }
+    // Said by the reload it announced: a page that stayed instead, opened again later, says nothing stale.
+    if (typeof notice?.at === 'number' && Date.now() - notice.at > NOTICE_AGE) return;
     if (typeof notice?.key === 'string' && this.configuration.messages[notice.key])
       this.bar.notice(this.message(notice.key, typeof notice.name === 'string' ? notice.name : null));
   }

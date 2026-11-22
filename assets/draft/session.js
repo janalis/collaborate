@@ -171,6 +171,9 @@ export class DraftSession {
     this.history = new Map();
     /** @type {Set<string>} */
     this.reported = new Set();
+    // The failures said in the console: the network failing again and again says so once.
+    /** @type {Set<string>} */
+    this.said = new Set();
     // Typed Markdown source not yet applied to its editor's model: flush() applies it before sending.
     /** @type {Map<string, () => void>} */
     this.sources = new Map();
@@ -287,7 +290,9 @@ export class DraftSession {
   message(key, name = null) {
     const messages = this.configuration.messages;
     if (name && messages[`${key}By`]) return messages[`${key}By`].replace('%name%', name);
-    return messages[key] || key;
+    // A Save the stopped draft could not post says what any Save that could not post says.
+    const text = key === 'notPosted' ? 'notSaved' : key;
+    return messages[text] || text;
   }
 
   /**
@@ -316,8 +321,11 @@ export class DraftSession {
   failed(error) {
     if (this.stopped || this.suspended || error?.name === 'AbortError') return;
     const status = error?.status;
-    // The network's failure, or the page's own: said in the console, a page's bug found there.
-    if (!status) console.error('Collaborate:', error);
+    // The network's failure, or the page's own: said in the console once, a page's bug found there.
+    if (!status && !this.said.has(messageOf(error))) {
+      this.said.add(messageOf(error));
+      console.error('Collaborate:', error);
+    }
     if (!status || status === 429 || status >= 500) this.setStatus('offline');
     else if (status === 409) {
       this.setStatus('changed');
@@ -447,19 +455,19 @@ export class DraftSession {
    */
   submit(submitter) {
     if (this.stopped || this.suspended || this.resuming || this.composing) return;
+    // A form that can save has joined: its conflicts are known.
+    if (Object.keys(/** @type {Record<string, unknown>} */ (this.conflicts)).length) {
+      this.setStatus('conflict');
+      this.conflictPanel.scrollIntoView?.({ block: 'nearest' });
+      this.conflictPanel.querySelector('h2')?.focus();
+      return;
+    }
     try {
-      // A form that can save has joined: its conflicts are known.
-      if (Object.keys(/** @type {Record<string, unknown>} */ (this.conflicts)).length) {
-        this.setStatus('conflict');
-        this.conflictPanel.scrollIntoView?.({ block: 'nearest' });
-        this.conflictPanel.querySelector('h2')?.focus();
-        return;
-      }
       this.hidden('_collaborate_grant', this.configuration.grant);
       this.hidden('_collaborate_revision', String(this.revision));
       this.hidden('_collaborate_generation', String(this.generation));
     } catch (error) {
-      console.error(error);
+      console.error('Collaborate: the form could not be saved; save again.', error);
       this.setStatus('notSaved');
       return;
     }
@@ -1022,10 +1030,12 @@ export class DraftSession {
     if (this.stopped || !this.initialized) return false;
     if (this.configuration.grant !== grant) return true;
     // The request it failed may be the replay a pull waits for: the retry, or the next replay, reads the draft.
+    // A refresh that stopped the draft (a sign-in page, a form no longer shared) renews nothing; one the network
+    // failed is the network's failure, the request said offline and retried.
     this.renewal ??= this.refreshRecord(false)
       .then(
         () => true,
-        () => false
+        (error) => (this.stopped ? false : Promise.reject(error))
       )
       .finally(() => {
         /** @type {Promise<boolean> | null} */
@@ -1050,9 +1060,10 @@ export class DraftSession {
     }
     // A sign-in page, or a form no longer shared, reads as no configuration.
     // A JSON answer the network cut is the network's failure: offline, the Save retried.
-    const json = response.headers.get('Content-Type')?.includes('json');
     const refreshed = isAccepted(response)
-      ? await response.json().catch((error) => (json ? Promise.reject(error) : null))
+      ? await response
+          .json()
+          .catch((error) => (response.headers.get('Content-Type')?.includes('json') ? Promise.reject(error) : null))
       : null;
     if (!refreshed?.configuration) {
       this.halt('denied');
@@ -1151,9 +1162,10 @@ export class DraftSession {
     }
     window.onbeforeunload = null;
     // Stopped meanwhile, its requests aborted, and said: a page that stays (its own prompt answered by staying)
-    // tells its user to reload it, nothing of the draft it left saying otherwise, its form saved the ordinary way.
-    this.stop();
-    this.setStatus('reloading');
+    // tells its user to reload it, nothing of the draft it left saying otherwise. Its controls stay as they were and
+    // its Save posts nothing: the form shows a draft the reload replaces.
+    this.halt('reloading', false);
+    this.abort.abort();
     location.reload();
   }
 

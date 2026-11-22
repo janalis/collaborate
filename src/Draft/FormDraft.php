@@ -48,7 +48,6 @@ final readonly class FormDraft
         'changed' => 'The shared draft changed meanwhile. Review it and try again.',
         'failed' => 'The server refused this action. Copy unsaved content and reload the page.',
         'notSaved' => 'The form could not be saved. Click Save again.',
-        'notPosted' => 'The form could not be saved. Click Save again.',
         'reloading' => 'Reloading the page to follow the shared draft. If it does not reload, reload it.',
         'save' => 'Save',
         'discard' => 'Discard changes',

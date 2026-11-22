@@ -108,6 +108,10 @@ const grantScope = (grant) =>
   JSON.parse(
     new TextDecoder().decode(Uint8Array.from(atob(grant.split('.')[0]), (character) => character.charCodeAt(0)))
   );
+// How many times a field's editor may be asked for, none ready since, before the draft takes the host for one
+// re-creating it in a loop: enough for slow plugin loading and a few rebuilds of a widget meanwhile.
+const EDITOR_ASKS = 10;
+
 /** @param {unknown} error */
 const messageOf = (error) => (error instanceof Error ? error.message : String(error));
 /** @param {string} text */
@@ -508,7 +512,7 @@ export class DraftSession {
     }
     const name = this.fieldKey(field.name);
     const state = this.ensureField(name);
-    if (!state) return {};
+    if (!state || this.stopped) return {};
     // A field the draft follows as text gets an editor it cannot follow (a Drupal format switched to CKEditor 5):
     // what is typed there would not be shared, and a peer's edits would be lost, so the draft stops.
     if (state.type !== 'rich') {
@@ -565,7 +569,7 @@ export class DraftSession {
     // followed either.
     const asked = (this.asked.get(name) ?? 0) + 1;
     this.asked.set(name, asked);
-    if (asked > 9) this.editorFailed();
+    if (asked >= EDITOR_ASKS) this.editorFailed();
     // The editor asked for now has the whole while to come: the join's wait, taken, starts again (a wait made now
     // started with it).
     if (waiter === previous) this.awaitEditor(name, waiter);

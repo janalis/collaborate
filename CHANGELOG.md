@@ -69,7 +69,7 @@ versions follow [Semantic Versioning](https://semver.org/).
   another button: pressing Save again posts it. A save waits for editors as
   long as each is given, never less; a page restored from the back/forward
   cache gives them their whole time again. A field whose editor is asked for
-  five times, none ready, stops the draft (a host re-creating it in a loop).
+  ten times, none ready, stops the draft (a host re-creating it in a loop).
   Drupal: its editors are watched on every page, whenever they come, through
   `Drupal.editorAttach` before it attaches one (an AJAX response's libraries
   included), so a shared form that comes in a dialog follows its draft, typed

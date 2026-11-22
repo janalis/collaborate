@@ -542,24 +542,40 @@ test('an editor the module cannot hook leaves the others hooked, and the module 
   await vi.waitFor(() => expect(session.editorFailed).toHaveBeenCalledOnce());
 });
 
-test("a shared form that comes in a dialog loads the bundle's plugin for its editors", async () => {
-  const form = document.querySelector('form');
-  form.remove();
-  // Drupal's CKEditor 5 is watched from the first, no shared form on the page yet.
-  await load();
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  const ckeditor = build();
-  document.body.prepend(form);
-  globalThis.Drupal.behaviors.collaborate.attach(form);
-  await vi.waitFor(() => expect(ckeditor.collaborate?.Collaborate).toBe('CollaboratePlugin'));
-  // A page without CKEditor 5 loads no plugin for a shared form that comes.
-  vi.resetModules();
-  delete globalThis.CKEditor5;
-  await load();
-  delete globalThis.Drupal.editors.ckeditor5;
-  globalThis.Drupal.behaviors.collaborate.attach(form);
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  expect(globalThis.CKEditor5).toBeUndefined();
+test('an editor the module cannot hook, CKEditor 5 included, stops the draft through the dispatcher, said once', async () => {
+  for (const path of ['bridges/drupal.js', 'cursors/cursors.js', 'updates.js'])
+    vi.doMock(`@janalis/collaborate/${path}`, () => ({}));
+  const session = fakeSession({ follows: vi.fn(async () => true) });
+  vi.doMock('@janalis/collaborate/draft/session.js', () => ({ sessionFor: vi.fn(() => session) }));
+  const frozen = Object.freeze({ attach: vi.fn() });
+  const ckeditor5 = Object.freeze({ attach: vi.fn(), detach: vi.fn() });
+  const dispatch = vi.fn();
+  globalThis.Drupal = { behaviors: {}, editors: { ckeditor5, frozen }, editorAttach: dispatch };
+  await import('../../../drupal/js/collaborate.js');
+  expect(errors).toHaveBeenCalledTimes(2);
+  globalThis.Drupal.behaviors.collaborate.attach(document);
+  globalThis.Drupal.editorAttach(body(), { editor: 'frozen' });
+  expect(dispatch).toHaveBeenCalledWith(body(), { editor: 'frozen' });
+  await vi.waitFor(() => expect(session.editorFailed).toHaveBeenCalled());
+  session.stopped = false;
+  session.editorFailed.mockClear();
+  globalThis.Drupal.editorAttach(body(), { editor: 'ckeditor5' });
+  await vi.waitFor(() => expect(session.editorFailed).toHaveBeenCalled());
+  // Said once, however often the module looks again.
+  expect(errors).toHaveBeenCalledTimes(2);
+});
+
+test("a dispatcher the module cannot hook leaves Drupal's editors hooked", async () => {
+  for (const path of ['bridges/drupal.js', 'cursors/cursors.js', 'updates.js'])
+    vi.doMock(`@janalis/collaborate/${path}`, () => ({}));
+  vi.doMock('@janalis/collaborate/draft/session.js', () => ({ sessionFor: vi.fn(() => null) }));
+  const own = vi.fn();
+  const drupal = { behaviors: {}, editors: { codemirror: { attach: own } } };
+  Object.defineProperty(drupal, 'editorAttach', { value: vi.fn(), writable: false, enumerable: true });
+  globalThis.Drupal = drupal;
+  await import('../../../drupal/js/collaborate.js');
+  expect(errors).toHaveBeenCalledWith(expect.any(TypeError));
+  expect(globalThis.Drupal.editors.codemirror.attach).not.toBe(own);
 });
 
 test("an editor the module cannot watch is still attached by Drupal's dispatcher", async () => {

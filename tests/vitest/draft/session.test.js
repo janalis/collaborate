@@ -2123,6 +2123,11 @@ test('an editor asked for again and again, none ever ready, stops the draft: a s
   expect(session.stopped).toBe(true);
   expect(form.dataset.collaborateState).toBe('unavailable');
   await rejected;
+  // A stopped draft takes on no editor more.
+  const waiters = new Map(session.editorWaiters);
+  expect(await session.editorConfiguration({ name: 'Record[body]' })).toEqual({});
+  expect(session.editorWaiters).toEqual(waiters);
+  expect(session.editorWaiters.get('Record[body]')).toBe(waiters.get('Record[body]'));
   // One ready meanwhile starts the count again.
   const other = fixture('<textarea name="Record[body]"></textarea>', {
     'Record[body]': { type: 'rich', initial: 'Body' },

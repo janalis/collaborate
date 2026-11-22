@@ -313,6 +313,8 @@ export class DraftSession {
   failed(error) {
     if (this.stopped || this.suspended || error?.name === 'AbortError') return;
     const status = error?.status;
+    // The network's failure, or the page's own: said in the console, a page's bug found there.
+    if (!status) console.error('Collaborate:', error);
     if (!status || status === 429 || status >= 500) this.setStatus('offline');
     else if (status === 409) {
       this.setStatus('changed');
@@ -511,8 +513,8 @@ export class DraftSession {
       else this.form.requestSubmit();
     } catch (error) {
       console.error('Collaborate: the form could not be saved; save again.', error);
-      // A draft stopped meanwhile keeps saying why: its Save posts the form the ordinary way.
-      if (!this.stopped) this.setStatus('notSaved');
+      // A draft stopped meanwhile has no Discard to offer: its Save posts the form the ordinary way.
+      this.setStatus(this.stopped ? 'notPosted' : 'notSaved');
     }
   }
 
@@ -1044,7 +1046,11 @@ export class DraftSession {
       throw new HttpError(`Collaborate record refresh: ${response.status}`, response.status);
     }
     // A sign-in page, or a form no longer shared, reads as no configuration.
-    const refreshed = isAccepted(response) ? await response.json().catch(() => null) : null;
+    // A JSON answer the network cut is the network's failure: offline, the Save retried.
+    const json = response.headers.get('Content-Type')?.includes('json');
+    const refreshed = isAccepted(response)
+      ? await response.json().catch((error) => (json ? Promise.reject(error) : null))
+      : null;
     if (!refreshed?.configuration) {
       this.halt('denied');
       throw new Error('Collaborate record is unavailable.');
@@ -1141,9 +1147,10 @@ export class DraftSession {
       }
     }
     window.onbeforeunload = null;
-    // Stopped meanwhile, and said: a page that stays (its own prompt answered by staying) tells its user to reload
-    // it, nothing of the draft it left saying otherwise.
-    this.halt('reloading', false);
+    // Stopped meanwhile, its requests aborted, and said: a page that stays (its own prompt answered by staying)
+    // tells its user to reload it, nothing of the draft it left saying otherwise, its form saved the ordinary way.
+    this.stop();
+    this.setStatus('reloading');
     location.reload();
   }
 
@@ -1199,6 +1206,7 @@ export class DraftSession {
     // A draft that had nothing unsaved holds what this page shows. A compaction keeps only saved content, so
     // a page that sent every edit loses none by reloading, even one that has not heard of the save yet.
     if (rebased ? this.sent() : this.clean()) {
+      // Stopped here, whatever rejoining does next.
       this.halt('connecting', false);
       this.rejoin(name ? { key: 'noticeDiscarded', name } : null);
       throw new Error('Collaborate draft was rebased; rejoining.');

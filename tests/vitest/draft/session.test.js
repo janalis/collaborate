@@ -795,8 +795,9 @@ test('a Save whose button left the form posts nothing, and the bar says to save 
   form.dispatchEvent(new SubmitEvent('submit', { cancelable: true, submitter: again }));
   await vi.waitFor(() => expect(said).toHaveBeenCalledWith(expect.stringContaining('save again'), expect.anything()));
   expect(native).not.toHaveBeenCalled();
-  // The draft stopped keeps saying why, offering no Discard it could not do.
-  expect(form.dataset.collaborateState).toBe('unavailable');
+  // The draft stopped: said, offering no Discard it could not do.
+  expect(form.dataset.collaborateState).toBe('notPosted');
+  expect(session.bar.element.querySelector('[data-collaborate-discard]')?.hidden).not.toBe(false);
 });
 
 test("the bar's Save that cannot post says to save again", async () => {
@@ -910,7 +911,7 @@ test("the draft's save fields are its own: a host's control of the name is left 
 test('a Save failing on the page itself says to save again; one the network failed says offline', async () => {
   const { session, form, fetcher } = fixture();
   await session.ready;
-  vi.spyOn(session, 'refreshRecord').mockResolvedValue(undefined);
+  const refresh = vi.spyOn(session, 'refreshRecord').mockResolvedValue(undefined);
   const flush = vi.spyOn(session, 'flush').mockResolvedValue(undefined);
   const said = vi.spyOn(console, 'error').mockImplementation(() => {});
   const hidden = vi.spyOn(session, 'hidden').mockImplementation(() => {
@@ -931,7 +932,20 @@ test('a Save failing on the page itself says to save again; one the network fail
   fetcher.mockResolvedValue(new Response('<html>', { status: 200 }));
   form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
   await vi.waitFor(() => expect(form.dataset.collaborateState).toBe('offline'));
+  // The record's refresh, its JSON cut by the network: offline, the draft kept; a sign-in page there stops it.
+  refresh.mockRestore();
+  session.setStatus('draft');
+  fetcher.mockImplementation(async (url) =>
+    url === form.action
+      ? new Response('{"config', { status: 200, headers: { 'Content-Type': 'application/json' } })
+      : Response.json({})
+  );
+  form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
+  await vi.waitFor(() => expect(form.dataset.collaborateState).toBe('offline'));
+  expect(session.stopped).toBeFalsy();
+  expect(said).toHaveBeenCalledWith('Collaborate:', expect.any(SyntaxError));
   // An aborted Save says nothing of its own.
+  refresh.mockResolvedValue(undefined);
   session.setStatus('draft');
   fetcher.mockRejectedValue(new DOMException('Aborted.', 'AbortError'));
   form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
@@ -944,9 +958,13 @@ test('a draft reloading its page says so: a page that stays tells its user to re
   await session.ready;
   session.rejoin();
   expect(form.dataset.collaborateState).toBe('reloading');
-  // Stopped: nothing of the draft it left says otherwise.
+  // Stopped: nothing of the draft it left says otherwise, its requests aborted, its form saved the ordinary way.
   expect(session.stopped).toBe(true);
   expect(session.live).toBe(false);
+  expect(session.abort.signal.aborted).toBe(true);
+  const event = new SubmitEvent('submit', { cancelable: true });
+  form.dispatchEvent(event);
+  expect(event.defaultPrevented).toBe(false);
 });
 
 test('a draft stopped for an editor while no Save is under way leaves none of its save fields to the next Save', async () => {
@@ -2107,8 +2125,12 @@ test('allows an explicit discard while synchronization is stopped and handles a 
   session.stopped = true;
   form.querySelector('[data-collaborate-discard]').click();
   await vi.waitFor(() => expect(fetcher.mock.calls.some(([url]) => url === '/discard')).toBe(true));
-  await session.reconcile(false);
-  expect(fetcher.mock.calls.some(([url]) => url === '/reconcile')).toBe(true);
+  // The page reloads then: another one uses the saved record.
+  const other = fixture();
+  await other.session.ready;
+  other.session.stopped = true;
+  await other.session.reconcile(false);
+  expect(other.fetcher.mock.calls.some(([url]) => url === '/reconcile')).toBe(true);
 });
 
 test('waits for rich editor initialization, no more once the draft stops for an editor that never comes', async () => {

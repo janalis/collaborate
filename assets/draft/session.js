@@ -112,22 +112,6 @@ const grantScope = (grant) =>
 // re-creating it in a loop: enough for slow plugin loading and a few rebuilds of a widget meanwhile.
 const EDITOR_ASKS = 10;
 
-/**
- * Reaches the server, a failure of the network marked as one (`network`): a Save tells it from the page's own.
- *
- * @template T
- * @param {() => Promise<T>} call
- * @returns {Promise<T>}
- */
-const reach = async (call) => {
-  try {
-    return await call();
-  } catch (error) {
-    if (error instanceof Error) Object.assign(error, { network: true });
-    throw error;
-  }
-};
-
 /** @param {unknown} error */
 const messageOf = (error) => (error instanceof Error ? error.message : String(error));
 /** @param {string} text */
@@ -348,14 +332,12 @@ export class DraftSession {
     const grant = this.configuration.grant;
     // Once the server has verified this grant, its signature stands for the whole field schema.
     const short = this.acknowledged === grant;
-    const response = await reach(() =>
-      postJson(
-        this.fetcher,
-        this.configuration.url.replace('__action__', action),
-        this.configuration.csrf,
-        { grant: short ? grant.split('.')[1] : grant, ...body },
-        { signal }
-      )
+    const response = await postJson(
+      this.fetcher,
+      this.configuration.url.replace('__action__', action),
+      this.configuration.csrf,
+      { grant: short ? grant.split('.')[1] : grant, ...body },
+      { signal }
     );
     signal.throwIfAborted();
     if (short && response.status === 412) {
@@ -416,6 +398,7 @@ export class DraftSession {
         if (this.composing || this.suspended || this.resuming || this.saving) return;
         this.saving = true;
         try {
+          // The server's part: what fails there (the network, the server, the draft) is said as always.
           /** @type {unknown} */
           let failure = null;
           try {
@@ -425,43 +408,9 @@ export class DraftSession {
             failure = error;
           }
           // An editor that never came stopped the draft meanwhile: the Save posts the form as usual.
-          if (this.ordinary) {
-            if (!this.post(event.submitter)) this.setStatus('notSaved');
-            return;
-          }
-          if (failure) throw failure;
-          if (this.stopped || this.suspended || this.resuming || this.composing) return;
-          // A form that can save has joined: its conflicts are known.
-          if (Object.keys(/** @type {Record<string, unknown>} */ (this.conflicts)).length) {
-            this.setStatus('conflict');
-            this.conflictPanel.scrollIntoView?.({ block: 'nearest' });
-            this.conflictPanel.querySelector('h2')?.focus();
-            return;
-          }
-          this.hidden('_collaborate_grant', this.configuration.grant);
-          this.hidden('_collaborate_revision', String(this.revision));
-          this.hidden('_collaborate_generation', String(this.generation));
-          this.submitting = true;
-          // The form posts the revision above: an edit sent after it would read as a peer's and fail the save.
-          // A submission that no handler cancelled leaves the page; one blocked by validation dispatches nothing.
-          /** @param {SubmitEvent} submission */
-          const posted = (submission) => {
-            if (!submission.defaultPrevented) this.posted = true;
-          };
-          window.addEventListener('submit', posted);
-          try {
-            if (!this.post(event.submitter)) this.setStatus('notSaved');
-          } finally {
-            window.removeEventListener('submit', posted);
-            this.submitting = false;
-          }
-        } catch (error) {
-          // A failure neither of the server nor of the network is the page's own: the Save can be pressed again.
-          const status = /** @type {{ status?: unknown, network?: boolean, name?: string }} */ (error);
-          if (status?.status === undefined && !status?.network && status?.name !== 'AbortError' && !this.stopped) {
-            console.error(error);
-            this.setStatus('notSaved');
-          } else this.failed(error);
+          if (this.ordinary) this.post(event.submitter);
+          else if (failure) this.failed(failure);
+          else this.submit(event.submitter);
         } finally {
           this.saving = false;
         }
@@ -482,6 +431,46 @@ export class DraftSession {
       // Without a shared draft the form keeps the ordinary Symfony submission path.
       this.stop();
       throw error;
+    }
+  }
+
+  /**
+   * The page's part of a Save, once the draft holds every edit: what fails here is the page's own, the Save left to
+   * press again.
+   *
+   * @param {HTMLElement | null} [submitter]
+   */
+  submit(submitter) {
+    if (this.stopped || this.suspended || this.resuming || this.composing) return;
+    try {
+      // A form that can save has joined: its conflicts are known.
+      if (Object.keys(/** @type {Record<string, unknown>} */ (this.conflicts)).length) {
+        this.setStatus('conflict');
+        this.conflictPanel.scrollIntoView?.({ block: 'nearest' });
+        this.conflictPanel.querySelector('h2')?.focus();
+        return;
+      }
+      this.hidden('_collaborate_grant', this.configuration.grant);
+      this.hidden('_collaborate_revision', String(this.revision));
+      this.hidden('_collaborate_generation', String(this.generation));
+    } catch (error) {
+      console.error(error);
+      this.setStatus('notSaved');
+      return;
+    }
+    this.submitting = true;
+    // The form posts the revision above: an edit sent after it would read as a peer's and fail the save.
+    // A submission that no handler cancelled leaves the page; one blocked by validation dispatches nothing.
+    /** @param {SubmitEvent} submission */
+    const posted = (submission) => {
+      if (!submission.defaultPrevented) this.posted = true;
+    };
+    window.addEventListener('submit', posted);
+    try {
+      this.post(submitter);
+    } finally {
+      window.removeEventListener('submit', posted);
+      this.submitting = false;
     }
   }
 
@@ -515,16 +504,15 @@ export class DraftSession {
    * posts nothing, the browser refusing it: another button would run another action. The bar says to save again.
    *
    * @param {HTMLElement | null} [submitter]
-   * @returns {boolean} whether the form was submitted
    */
   post(submitter) {
     try {
       if (submitter) this.form.requestSubmit(submitter);
       else this.form.requestSubmit();
-      return true;
     } catch (error) {
       console.error('Collaborate: the form could not be saved; save again.', error);
-      return false;
+      // A draft stopped meanwhile keeps saying why: its Save posts the form the ordinary way.
+      if (!this.stopped) this.setStatus('notSaved');
     }
   }
 
@@ -1045,14 +1033,12 @@ export class DraftSession {
     if (this.stopped) return;
     // The action the form posts to answers its grant and CSRF tokens alone (the `X-Collaborate-Refresh` header);
     // a new-record form's action carries the draft key its grant names.
-    const response = await reach(() =>
-      this.fetcher(this.form.action, {
-        credentials: 'same-origin',
-        cache: 'no-store',
-        signal: this.abort.signal,
-        headers: { Accept: 'application/json', 'X-Collaborate-Refresh': '1' },
-      })
-    );
+    const response = await this.fetcher(this.form.action, {
+      credentials: 'same-origin',
+      cache: 'no-store',
+      signal: this.abort.signal,
+      headers: { Accept: 'application/json', 'X-Collaborate-Refresh': '1' },
+    });
     // A transient failure keeps the session; Save retries the refresh.
     if (!response.ok && !response.redirected && ![401, 403, 404].includes(response.status)) {
       throw new HttpError(`Collaborate record refresh: ${response.status}`, response.status);
@@ -1155,8 +1141,9 @@ export class DraftSession {
       }
     }
     window.onbeforeunload = null;
-    // Said meanwhile: a page that stays (its own prompt answered by staying) tells its user to reload it.
-    this.setStatus('reloading');
+    // Stopped meanwhile, and said: a page that stays (its own prompt answered by staying) tells its user to reload
+    // it, nothing of the draft it left saying otherwise.
+    this.halt('reloading', false);
     location.reload();
   }
 
@@ -1448,7 +1435,7 @@ export class DraftSession {
 
   /** The bar's Save submits the form as its own button would, through the same draft-aware submit handler. */
   saveFromBar() {
-    if (!this.post(this.submitter())) this.setStatus('notSaved');
+    this.post(this.submitter());
   }
 
   async discardDraft() {

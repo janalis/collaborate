@@ -795,12 +795,17 @@ test('a Save whose button left the form posts nothing, and the bar says to save 
   form.dispatchEvent(new SubmitEvent('submit', { cancelable: true, submitter: again }));
   await vi.waitFor(() => expect(said).toHaveBeenCalledWith(expect.stringContaining('save again'), expect.anything()));
   expect(native).not.toHaveBeenCalled();
-  expect(form.dataset.collaborateState).toBe('notSaved');
-  // And from the bar's Save.
+  // The draft stopped keeps saying why, offering no Discard it could not do.
+  expect(form.dataset.collaborateState).toBe('unavailable');
+});
+
+test("the bar's Save that cannot post says to save again", async () => {
+  const { session, form } = fixture();
+  await session.ready;
+  vi.spyOn(console, 'error').mockImplementation(() => {});
   vi.spyOn(form, 'requestSubmit').mockImplementation(() => {
     throw new Error('Detached.');
   });
-  session.setStatus('draft');
   session.saveFromBar();
   expect(form.dataset.collaborateState).toBe('notSaved');
 });
@@ -921,6 +926,11 @@ test('a Save failing on the page itself says to save again; one the network fail
   session.state.fields['Record[name]'].value = 'Changed';
   form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
   await vi.waitFor(() => expect(form.dataset.collaborateState).toBe('offline'));
+  // A body the network cut, or a page that is not the server's answer: the server's part, offline too.
+  session.setStatus('draft');
+  fetcher.mockResolvedValue(new Response('<html>', { status: 200 }));
+  form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
+  await vi.waitFor(() => expect(form.dataset.collaborateState).toBe('offline'));
   // An aborted Save says nothing of its own.
   session.setStatus('draft');
   fetcher.mockRejectedValue(new DOMException('Aborted.', 'AbortError'));
@@ -934,6 +944,9 @@ test('a draft reloading its page says so: a page that stays tells its user to re
   await session.ready;
   session.rejoin();
   expect(form.dataset.collaborateState).toBe('reloading');
+  // Stopped: nothing of the draft it left says otherwise.
+  expect(session.stopped).toBe(true);
+  expect(session.live).toBe(false);
 });
 
 test('a draft stopped for an editor while no Save is under way leaves none of its save fields to the next Save', async () => {

@@ -147,6 +147,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A Save that cannot post (its button left the form, a failure of the page
+  itself) says in the bar to save again, instead of only in the console or as
+  "connection interrupted"; one the network failed still says offline. A
+  draft reloading its page says so, telling its user to reload a page that
+  stays.
 - A shared draft that stops while an editor is still awaited (access
   denied, the draft full or discarded) releases the form's controls, which
   stayed inert until the page was reloaded; one about to reload keeps them

@@ -4,6 +4,8 @@
 'Unsaved changes, kept automatically. Click Save to record them.': 'Unsaved changes, kept automatically. Click Save to record them.'
 'Synchronizing changes…': 'Synchronizing changes…'
 'Connection interrupted. Keep this page open to synchronize your changes.': 'Connection interrupted. Keep this page open to synchronize your changes.'
+'The form could not be saved. Click Save again.': 'The form could not be saved. Click Save again.'
+'Reloading the page to follow the shared draft. If it does not reload, reload it.': 'Reloading the page to follow the shared draft. If it does not reload, reload it.'
 'Collaboration access expired. Your local content is retained.': 'Collaboration access expired. Your local content is retained.'
 'The shared draft is unavailable. Changes you save here are not shared live.': 'The shared draft is unavailable. Changes you save here are not shared live.'
 'This editor is incompatible with the shared draft. Reload the page.': 'This editor is incompatible with the shared draft. Reload the page.'

@@ -21,6 +21,8 @@ export const STATES = {
   discarded: { variant: 'warning', icon: 'fa-rotate-left', announce: true, save: false, discard: false },
   created: { variant: 'success', icon: 'fa-circle-check', announce: true, save: false, discard: false },
   failed: { variant: 'danger', icon: 'fa-triangle-exclamation', announce: true, save: false, discard: false },
+  notSaved: { variant: 'warning', icon: 'fa-triangle-exclamation', announce: true, save: true, discard: true },
+  reloading: { variant: 'secondary', icon: 'fa-rotate', announce: true, save: false, discard: false },
   full: { variant: 'danger', icon: 'fa-database', announce: true, save: false, discard: true },
   denied: { variant: 'danger', icon: 'fa-lock', announce: true, save: false, discard: false },
   incompatible: { variant: 'danger', icon: 'fa-triangle-exclamation', announce: true, save: false, discard: false },

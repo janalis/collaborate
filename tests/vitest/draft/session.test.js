@@ -768,7 +768,7 @@ test('a Save posts the form as usual once the draft stopped for an editor, witho
   expect(form.elements.namedItem('_collaborate_revision')).toBeNull();
 });
 
-test('a Save whose button left the form posts nothing, says so, and leaves the page to save again', async () => {
+test('a Save whose button left the form posts nothing, and the bar says to save again', async () => {
   const { session, form } = fixture();
   await session.ready;
   vi.spyOn(session, 'refreshRecord').mockResolvedValue(undefined);
@@ -776,7 +776,6 @@ test('a Save whose button left the form posts nothing, says so, and leaves the p
   const native = vi.fn((event) => event.preventDefault());
   form.addEventListener('submit', native);
   const submitter = /** @type {HTMLButtonElement} */ (form.querySelector('button[type="submit"]'));
-  const state = form.dataset.collaborateState;
   // The host renders its actions again while the Save waits.
   const flush = vi.spyOn(session, 'flush').mockImplementation(async () => {
     submitter.replaceWith(submitter.cloneNode(true));
@@ -784,7 +783,8 @@ test('a Save whose button left the form posts nothing, says so, and leaves the p
   form.dispatchEvent(new SubmitEvent('submit', { cancelable: true, submitter }));
   await vi.waitFor(() => expect(said).toHaveBeenCalledWith(expect.stringContaining('save again'), expect.anything()));
   expect(native).not.toHaveBeenCalled();
-  expect(form.dataset.collaborateState).toBe(state);
+  expect(form.dataset.collaborateState).toBe('notSaved');
+  expect(session.bar.element.querySelector('[data-collaborate-save]')?.hidden).toBeFalsy();
   // The same as the draft stops for an editor meanwhile.
   said.mockClear();
   const again = /** @type {HTMLButtonElement} */ (form.querySelector('button[type="submit"]'));
@@ -795,6 +795,14 @@ test('a Save whose button left the form posts nothing, says so, and leaves the p
   form.dispatchEvent(new SubmitEvent('submit', { cancelable: true, submitter: again }));
   await vi.waitFor(() => expect(said).toHaveBeenCalledWith(expect.stringContaining('save again'), expect.anything()));
   expect(native).not.toHaveBeenCalled();
+  expect(form.dataset.collaborateState).toBe('notSaved');
+  // And from the bar's Save.
+  vi.spyOn(form, 'requestSubmit').mockImplementation(() => {
+    throw new Error('Detached.');
+  });
+  session.setStatus('draft');
+  session.saveFromBar();
+  expect(form.dataset.collaborateState).toBe('notSaved');
 });
 
 test('a page frozen in the back/forward cache gives its editors their whole time again once back', async () => {
@@ -894,16 +902,38 @@ test("the draft's save fields are its own: a host's control of the name is left 
   expect(form.querySelectorAll('[name="_collaborate_revision"]')).toHaveLength(2);
 });
 
-test('an unexpected failure of a Save is said in the bar', async () => {
-  const { session, form } = fixture();
+test('a Save failing on the page itself says to save again; one the network failed says offline', async () => {
+  const { session, form, fetcher } = fixture();
   await session.ready;
   vi.spyOn(session, 'refreshRecord').mockResolvedValue(undefined);
-  vi.spyOn(session, 'flush').mockResolvedValue(undefined);
-  vi.spyOn(session, 'hidden').mockImplementation(() => {
+  const flush = vi.spyOn(session, 'flush').mockResolvedValue(undefined);
+  const said = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const hidden = vi.spyOn(session, 'hidden').mockImplementation(() => {
     throw new Error('Unexpected.');
   });
   form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
+  await vi.waitFor(() => expect(form.dataset.collaborateState).toBe('notSaved'));
+  expect(said).toHaveBeenCalledWith(new Error('Unexpected.'));
+  hidden.mockRestore();
+  // The network fails the flush's request: offline.
+  flush.mockRestore();
+  fetcher.mockRejectedValue(new TypeError('Failed to fetch'));
+  session.state.fields['Record[name]'].value = 'Changed';
+  form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
   await vi.waitFor(() => expect(form.dataset.collaborateState).toBe('offline'));
+  // An aborted Save says nothing of its own.
+  session.setStatus('draft');
+  fetcher.mockRejectedValue(new DOMException('Aborted.', 'AbortError'));
+  form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(form.dataset.collaborateState).toBe('draft');
+});
+
+test('a draft reloading its page says so: a page that stays tells its user to reload it', async () => {
+  const { session, form } = fixture();
+  await session.ready;
+  session.rejoin();
+  expect(form.dataset.collaborateState).toBe('reloading');
 });
 
 test('a draft stopped for an editor while no Save is under way leaves none of its save fields to the next Save', async () => {

@@ -3,6 +3,8 @@
 'Unsaved changes, kept automatically. Click Save to record them.': 'Modifications non enregistrées, conservées automatiquement. Cliquez sur Enregistrer pour les valider.'
 'Synchronizing changes…': 'Synchronisation des modifications…'
 'Connection interrupted. Keep this page open to synchronize your changes.': 'Connexion interrompue. Gardez cette page ouverte pour synchroniser vos modifications.'
+'The form could not be saved. Click Save again.': 'Le formulaire n’a pas pu être enregistré. Cliquez à nouveau sur Enregistrer.'
+'Reloading the page to follow the shared draft. If it does not reload, reload it.': 'Rechargement de la page pour suivre le brouillon partagé. Si elle ne se recharge pas, rechargez-la.'
 'Collaboration access expired. Your local content is retained.': 'L’accès à la collaboration a expiré. Votre contenu local est conservé.'
 'The shared draft is unavailable. Changes you save here are not shared live.': 'Le brouillon partagé est indisponible. Les modifications enregistrées ici ne sont pas partagées en direct.'
 'This editor is incompatible with the shared draft. Reload the page.': 'Cet éditeur est incompatible avec le brouillon partagé. Rechargez la page.'

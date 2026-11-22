@@ -112,6 +112,22 @@ const grantScope = (grant) =>
 // re-creating it in a loop: enough for slow plugin loading and a few rebuilds of a widget meanwhile.
 const EDITOR_ASKS = 10;
 
+/**
+ * Reaches the server, a failure of the network marked as one (`network`): a Save tells it from the page's own.
+ *
+ * @template T
+ * @param {() => Promise<T>} call
+ * @returns {Promise<T>}
+ */
+const reach = async (call) => {
+  try {
+    return await call();
+  } catch (error) {
+    if (error instanceof Error) Object.assign(error, { network: true });
+    throw error;
+  }
+};
+
 /** @param {unknown} error */
 const messageOf = (error) => (error instanceof Error ? error.message : String(error));
 /** @param {string} text */
@@ -332,12 +348,14 @@ export class DraftSession {
     const grant = this.configuration.grant;
     // Once the server has verified this grant, its signature stands for the whole field schema.
     const short = this.acknowledged === grant;
-    const response = await postJson(
-      this.fetcher,
-      this.configuration.url.replace('__action__', action),
-      this.configuration.csrf,
-      { grant: short ? grant.split('.')[1] : grant, ...body },
-      { signal }
+    const response = await reach(() =>
+      postJson(
+        this.fetcher,
+        this.configuration.url.replace('__action__', action),
+        this.configuration.csrf,
+        { grant: short ? grant.split('.')[1] : grant, ...body },
+        { signal }
+      )
     );
     signal.throwIfAborted();
     if (short && response.status === 412) {
@@ -408,7 +426,7 @@ export class DraftSession {
           }
           // An editor that never came stopped the draft meanwhile: the Save posts the form as usual.
           if (this.ordinary) {
-            this.post(event.submitter);
+            if (!this.post(event.submitter)) this.setStatus('notSaved');
             return;
           }
           if (failure) throw failure;
@@ -432,13 +450,18 @@ export class DraftSession {
           };
           window.addEventListener('submit', posted);
           try {
-            this.post(event.submitter);
+            if (!this.post(event.submitter)) this.setStatus('notSaved');
           } finally {
             window.removeEventListener('submit', posted);
             this.submitting = false;
           }
         } catch (error) {
-          this.failed(error);
+          // A failure neither of the server nor of the network is the page's own: the Save can be pressed again.
+          const status = /** @type {{ status?: unknown, network?: boolean, name?: string }} */ (error);
+          if (status?.status === undefined && !status?.network && status?.name !== 'AbortError' && !this.stopped) {
+            console.error(error);
+            this.setStatus('notSaved');
+          } else this.failed(error);
         } finally {
           this.saving = false;
         }
@@ -489,17 +512,19 @@ export class DraftSession {
 
   /**
    * Posts the form with the button the user pressed. One gone from the form meanwhile (its actions rendered again)
-   * posts nothing, the browser refusing it: another button would run another action. The page stays as it was, its
-   * Save there to press again.
+   * posts nothing, the browser refusing it: another button would run another action. The bar says to save again.
    *
    * @param {HTMLElement | null} [submitter]
+   * @returns {boolean} whether the form was submitted
    */
   post(submitter) {
     try {
       if (submitter) this.form.requestSubmit(submitter);
       else this.form.requestSubmit();
+      return true;
     } catch (error) {
       console.error('Collaborate: the form could not be saved; save again.', error);
+      return false;
     }
   }
 
@@ -1020,12 +1045,14 @@ export class DraftSession {
     if (this.stopped) return;
     // The action the form posts to answers its grant and CSRF tokens alone (the `X-Collaborate-Refresh` header);
     // a new-record form's action carries the draft key its grant names.
-    const response = await this.fetcher(this.form.action, {
-      credentials: 'same-origin',
-      cache: 'no-store',
-      signal: this.abort.signal,
-      headers: { Accept: 'application/json', 'X-Collaborate-Refresh': '1' },
-    });
+    const response = await reach(() =>
+      this.fetcher(this.form.action, {
+        credentials: 'same-origin',
+        cache: 'no-store',
+        signal: this.abort.signal,
+        headers: { Accept: 'application/json', 'X-Collaborate-Refresh': '1' },
+      })
+    );
     // A transient failure keeps the session; Save retries the refresh.
     if (!response.ok && !response.redirected && ![401, 403, 404].includes(response.status)) {
       throw new HttpError(`Collaborate record refresh: ${response.status}`, response.status);
@@ -1128,6 +1155,8 @@ export class DraftSession {
       }
     }
     window.onbeforeunload = null;
+    // Said meanwhile: a page that stays (its own prompt answered by staying) tells its user to reload it.
+    this.setStatus('reloading');
     location.reload();
   }
 
@@ -1419,7 +1448,7 @@ export class DraftSession {
 
   /** The bar's Save submits the form as its own button would, through the same draft-aware submit handler. */
   saveFromBar() {
-    this.post(this.submitter());
+    if (!this.post(this.submitter())) this.setStatus('notSaved');
   }
 
   async discardDraft() {

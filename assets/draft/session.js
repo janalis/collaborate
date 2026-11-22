@@ -520,7 +520,10 @@ export class DraftSession {
       this.editorFailed();
       return {};
     }
-    return { initialData: state.initial, collaborate: this.editorHandle(name) };
+    const collaborate = this.editorHandle(name);
+    // Asked too many times, the draft stopped: the editor starts from the textarea.
+    if (this.stopped) return {};
+    return { initialData: state.initial, collaborate };
   }
 
   /**
@@ -562,7 +565,7 @@ export class DraftSession {
     // followed either.
     const asked = (this.asked.get(name) ?? 0) + 1;
     this.asked.set(name, asked);
-    if (asked > 4) this.editorFailed();
+    if (asked > 9) this.editorFailed();
     // The editor asked for now has the whole while to come: the join's wait, taken, starts again (a wait made now
     // started with it).
     if (waiter === previous) this.awaitEditor(name, waiter);

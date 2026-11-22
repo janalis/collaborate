@@ -2114,12 +2114,12 @@ test('an editor asked for again and again, none ever ready, stops the draft: a s
   await vi.advanceTimersByTimeAsync(0);
   await session.ready;
   const rejected = expect(session.flush()).rejects.toThrow('Collaborate draft stopped.');
-  // The join's time, then four editors asked for in turn: the fifth stops the draft.
-  for (let asked = 0; asked < 4; asked += 1) {
+  // Nine editors asked for in turn, none ready: the tenth stops the draft, and starts from the textarea.
+  for (let asked = 0; asked < 9; asked += 1) {
     await session.editorConfiguration({ name: 'Record[body]' });
     expect(session.stopped).toBeFalsy();
   }
-  await session.editorConfiguration({ name: 'Record[body]' });
+  expect(await session.editorConfiguration({ name: 'Record[body]' })).toEqual({});
   expect(session.stopped).toBe(true);
   expect(form.dataset.collaborateState).toBe('unavailable');
   await rejected;
@@ -2129,9 +2129,9 @@ test('an editor asked for again and again, none ever ready, stops the draft: a s
   });
   await vi.advanceTimersByTimeAsync(0);
   await other.session.ready;
-  for (let asked = 0; asked < 4; asked += 1)
+  for (let asked = 0; asked < 9; asked += 1)
     (await other.session.editorConfiguration({ name: 'Record[body]' })).collaborate.ready();
-  for (let asked = 0; asked < 4; asked += 1) await other.session.editorConfiguration({ name: 'Record[body]' });
+  for (let asked = 0; asked < 9; asked += 1) await other.session.editorConfiguration({ name: 'Record[body]' });
   expect(other.session.stopped).toBeFalsy();
   vi.useRealTimers();
 });

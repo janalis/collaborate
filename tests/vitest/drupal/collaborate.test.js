@@ -520,6 +520,48 @@ test("a shared form that comes in a dialog has its CKEditor 5 follow the draft, 
   expect(attach.mock.calls[0][1].editorSettings.plugins).toContain('collaborate.Collaborate');
 });
 
+test('an editor the module cannot hook leaves the others hooked, and the module running', async () => {
+  for (const path of ['bridges/drupal.js', 'cursors/cursors.js', 'updates.js'])
+    vi.doMock(`@janalis/collaborate/${path}`, () => ({}));
+  const session = fakeSession({ follows: vi.fn(async () => true) });
+  vi.doMock('@janalis/collaborate/draft/session.js', () => ({ sessionFor: vi.fn(() => session) }));
+  const own = vi.fn();
+  globalThis.Drupal = {
+    behaviors: {},
+    editors: {
+      ckeditor5: Object.freeze({ attach: vi.fn(), detach: vi.fn() }),
+      frozen: Object.freeze({ attach: vi.fn() }),
+      codemirror: { attach: own },
+    },
+  };
+  await import('../../../drupal/js/collaborate.js');
+  expect(errors).toHaveBeenCalledWith(expect.any(TypeError));
+  expect(globalThis.Drupal.behaviors.collaborate).toBeDefined();
+  globalThis.Drupal.editors.codemirror.attach(body(), {});
+  expect(own).toHaveBeenCalledOnce();
+  await vi.waitFor(() => expect(session.editorFailed).toHaveBeenCalledOnce());
+});
+
+test("a shared form that comes in a dialog loads the bundle's plugin for its editors", async () => {
+  const form = document.querySelector('form');
+  form.remove();
+  // Drupal's CKEditor 5 is watched from the first, no shared form on the page yet.
+  await load();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const ckeditor = build();
+  document.body.prepend(form);
+  globalThis.Drupal.behaviors.collaborate.attach(form);
+  await vi.waitFor(() => expect(ckeditor.collaborate?.Collaborate).toBe('CollaboratePlugin'));
+  // A page without CKEditor 5 loads no plugin for a shared form that comes.
+  vi.resetModules();
+  delete globalThis.CKEditor5;
+  await load();
+  delete globalThis.Drupal.editors.ckeditor5;
+  globalThis.Drupal.behaviors.collaborate.attach(form);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(globalThis.CKEditor5).toBeUndefined();
+});
+
 test("an editor the module cannot watch is still attached by Drupal's dispatcher", async () => {
   const dispatch = vi.fn(() => 'attached');
   globalThis.Drupal = undefined;
@@ -531,6 +573,9 @@ test("an editor the module cannot watch is still attached by Drupal's dispatcher
   globalThis.Drupal.editors.frozen = Object.freeze({ attach: vi.fn() });
   expect(globalThis.Drupal.editorAttach(body(), { editor: 'frozen' })).toBe('attached');
   expect(errors).toHaveBeenCalledWith(expect.any(TypeError));
+  // A page whose editors are gone, or a format naming none, is Drupal's to attach.
+  delete globalThis.Drupal.editors;
+  expect(globalThis.Drupal.editorAttach(body(), {})).toBe('attached');
 });
 
 test('a Drupal page without editors has none to watch', async () => {

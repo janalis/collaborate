@@ -94,18 +94,13 @@ const stopFor = (session, element) =>
 // field left, settles nothing of the next.
 // Drupal's editors and its dispatcher, watched once each, whenever they come: on the page at first, or later with an
 // AJAX response's libraries (the module's behavior runs before the behaviors those bring).
+// One the module cannot hook (a frozen object) is Drupal's alone, and the others are hooked still.
 /** @type {WeakSet<object>} */
 const hooked = new WeakSet();
-/** @param {object | undefined} target */
-const hook = (target) => {
-  if (!target || hooked.has(target)) return false;
-  hooked.add(target);
-  return true;
-};
 const watchCkeditor5 = () => {
   const ckeditor5 = page.Drupal?.editors?.ckeditor5;
   // On every page: a shared form may come later (a dialog's), and each field's attach asks whether its form is shared.
-  if (!ckeditor5 || !hook(ckeditor5)) return;
+  if (!ckeditor5 || hooked.has(ckeditor5)) return;
   const { attach, detach } = ckeditor5;
   /** @typedef {import('@janalis/collaborate/draft/session.js').EditorHandle} EditorHandle */
   /**
@@ -259,6 +254,7 @@ const watchCkeditor5 = () => {
     attachShared(element, format, mine).catch((error) => console.error(error));
     return true;
   };
+  hooked.add(ckeditor5);
 
   /**
    * @param {HTMLTextAreaElement} element
@@ -295,7 +291,7 @@ const watchOthers = () => {
   const drupal = page.Drupal;
   if (!drupal) return;
   const editorAttach = drupal.editorAttach;
-  if (typeof editorAttach === 'function' && hook(editorAttach)) {
+  if (typeof editorAttach === 'function' && !hooked.has(editorAttach)) {
     // Drupal attaches every editor through it: one whose library came later (a dialog's) is watched before it is
     // attached, Drupal's editor behavior running before the module's.
     /**
@@ -303,12 +299,8 @@ const watchOthers = () => {
      * @param {any} format
      */
     const watcher = (element, format) => {
-      try {
-        watchEditors();
-      } catch (error) {
-        // An editor the module cannot watch is Drupal's still.
-        console.error(error);
-      }
+      const editor = /** @type {Record<string, object | undefined>} */ (drupal.editors ?? {})[String(format?.editor)];
+      if (!editor || !hooked.has(editor)) watchEditors();
       return editorAttach.call(drupal, element, format);
     };
     hooked.add(watcher);
@@ -316,21 +308,31 @@ const watchOthers = () => {
   }
   // Each editor tells the draft, through the dispatcher or called directly.
   for (const [name, editor] of Object.entries(drupal.editors ?? {})) {
-    if (name === 'ckeditor5' || typeof editor?.attach !== 'function' || !hook(editor)) continue;
+    if (name === 'ckeditor5' || typeof editor?.attach !== 'function' || hooked.has(editor)) continue;
     const attachOther = editor.attach;
-    /**
-     * @param {HTMLTextAreaElement} element
-     * @param {any} format
-     */
-    editor.attach = (element, format) => {
-      otherEditor(element);
-      return attachOther.call(editor, element, format);
-    };
+    try {
+      /**
+       * @param {HTMLTextAreaElement} element
+       * @param {any} format
+       */
+      editor.attach = (element, format) => {
+        otherEditor(element);
+        return attachOther.call(editor, element, format);
+      };
+      hooked.add(editor);
+    } catch (error) {
+      console.error(error);
+    }
   }
 };
 const watchEditors = () => {
-  watchCkeditor5();
-  watchOthers();
+  for (const watch of [watchCkeditor5, watchOthers]) {
+    try {
+      watch();
+    } catch (error) {
+      console.error(error);
+    }
+  }
 };
 watchEditors();
 
@@ -395,6 +397,8 @@ if (page.Drupal) {
         context.closest('form[data-collaborate]') ?? context.querySelector('form[data-collaborate]')
       );
       if (!form) return;
+      // Its editors need the bundle's plugin, a form come in a dialog's as much as one on the page at first.
+      if (page.Drupal?.editors?.ckeditor5) loadPlugins().catch(() => {});
       loadDrafts().then(
         ({ sessionFor }) => {
           const session = sessionFor({ form });

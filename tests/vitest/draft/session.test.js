@@ -2937,9 +2937,27 @@ test('blocks Save while external changes need review, supports Enter submission 
   state.conflicts = {};
   form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
   await vi.waitFor(() => expect(form.requestSubmit).toHaveBeenCalledWith());
-  fetcher.mockRejectedValue(new Error('offline'));
+  // The network failing, as fetch does: offline.
+  fetcher.mockRejectedValue(new TypeError('Failed to fetch'));
   form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
   await vi.waitFor(() => expect(form.dataset.collaborateState).toBe('offline'));
+  // A bug of the page's own as the Save reaches the server (not as the network fails): said to save again.
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  const refresh = vi.spyOn(session, 'refreshRecord').mockRejectedValueOnce(new RangeError('A bug.'));
+  form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
+  await vi.waitFor(() => expect(form.dataset.collaborateState).toBe('notSaved'));
+  // The server failing (an answer's status): offline, not the page's.
+  session.setStatus('draft');
+  refresh.mockRejectedValueOnce(new HttpError('Collaborate record refresh: 503', 503));
+  form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
+  await vi.waitFor(() => expect(form.dataset.collaborateState).toBe('offline'));
+  expect(session.pageBug(new RangeError('A bug.'))).toBe(true);
+  // A draft frozen, or stopped, as it fails: nothing of the page's.
+  session.suspended = true;
+  expect(session.pageBug(new RangeError('A bug.'))).toBe(false);
+  session.suspended = false;
+  session.stopped = true;
+  expect(session.pageBug(new RangeError('A bug.'))).toBe(false);
 });
 
 test('pauses an in-flight replay when IME composition begins and refuses schema changes in refreshed grants', async () => {

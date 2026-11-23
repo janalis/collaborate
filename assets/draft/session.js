@@ -361,6 +361,24 @@ export class DraftSession {
   }
 
   /**
+   * Whether a Save's failure is the page's own: no answer's status, not as the network fails (a TypeError, which a
+   * bug may throw too, is the network's), nor an answer that is not JSON, an abort, or the draft stopping.
+   *
+   * @param {unknown} error
+   */
+  pageBug(error) {
+    const failure = /** @type {{ status?: unknown, name?: string }} */ (error);
+    return (
+      !this.stopped &&
+      !this.suspended &&
+      failure?.status === undefined &&
+      !(error instanceof TypeError) &&
+      !(error instanceof SyntaxError) &&
+      failure?.name !== 'AbortError'
+    );
+  }
+
+  /**
    * @param {string} action
    * @param {object} [body]
    * @param {boolean} [renewed]
@@ -449,7 +467,11 @@ export class DraftSession {
           }
           // An editor that never came stopped the draft meanwhile: the Save posts the form as usual.
           if (this.ordinary) this.post(event.submitter);
-          else if (failure) this.failed(failure);
+          else if (failure && this.pageBug(failure)) {
+            // Neither the server's nor the network's: the page's own, its Save to press again.
+            console.error('Collaborate: the form could not be saved; save again.', failure);
+            this.setStatus('notSaved');
+          } else if (failure) this.failed(failure);
           else this.submit(event.submitter);
         } finally {
           this.saving = false;

@@ -207,6 +207,7 @@ export class Editor {
    *
    * @param {{ force?: boolean }} [options] `force` for a page without JavaScript, whose button Playwright never sees
    *   as stable (its check stalls there until a retry, 30 seconds on)
+   * @returns {Promise<import('@playwright/test').Response | null>} the save's answer
    */
   async save({ force = false } = {}) {
     const posted = this.page.waitForRequest((request) => request.method() === 'POST' && request.isNavigationRequest());
@@ -215,8 +216,9 @@ export class Editor {
     await this.saveButton.click({ force });
     // The save checkpoints the draft before it answers: a page opened before the answer would read the draft
     // as it was, and leaving earlier aborts the request while the server still saves.
-    await (await posted).response();
+    const response = await (await posted).response();
     await loaded;
+    return response;
   }
 
   /** The draft session of this page's shared form, as a page-side handle (`window.collaborateSession()`). */
@@ -413,7 +415,11 @@ export const test = base.extend({
       const carol = await editor('carol', { javaScriptEnabled: false });
       await carol.page.goto(carol.routes.edit(id));
       await fill(carol);
-      await carol.save({ force: true });
+      const response = await carol.save({ force: true });
+      // Accepted, it redirects: a form refused (whatever its theme renders errors as) fails here, not as a
+      // conflict never shown later.
+      const status = response?.status() ?? 0;
+      expect(status >= 300 && status < 400, `the outside save answered ${status}`).toBe(true);
       await expect(carol.page.locator('.invalid-feedback, .form-error-message')).toHaveCount(0);
       return carol;
     });

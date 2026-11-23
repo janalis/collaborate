@@ -175,6 +175,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 - A save field a host moved into another form is taken out of it as that
   form posts, or as the draft writes its save fields again: it would post the
   draft's grant and revision there.
+- A Save failing for a bug of the page's own as it reaches the server (an
+  error with no answer's status, not as the network fails) says to save
+  again, the error in the console, instead of "connection interrupted". One
+  thrown as a TypeError still reads as the network's.
 - A draft reloading its page stops and says so. A page that stays (a
   leave-page prompt answered by staying) keeps telling its user to reload, and
   its Save posts the form the ordinary way, without the draft's save fields.

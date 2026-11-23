@@ -163,6 +163,11 @@ versions follow [Semantic Versioning](https://semver.org/).
   saves the ordinary way, its field holding that text. Edits a next editor
   cannot take over (it has typed already, or the draft moved on since an
   editor it replaced was built) are dropped, and the console says so.
+- A Save under way as an editor goes holding edits (a format switched) waits
+  for the field's next editor, as any Save waits for editors, and sends what
+  it takes over before posting. A grant renewal that fails while the browser
+  knows it is offline says offline and is retried, instead of stopping the
+  draft as denied.
 - A save field a host moved into another form is taken out of it as the
   draft writes its save fields again: it would post the draft's grant and
   revision there.

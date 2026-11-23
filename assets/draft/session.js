@@ -515,8 +515,11 @@ export class DraftSession {
     // The hidden inputs this session added: a host's own control of the name, or the id, is not the session's.
     // One a host took out of the form is added again; one it moved into another form, where it would post this
     // draft's grant and revision, is taken out of there.
-    for (const added of this.added) if (added.form !== this.form) added.remove();
-    this.added = this.added.filter((added) => added.form === this.form);
+    this.added = this.added.filter((added) => {
+      if (added.form === this.form) return true;
+      added.remove();
+      return false;
+    });
     let control = this.added.find((added) => added.name === name);
     if (!control) {
       control = document.createElement('input');
@@ -768,6 +771,7 @@ export class DraftSession {
    */
   detachField(name) {
     this.removals.set(name, (this.removals.get(name) ?? 0) + 1);
+    for (const other of this.replaced) if (other.field === name) other.adapter.destroy?.();
     this.replaced = this.replaced.filter((other) => other.field !== name);
     this.retiring = this.retiring.filter((retired) => retired.field !== name);
     this.adapters.get(name)?.destroy?.();
@@ -791,7 +795,8 @@ export class DraftSession {
     }
     const removals = this.removals.get(name) ?? 0;
     const prior = this.adapters.get(name);
-    if (prior && prior !== buffer) this.replaced.push({ field: name, adapter: prior });
+    // An editor (one that can hold edits) replaced, not gone yet: a field's value control has no going to wait for.
+    if (prior && prior !== buffer && prior.held) this.replaced.push({ field: name, adapter: prior });
     this.adapters.set(name, buffer);
     // What an editor of the field gone held unsent (one at most): taken over where the draft was when it went.
     const index = this.retiring.findIndex((retired) => retired.field === name);
@@ -822,18 +827,8 @@ export class DraftSession {
       if (removals !== (this.removals.get(name) ?? 0)) return;
       // What its editor typed last and had not sent (a format switched within the 150 ms edits wait): the field's
       // next editor takes it over, or one already there, on the version it was made on.
-      let kept = buffer.held?.();
+      const kept = this.unsent(name, buffer);
       if (!kept?.groups.length) return;
-      // What it sent that the draft has already (acknowledged while another editor followed the field) is the
-      // draft's: the rest follows it.
-      for (const event of this.history.get(name) || []) {
-        const batch = /** @type {{ id?: string, version: number, operations: unknown[] }} */ (
-          /** @type {unknown} */ (event)
-        );
-        if (kept.groups[0]?.id === batch.id)
-          kept = { version: batch.version + batch.operations.length, groups: kept.groups.slice(1) };
-      }
-      if (!kept.groups.length) return;
       const next = this.adapters.get(name);
       if (next) {
         this.takeOver(name, next, kept);
@@ -854,6 +849,26 @@ export class DraftSession {
       }
       this.editorWaiter(name);
     };
+  }
+
+  /**
+   * What an editor holds the draft has not: what it sent that the draft has already (acknowledged while another
+   * editor followed the field) is the draft's, the rest follows it.
+   *
+   * @param {string} name
+   * @param {Adapter} buffer
+   * @returns {Held | null}
+   */
+  unsent(name, buffer) {
+    let kept = buffer.held?.() ?? null;
+    for (const event of this.history.get(name) || []) {
+      const batch = /** @type {{ id?: string, version: number, operations: unknown[] }} */ (
+        /** @type {unknown} */ (event)
+      );
+      if (kept && kept.groups[0]?.id === batch.id)
+        kept = { version: batch.version + batch.operations.length, groups: kept.groups.slice(1) };
+    }
+    return kept;
   }
 
   /** @param {string} name a field whose editor gone held edits no editor could take over */
@@ -1154,11 +1169,12 @@ export class DraftSession {
     if (this.configuration.grant !== grant) return true;
     // The request it failed may be the replay a pull waits for: the retry, or the next replay, reads the draft.
     // A refresh that fails renews nothing: a sign-in on another origin fails as the network would, and the draft
-    // stops as denied rather than retrying for good.
+    // stops as denied rather than retrying for good. One failing while the browser knows it is offline is the
+    // network's: the request says offline, and is retried.
     this.renewal ??= this.refreshRecord(false)
       .then(
         () => true,
-        () => false
+        (error) => (navigator.onLine === false ? Promise.reject(error) : false)
       )
       .finally(() => {
         /** @type {Promise<boolean> | null} */
@@ -1268,7 +1284,7 @@ export class DraftSession {
   sent() {
     return (
       !this.retiring.length &&
-      this.replaced.every((other) => !other.adapter.hasPending?.()) &&
+      this.replaced.every((other) => !this.unsent(other.field, other.adapter)?.groups.length) &&
       Array.from(this.adapters.values()).every((adapter) =>
         adapter.hasPending ? !adapter.hasPending() : !adapter.next()
       )
@@ -1483,15 +1499,20 @@ export class DraftSession {
       await this.ready;
       // Every editor awaited has its own time to come, past which, or past a few times asked for again without
       // coming, the draft stops: a save waits that long.
-      await Promise.race([
-        Promise.all(Array.from(this.editorWaiters.values(), (waiter) => waiter.promise)),
-        this.stopping,
-      ]);
+      const editors = () =>
+        Promise.race([Promise.all(Array.from(this.editorWaiters.values(), (waiter) => waiter.promise)), this.stopping]);
+      await editors();
       await this.pull();
       for (const settle of this.sources.values()) settle();
       for (;;) {
         // A flush already under way when the form was posted sends nothing more.
         if (this.composing || this.posted) return;
+        // An editor awaited meanwhile (one gone with edits it held, a format switched) is waited for too: what it
+        // takes over is sent before the flush ends. A draft stopping ends the wait, and the flush, throwing.
+        if (Array.from(this.editorWaiters.values()).some((waiter) => !waiter.ready)) {
+          await editors();
+          continue;
+        }
         let outgoing;
         for (const [field, adapter] of this.adapters) {
           const batch = adapter.next();

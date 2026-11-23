@@ -2049,6 +2049,121 @@ test('a replaced editor hands over what follows its batch the draft acknowledged
   for (const each of [a, b, c]) each.model.destroy();
 });
 
+test('a flush under way as an editor goes holding edits waits for the next one and sends them; a renewal failing offline is offline', async () => {
+  const name = 'Record[body]';
+  const { session, form, state, fetcher } = fixture('<textarea id="body" name="Record[body]"></textarea>', {
+    [name]: { type: 'rich', initial: '' },
+  });
+  await session.ready;
+  (await session.editorConfiguration(form.querySelector('textarea'))).collaborate.ready();
+  vi.spyOn(session, 'schedule').mockImplementation(() => {});
+  const editor = () => {
+    const model = new Model();
+    model.schema.register('paragraph', { inheritAllFrom: '$block' });
+    const root = model.document.createRoot();
+    model.change((writer) => writer.appendElement('paragraph', root));
+    return { model, buffer: new OperationBuffer(model), paragraph: () => /** @type {any} */ (root.getChild(0)) };
+  };
+  const a = editor();
+  const leaveA = session.register(name, a.buffer);
+  a.model.change((writer) => writer.insertText('Held', a.paragraph(), 0));
+  // The editor goes as the flush pulls, past its wait for editors.
+  const pull = session.pull.bind(session);
+  vi.spyOn(session, 'pull').mockImplementationOnce(async () => {
+    leaveA();
+    await pull();
+  });
+  const flushing = session.flush();
+  await vi.waitFor(() => expect(session.editorWaiters.get(name)?.ready).toBe(false));
+  const b = editor();
+  session.register(name, b.buffer);
+  (await session.editorConfiguration(form.querySelector('textarea'))).collaborate.ready();
+  await flushing;
+  expect(state.events.filter((event) => event.field === name)).toHaveLength(1);
+  expect(b.buffer.hasPending()).toBe(false);
+  // A grant's renewal failing while the browser is offline: the network's failure, not a refusal.
+  const offline = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+  const transport = fetcher.getMockImplementation();
+  fetcher.mockImplementation(async (url, options) => {
+    if (url === form.action) throw new TypeError('Failed to fetch');
+    if (url === '/replay') return new Response('', { status: 403 });
+    return transport(url, options);
+  });
+  await expect(session.pull()).rejects.toThrow('Failed to fetch');
+  expect(session.stopped).toBeFalsy();
+  offline.mockRestore();
+  for (const each of [a, b]) each.model.destroy();
+});
+
+test('a replaced editor owes nothing the draft acknowledged; only editors are kept as replaced, destroyed with their field; a flush ends as the draft stops', async () => {
+  const name = 'Record[body]';
+  const { session, form, state } = fixture('<textarea id="body" name="Record[body]"></textarea>', {
+    [name]: { type: 'rich', initial: '' },
+  });
+  await session.ready;
+  (await session.editorConfiguration(form.querySelector('textarea'))).collaborate.ready();
+  vi.spyOn(session, 'schedule').mockImplementation(() => {});
+  const editor = () => {
+    const model = new Model();
+    model.schema.register('paragraph', { inheritAllFrom: '$block' });
+    const root = model.document.createRoot();
+    model.change((writer) => writer.appendElement('paragraph', root));
+    return { model, buffer: new OperationBuffer(model), paragraph: () => /** @type {any} */ (root.getChild(0)) };
+  };
+  // A sent its edit; B replaced it; the draft acknowledged the edit, heard by B: A owes nothing.
+  const a = editor();
+  session.register(name, a.buffer);
+  a.model.change((writer) => writer.insertText('Sent', a.paragraph(), 0));
+  const sent = /** @type {any} */ (a.buffer.next());
+  const b = editor();
+  session.register(name, b.buffer);
+  state.fields[name].initialVersion = sent.version;
+  state.fields[name].version = sent.version + sent.operations.length;
+  state.events.push({ kind: 'operations', ...sent, field: name, revision: ++state.revision });
+  await session.pull();
+  expect(a.buffer.hasPending()).toBe(true);
+  expect(session.sent()).toBe(true);
+  // A value control replaced is not kept: it has no going to wait for.
+  const control = { next: () => null, receive() {} };
+  session.register(name, control);
+  const c = editor();
+  session.register(name, c.buffer);
+  expect(session.replaced.map((other) => other.adapter)).not.toContain(control);
+  // The field removed: its replaced editors are destroyed with it; another field's are not.
+  const destroy = vi.spyOn(a.buffer, 'destroy');
+  const elsewhere = { field: 'Record[other]', adapter: { next: () => null, receive() {}, destroy: vi.fn() } };
+  session.replaced.push(elsewhere);
+  session.detachField(name);
+  expect(destroy).toHaveBeenCalled();
+  expect(elsewhere.adapter.destroy).not.toHaveBeenCalled();
+  expect(session.replaced).toEqual([elsewhere]);
+  session.replaced = [];
+  // A flush waiting for an editor as the draft stops ends, rather than waiting on.
+  const d = editor();
+  const leaveD = session.register(name, d.buffer);
+  d.model.change((writer) => writer.insertText('D', d.paragraph(), 0));
+  leaveD();
+  expect(session.editorWaiters.get(name)?.ready).toBe(false);
+  const pull = session.pull.bind(session);
+  vi.spyOn(session, 'pull').mockImplementationOnce(async () => {
+    session.editorFailed();
+    await pull().catch(() => {});
+  });
+  session.editorWaiters.get(name)?.resolve();
+  const waiter = session.editorWaiter(name);
+  waiter.ready = false;
+  await expect(
+    Promise.race([
+      session.flush().then(
+        () => 'ended',
+        () => 'ended'
+      ),
+      new Promise((resolve) => setTimeout(() => resolve('spinning'), 500)),
+    ])
+  ).resolves.toBe('ended');
+  for (const each of [a, b, c, d]) each.model.destroy();
+});
+
 test('applies typed Markdown source once typing settles, on blur, before a flush, and never after removal', async () => {
   const name = 'Record[body]';
   const { session, form } = fixture(

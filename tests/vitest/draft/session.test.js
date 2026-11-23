@@ -2232,6 +2232,10 @@ test('a reload keeps inert controls so; held edits go with their field; a replac
   const flush = vi.spyOn(session, 'flush').mockResolvedValue(undefined);
   await session.reconcile(true);
   expect(adopt).not.toHaveBeenCalled();
+  // One holding edits of another field keeps this one's saved value from nothing.
+  session.replaced = [{ field: 'Record[other]', adapter: holding }];
+  await session.reconcile(true);
+  expect(adopt).toHaveBeenCalledWith('Saved');
   session.replaced = [];
   request.mockRestore();
   vi.mocked(session.pull).mockRestore();
@@ -2298,6 +2302,77 @@ test('a Save waits for a replaced editor holding edits to go, and sends them; on
   expect(Date.now() - started).toBeGreaterThanOrEqual(40);
   expect(session.owing()).toBe(true);
   for (const each of [a, b, c]) each.model.destroy();
+});
+
+test("held edits taken over as the next editor replays are rebased only over what it applied; two held for a field both taken; a Save's wait ends as nothing is owed", async () => {
+  const name = 'Record[body]';
+  const { session, form, state } = fixture('<textarea id="body" name="Record[body]"></textarea>', {
+    [name]: { type: 'rich', initial: '' },
+  });
+  await session.ready;
+  (await session.editorConfiguration(form.querySelector('textarea'))).collaborate.ready();
+  vi.spyOn(session, 'schedule').mockImplementation(() => {});
+  const editor = () => {
+    const model = new Model();
+    model.schema.register('paragraph', { inheritAllFrom: '$block' });
+    const root = model.document.createRoot();
+    model.change((writer) => writer.appendElement('paragraph', root));
+    const paragraph = () => /** @type {any} */ (root.getChild(0));
+    const text = () => Array.from(paragraph().getChildren(), (/** @type {any} */ node) => node.data).join('');
+    return { model, buffer: new OperationBuffer(model), paragraph, text };
+  };
+  const events = () => state.events.filter((event) => event.field === name);
+  // 'ab' in the draft; the editor goes holding 'X' typed after it.
+  const a = editor();
+  const leaveA = session.register(name, a.buffer);
+  a.model.change((writer) => writer.insertText('ab', a.paragraph(), 0));
+  await session.flush();
+  a.model.change((writer) => writer.insertText('X', a.paragraph(), 2));
+  leaveA();
+  // A peer's 'PP' reaches the draft at that version, before the field's next editor comes.
+  const peer = editor();
+  for (const event of events()) peer.buffer.receive(event);
+  peer.model.change((writer) => writer.insertText('PP', peer.paragraph(), 0));
+  const batch = /** @type {any} */ (peer.buffer.next());
+  state.fields[name].version = batch.version + batch.operations.length;
+  state.events.push({ kind: 'operations', ...batch, field: name, revision: ++state.revision });
+  await session.pull();
+  const next = editor();
+  session.register(name, next.buffer);
+  expect(form.dataset.collaborateState).not.toBe('incompatible');
+  expect(next.text()).toBe('PPabX');
+  // Two held for the field (one replaced going after the one that replaced it): both taken over.
+  (await session.editorConfiguration(form.querySelector('textarea'))).collaborate.ready();
+  const b = editor();
+  const leaveB = session.register(name, b.buffer);
+  b.model.change((writer) => writer.insertText('1', b.paragraph(), 0));
+  const c = editor();
+  const leaveC = session.register(name, c.buffer);
+  c.model.change((writer) => writer.insertText('2', c.paragraph(), 0));
+  leaveC();
+  leaveB();
+  expect(session.retiring).toHaveLength(2);
+  const d = editor();
+  session.register(name, d.buffer);
+  expect(session.retiring).toEqual([]);
+  expect(d.buffer.held().groups).toHaveLength(2);
+  // A Save waiting on a replaced editor holding edits ends as soon as nothing is owed: its field removed.
+  session.configuration.config = { ...session.configuration.config, nextEditorGrace: 5_000 };
+  (await session.editorConfiguration(form.querySelector('textarea'))).collaborate.ready();
+  session.adapters.delete(name);
+  const e = editor();
+  session.register(name, e.buffer);
+  e.model.change((writer) => writer.insertText('E', e.paragraph(), 0));
+  const f = editor();
+  session.register(name, f.buffer);
+  expect(session.owing()).toBe(true);
+  const started = Date.now();
+  const saving = session.flush();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  session.detachField(name);
+  await saving;
+  expect(Date.now() - started).toBeLessThan(2_000);
+  for (const each of [a, peer, next, b, c, d, e, f]) each.model.destroy();
 });
 
 test('applies typed Markdown source once typing settles, on blur, before a flush, and never after removal', async () => {

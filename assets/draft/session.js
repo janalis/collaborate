@@ -186,9 +186,6 @@ export class DraftSession {
     // Editors a later one of their field replaced, not gone yet: what they hold is unsent until they go.
     /** @type {{ field: string, adapter: Adapter }[]} */
     this.replaced = [];
-    // What a Save waiting for replaced editors to go is told as one goes.
-    /** @type {(() => void)[]} */
-    this.goings = [];
     // The failures said in the console: the network failing again and again says so once.
     /** @type {Set<string>} */
     this.said = new Set();
@@ -815,21 +812,20 @@ export class DraftSession {
     if (prior && prior !== buffer && prior.held) this.replaced.push({ field: name, adapter: prior });
     this.adapters.set(name, buffer);
     // What an editor of the field gone held unsent (one at most): taken over where the draft was when it went.
-    const index = this.retiring.findIndex((retired) => retired.field === name);
-    let held = index < 0 ? null : this.retiring.splice(index, 1)[0].held;
+    // What editors of the field gone held unsent (one replaced going after the one that replaced it: two): each
+    // taken over where the draft was when it went, or after the replay, rebased over what it applied since.
+    const helds = this.retiring.filter((retired) => retired.field === name).map((retired) => retired.held);
+    this.retiring = this.retiring.filter((retired) => retired.field !== name);
     try {
       for (const event of this.history.get(name) || []) {
         // Taken over before the draft's first edit after it went: one of its own the draft has already acknowledges
         // it, under its id, as any of the editor's own. One that cannot be applied stops the draft, this editor
         // left registered, to go as any.
-        if (held && /** @type {number} */ (event.version) >= held.version) {
-          const taken = held;
-          held = null;
-          if (!this.takeOver(name, buffer, taken)) break;
-        }
+        if (helds.length && /** @type {number} */ (event.version) >= helds[0].version)
+          if (!this.takeOver(name, buffer, /** @type {Held} */ (helds.shift()))) break;
         buffer.receive(event);
       }
-      if (held) this.takeOver(name, buffer, held);
+      helds.every((held) => this.takeOver(name, buffer, held));
     } catch (error) {
       this.incompatible('replay', name, messageOf(error));
       throw error;
@@ -838,10 +834,7 @@ export class DraftSession {
     return () => {
       const current = this.adapters.get(name) === buffer;
       if (current) this.adapters.delete(name);
-      if (this.replaced.some((other) => other.adapter === buffer)) {
-        this.replaced = this.replaced.filter((other) => other.adapter !== buffer);
-        for (const gone of this.goings.splice(0)) gone();
-      }
+      this.replaced = this.replaced.filter((other) => other.adapter !== buffer);
       // A field removed meanwhile keeps nothing of it.
       if (removals !== (this.removals.get(name) ?? 0)) return;
       // What its editor typed last and had not sent (a format switched within the 150 ms edits wait): the field's
@@ -922,7 +915,7 @@ export class DraftSession {
     if (buffer.hold && version >= held.version) {
       const since = (this.history.get(name) || []).flatMap((event) => {
         const batch = /** @type {{ version: number, operations: unknown[] }} */ (/** @type {unknown} */ (event));
-        return batch.version >= held.version ? batch.operations : [];
+        return batch.version >= held.version && batch.version < version ? batch.operations : [];
       });
       buffer.hold(held, since);
       return;
@@ -1302,14 +1295,21 @@ export class DraftSession {
     return this.revision === this.state.savedRevision && this.sent();
   }
 
-  /** Every edit made on this page reached the journal. */
-  /** Whether an editor replaced, not gone yet, holds edits the draft has not. */
-  owing() {
+  /**
+   * Whether an editor replaced, not gone yet, holds edits the draft has not.
+   *
+   * @param {string} [name] the field's only
+   */
+  owing(name) {
     return this.replaced.some(
-      (other) => other.adapter.hasPending?.() && Boolean(this.unsent(other.field, other.adapter)?.groups.length)
+      (other) =>
+        (name === undefined || other.field === name) &&
+        other.adapter.hasPending?.() &&
+        Boolean(this.unsent(other.field, other.adapter)?.groups.length)
     );
   }
 
+  /** Every edit made on this page reached the journal. */
   sent() {
     return (
       !this.retiring.length &&
@@ -1505,11 +1505,7 @@ export class DraftSession {
         for (const [name, value] of Object.entries(/** @type {Record<string, unknown>} */ (this.conflicts))) {
           const state = this.state.fields[name];
           const adapter = this.adapters.get(name);
-          const held =
-            this.retiring.some((retired) => retired.field === name) ||
-            this.replaced.some(
-              (other) => other.field === name && Boolean(this.unsent(other.field, other.adapter)?.groups.length)
-            );
+          const held = this.retiring.some((retired) => retired.field === name) || this.owing(name);
           if (state && state.version === (state.savedVersion ?? null) && !adapter?.next() && !held)
             adapter?.adopt?.(value);
         }
@@ -1549,24 +1545,6 @@ export class DraftSession {
           await editors();
           continue;
         }
-        // A replaced editor holding edits it has not sent (a host building the next before destroying it) is waited
-        // for to go, its edits handed over and sent, as long as an editor is: then the Save goes on without them.
-        if (this.owing()) {
-          deadline ??= Date.now() + this.setting('nextEditorGrace', 10_000);
-          const left = deadline - Date.now();
-          if (left > 0) {
-            /** @type {ReturnType<typeof setTimeout> | undefined} */
-            let timer;
-            await Promise.race([
-              new Promise((gone) => {
-                this.goings.push(() => gone(undefined));
-                timer = setTimeout(gone, left);
-              }),
-              this.stopping,
-            ]).finally(() => clearTimeout(timer));
-            continue;
-          }
-        }
         let outgoing;
         for (const [field, adapter] of this.adapters) {
           const batch = adapter.next();
@@ -1576,7 +1554,16 @@ export class DraftSession {
             break;
           }
         }
-        if (!outgoing) return;
+        if (!outgoing) {
+          // Everything else sent: a replaced editor holding edits it has not sent (a host building the next before
+          // destroying it) is waited for to go, its edits handed over and sent, as long as an editor is; then the
+          // Save goes on without them. Its going, a field removed or an acknowledgement ends the wait.
+          deadline ??= Date.now() + this.setting('nextEditorGrace', 10_000);
+          const left = deadline - Date.now();
+          if (!this.owing() || left <= 0) return;
+          await Promise.race([new Promise((later) => setTimeout(later, Math.min(left, 50))), this.stopping]);
+          continue;
+        }
         this.setStatus('pending');
         try {
           await this.request('append', outgoing);

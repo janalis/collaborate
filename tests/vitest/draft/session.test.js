@@ -8,6 +8,7 @@ vi.mock('../../../assets/draft/bar.js', async (original) => ({
 }));
 
 import { Model } from 'ckeditor5';
+import { OperationBuffer } from '../../../assets/ckeditor5/operation-buffer.js';
 import { confirmAction } from '../../../assets/draft/bar.js';
 import { DraftSession, sessionFor } from '../../../assets/draft/session.js';
 import { HttpError } from '../../../assets/http.js';
@@ -1726,6 +1727,49 @@ test('shares source mode while preserving pending local choices and locking sour
   later();
   session.registerMode(name, { sourceElement: null }, apply)();
   model.destroy();
+});
+
+test("an editor gone before its last edits were sent (a format switched) sends them still: the field's next editor has them", async () => {
+  const name = 'Record[body]';
+  const { session, form, state } = fixture('<textarea id="body" name="Record[body]"></textarea>', {
+    [name]: { type: 'rich', initial: '' },
+  });
+  await session.ready;
+  (await session.editorConfiguration(form.querySelector('textarea'))).collaborate.ready();
+  /** An editor's model as the draft builds it: one empty paragraph. */
+  const editor = () => {
+    const model = new Model();
+    model.schema.register('paragraph', { inheritAllFrom: '$block' });
+    const root = model.document.createRoot();
+    model.change((writer) => writer.appendElement('paragraph', root));
+    const buffer = new OperationBuffer(model, () => session.schedule());
+    return { model, buffer, paragraph: () => /** @type {any} */ (root.getChild(0)) };
+  };
+  const first = editor();
+  const unregister = session.register(name, first.buffer);
+  // Two edits, two batches, each on the version the one before it leaves.
+  first.model.change((writer) => writer.insertText('Typed', first.paragraph(), 0));
+  first.model.change((writer) => writer.insertText(' more', first.paragraph(), 5));
+  // Its format switched within the 150 ms its edits wait: the editor is destroyed, another built for the field,
+  // typed in at once too.
+  unregister();
+  first.buffer.destroy();
+  first.model.destroy();
+  const next = editor();
+  session.register(name, next.buffer);
+  next.model.change((writer) => writer.insertText('>', next.paragraph(), 0));
+  const text = () =>
+    /** @type {any[]} */ (Array.from(next.paragraph().getChildren())).map((node) => node.data).join('');
+  await vi.waitFor(() => expect(state.events.filter((event) => event.field === name)).toHaveLength(3));
+  await vi.waitFor(() => expect(next.buffer.hasPending()).toBe(false));
+  expect(text()).toMatch(/^(>Typed more|Typed more>)$/);
+  expect(session.retiring).toEqual([]);
+  // One gone with nothing unsent leaves nothing to send.
+  const idle = editor();
+  session.register(name, idle.buffer)();
+  expect(session.retiring).toEqual([]);
+  next.model.destroy();
+  idle.model.destroy();
 });
 
 test('applies typed Markdown source once typing settles, on blur, before a flush, and never after removal', async () => {

@@ -87,6 +87,16 @@ export class OperationBuffer {
     };
   }
 
+  /**
+   * The batch to send, taken as acknowledged: an editor gone sends what it had not, the draft's acknowledgement
+   * reaching the field's next editor instead.
+   */
+  take() {
+    const batch = this.next();
+    if (batch) this.version += /** @type {{ operations: unknown[] }} */ (this.pending.shift()).operations.length;
+    return batch;
+  }
+
   /** @param {JournalBatch} batch */
   receive(batch) {
     if (batch.version < this.version) return;

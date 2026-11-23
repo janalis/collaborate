@@ -73,6 +73,7 @@ import { initializeText, initializeValue, valueAdapter } from './fields.js';
  *
  * @typedef {object} Adapter
  * @property {() => object | null} next the batch to send, marked as sent
+ * @property {() => object | null} [take] the batch to send, taken as acknowledged: what an editor gone sends
  * @property {(event: any) => void} receive
  * @property {number} [version]
  * @property {() => boolean} [hasPending]
@@ -171,6 +172,9 @@ export class DraftSession {
     this.history = new Map();
     /** @type {Set<string>} */
     this.reported = new Set();
+    // Editors gone with edits not sent yet (a format switched, their last ~150 ms): sent still, before any other.
+    /** @type {{ field: string, adapter: Adapter & { take: () => object | null } }[]} */
+    this.retiring = [];
     // The failures said in the console: the network failing again and again says so once.
     /** @type {Set<string>} */
     this.said = new Set();
@@ -779,7 +783,12 @@ export class DraftSession {
     }
     // A later editor of the field may have registered since: its adapter stays.
     return () => {
-      if (this.adapters.get(name) === buffer) this.adapters.delete(name);
+      if (this.adapters.get(name) !== buffer) return;
+      this.adapters.delete(name);
+      // What its editor typed last and had not sent is sent still (the flush its typing scheduled sends it): the
+      // field's next editor, built from the draft, receives it as the draft's.
+      if (buffer.take && buffer.hasPending?.())
+        this.retiring.push({ field: name, adapter: /** @type {Adapter & { take: () => object | null }} */ (buffer) });
     };
   }
 
@@ -1370,7 +1379,14 @@ export class DraftSession {
         // A flush already under way when the form was posted sends nothing more.
         if (this.composing || this.posted) return;
         let outgoing;
-        for (const [field, adapter] of this.adapters) {
+        while (this.retiring.length && !outgoing) {
+          const { field, adapter } = this.retiring[0];
+          const batch = adapter.take();
+          if (batch)
+            outgoing = { kind: 'operations', ...batch, field, generation: this.generation, seen: this.revision };
+          else this.retiring.shift();
+        }
+        for (const [field, adapter] of outgoing ? [] : this.adapters) {
           const batch = adapter.next();
           if (batch) {
             // `seen` names the revision this edit was made on: one made before a Discard reset its field is refused.

@@ -1971,6 +1971,70 @@ test('what an editor gone held is dropped, said, for a next editor with edits of
   for (const each of [going, next, third, row, failing, unable]) each.model.destroy();
 });
 
+test('a replaced editor hands over what follows its batch the draft acknowledged; a hand-over failing at registration stops the draft, the editor registered', async () => {
+  const name = 'Record[body]';
+  const { session, form, state } = fixture('<textarea id="body" name="Record[body]"></textarea>', {
+    [name]: { type: 'rich', initial: '' },
+  });
+  await session.ready;
+  (await session.editorConfiguration(form.querySelector('textarea'))).collaborate.ready();
+  vi.spyOn(session, 'schedule').mockImplementation(() => {});
+  const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const editor = () => {
+    const model = new Model();
+    model.schema.register('paragraph', { inheritAllFrom: '$block' });
+    const root = model.document.createRoot();
+    model.change((writer) => writer.appendElement('paragraph', root));
+    const buffer = new OperationBuffer(model, () => session.schedule());
+    return { model, buffer, paragraph: () => /** @type {any} */ (root.getChild(0)) };
+  };
+  const text = (/** @type {any} */ paragraph) => Array.from(paragraph.getChildren(), (node) => node.data).join('');
+  // Editor A sends 'Sent' (the draft acknowledges it after B came), then types '!' it has not sent.
+  const a = editor();
+  const leaveA = session.register(name, a.buffer);
+  a.model.change((writer) => writer.insertText('Sent', a.paragraph(), 0));
+  const sent = /** @type {any} */ (a.buffer.next());
+  const b = editor();
+  session.register(name, b.buffer);
+  state.fields[name].initialVersion = sent.version;
+  state.fields[name].version = sent.version + sent.operations.length;
+  state.events.push({ kind: 'operations', ...sent, field: name, revision: ++state.revision });
+  await session.pull();
+  a.model.change((writer) => writer.insertText('!', a.paragraph(), 4));
+  leaveA();
+  expect(warned).not.toHaveBeenCalled();
+  expect(b.buffer.held().groups).toHaveLength(1);
+  expect(text(b.paragraph())).toBe('Sent!');
+  // One replaced whose only batch the draft has, its replacement gone first: nothing to hand over, nothing said.
+  const d = editor();
+  const leaveD = session.register(name, d.buffer);
+  d.model.change((writer) => writer.insertText('D', d.paragraph(), 0));
+  const dSent = /** @type {any} */ (d.buffer.next());
+  const e = editor();
+  const leaveE = session.register(name, e.buffer);
+  state.fields[name].version = dSent.version + dSent.operations.length;
+  state.events.push({ kind: 'operations', ...dSent, field: name, revision: ++state.revision });
+  await session.pull();
+  leaveE();
+  leaveD();
+  expect(warned).not.toHaveBeenCalled();
+  expect(session.retiring).toEqual([]);
+  for (const each of [d, e]) each.model.destroy();
+  // One taken over as the next editor registers, which cannot apply it: the draft stops; the editor is registered.
+  session.retiring = [{ field: name, held: { version: sent.version, groups: [{ id: 'held', operations: [] }] } }];
+  const c = editor();
+  vi.spyOn(c.buffer, 'hold').mockImplementation(() => {
+    throw new Error('Cannot apply.');
+  });
+  const unregisterC = session.register(name, c.buffer);
+  expect(form.dataset.collaborateState).toBe('incompatible');
+  expect(session.adapters.get(name)).toBe(c.buffer);
+  // Its replay stopped there: nothing more applied to a model the hand-over left half done.
+  expect(c.buffer.version).toBe(sent.version);
+  unregisterC();
+  for (const each of [a, b, c]) each.model.destroy();
+});
+
 test('applies typed Markdown source once typing settles, on blur, before a flush, and never after removal', async () => {
   const name = 'Record[body]';
   const { session, form } = fixture(

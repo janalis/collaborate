@@ -418,10 +418,28 @@ test('an editor writing its source (as it goes) applies Markdown typed there fir
     /** @type {any} */ (a.editor).updateSourceElement();
     expect(order).toEqual(['settle', 'update']);
     expect(a.session.settleSource).toHaveBeenCalledWith('body');
-    // Replaced by a later editor of the field: that one's source is not this one's to settle.
+    // Replaced by a later editor of the field: that one's source is not this one's to settle, nor to write.
     a.session.adapters.set('body', {});
     /** @type {any} */ (a.editor).updateSourceElement();
     expect(a.session.settleSource).toHaveBeenCalledOnce();
+    expect(order).toEqual(['settle', 'update']);
+    // Followed by no editor (the draft stopped): its source is written, nothing to settle.
+    a.session.adapters.delete('body');
+    /** @type {any} */ (a.editor).updateSourceElement();
+    expect(order).toEqual(['settle', 'update', 'update']);
+    // An editor going settles too (other editors write their source after their plugins go), while the field is
+    // its own.
+    const going = await peer();
+    going.session.settleSource = vi.fn();
+    editors.splice(editors.indexOf(going.editor), 1);
+    await going.editor.destroy();
+    expect(going.session.settleSource).toHaveBeenCalledWith('body');
+    const replaced = await peer();
+    replaced.session.settleSource = vi.fn();
+    replaced.session.adapters.set('body', {});
+    editors.splice(editors.indexOf(replaced.editor), 1);
+    await replaced.editor.destroy();
+    expect(replaced.session.settleSource).not.toHaveBeenCalled();
     // One that follows nothing has nothing to settle.
     const idle = await peer(undefined, [], false);
     idle.session.settleSource = vi.fn();

@@ -57,13 +57,16 @@ export default class Collaborate extends Plugin {
         }
       };
       this.buffer.adopt = (source) => this.applySource(source);
-      // Markdown typed in its source, not applied yet, is applied before the editor writes its source (as it goes,
-      // before its plugins do): what it holds then has it. Only the field's own editor's source is this one's.
+      // Markdown typed in its source, not applied yet, is applied before the editor writes its source (a classic
+      // editor does so as it goes, before its plugins): what it holds then has it. A later editor of the field owns
+      // the source now: this one's data, no longer the draft's, is not written there.
       const editor = /** @type {any} */ (this.editor);
       const update = editor.updateSourceElement?.bind(editor);
       if (update)
         editor.updateSourceElement = (/** @type {unknown[]} */ ...args) => {
-          if (session.adapters?.get(configuration.field) === this.buffer) session.settleSource?.(configuration.field);
+          const own = session.adapters?.get(configuration.field);
+          if (own && own !== this.buffer) return;
+          if (own) session.settleSource?.(configuration.field);
           return update(...args);
         };
       this.unregister = session.register(configuration.field, this.buffer);
@@ -95,6 +98,8 @@ export default class Collaborate extends Plugin {
   }
 
   destroy() {
+    // Other editors write their source after their plugins go: what is typed there is applied as this one goes.
+    if (this.buffer && this.session?.adapters?.get(this.field) === this.buffer) this.session.settleSource?.(this.field);
     this.unregister?.();
     this.buffer?.destroy();
     this.removeMode?.();

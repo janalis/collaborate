@@ -179,12 +179,9 @@ export class DraftSession {
     // over.
     /** @type {{ field: string, held: Held }[]} */
     this.retiring = [];
-    // How many times each field was removed, and for each editor how many when it registered: one going after its
-    // field was removed keeps nothing of it.
+    // How many times each field was removed: an editor going after its field was removed keeps nothing of it.
     /** @type {Map<string, number>} */
     this.removals = new Map();
-    /** @type {WeakMap<Adapter, number>} */
-    this.registeredAt = new WeakMap();
     // The failures said in the console: the network failing again and again says so once.
     /** @type {Set<string>} */
     this.said = new Set();
@@ -786,22 +783,24 @@ export class DraftSession {
       this.incompatible('version', name, `editor ${buffer.version}, draft ${state.initialVersion}`);
       throw new Error('Collaborate editor initialization differs from the stored draft.');
     }
-    this.registeredAt.set(buffer, this.removals.get(name) ?? 0);
+    const removals = this.removals.get(name) ?? 0;
     this.adapters.set(name, buffer);
-    // What an editor of the field gone held unsent: taken over where the draft was when it went.
-    let held = this.retiring.find((retired) => retired.field === name)?.held ?? null;
-    this.retiring = this.retiring.filter((retired) => retired.field !== name);
+    // What an editor of the field gone held unsent (one at most): taken over where the draft was when it went.
+    const index = this.retiring.findIndex((retired) => retired.field === name);
+    let held = index < 0 ? null : this.retiring.splice(index, 1)[0].held;
     try {
       for (const event of this.history.get(name) || []) {
         // Taken over before the draft's first edit after it went: one of its own the draft has already acknowledges
-        // it, under its id, as any of the editor's own.
+        // it, under its id, as any of the editor's own. One that cannot be applied stops the draft, this editor
+        // left registered, to go as any.
         if (held && /** @type {number} */ (event.version) >= held.version) {
-          this.handOver(name, buffer, held);
+          const taken = held;
           held = null;
+          if (!this.takeOver(name, buffer, taken)) break;
         }
         buffer.receive(event);
       }
-      if (held) this.handOver(name, buffer, held);
+      if (held) this.takeOver(name, buffer, held);
     } catch (error) {
       this.incompatible('replay', name, messageOf(error));
       throw error;
@@ -811,18 +810,24 @@ export class DraftSession {
       const current = this.adapters.get(name) === buffer;
       if (current) this.adapters.delete(name);
       // A field removed meanwhile keeps nothing of it.
-      if (this.registeredAt.get(buffer) !== (this.removals.get(name) ?? 0)) return;
+      if (removals !== (this.removals.get(name) ?? 0)) return;
       // What its editor typed last and had not sent (a format switched within the 150 ms edits wait): the field's
       // next editor takes it over, or one already there, on the version it was made on.
-      const kept = buffer.held?.();
+      let kept = buffer.held?.();
       if (!kept?.groups.length) return;
+      // What it sent that the draft has already (acknowledged while another editor followed the field) is the
+      // draft's: the rest follows it.
+      for (const event of this.history.get(name) || []) {
+        const batch = /** @type {{ id?: string, version: number, operations: unknown[] }} */ (
+          /** @type {unknown} */ (event)
+        );
+        if (kept.groups[0]?.id === batch.id)
+          kept = { version: batch.version + batch.operations.length, groups: kept.groups.slice(1) };
+      }
+      if (!kept.groups.length) return;
       const next = this.adapters.get(name);
       if (next) {
-        try {
-          this.handOver(name, next, kept);
-        } catch (error) {
-          this.incompatible('replay', name, messageOf(error));
-        }
+        this.takeOver(name, next, kept);
         return;
       }
       // One replaced whose replacement went first: nothing takes it over.
@@ -851,6 +856,28 @@ export class DraftSession {
    * Hands what an editor gone held to the field's next editor, on the version it was made on; one on another
    * version, or with edits of its own, cannot take it over: it is dropped, and said. One that cannot apply it throws.
    *
+   * @param {string} name
+   * @param {Adapter} buffer
+   * @param {Held} held
+   */
+  /**
+   * Hands over, a failure stopping the draft as incompatible: whether it did not fail.
+   *
+   * @param {string} name
+   * @param {Adapter} buffer
+   * @param {Held} held
+   */
+  takeOver(name, buffer, held) {
+    try {
+      this.handOver(name, buffer, held);
+      return true;
+    } catch (error) {
+      this.incompatible('replay', name, messageOf(error));
+      return false;
+    }
+  }
+
+  /**
    * @param {string} name
    * @param {Adapter} buffer
    * @param {Held} held

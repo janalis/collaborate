@@ -182,6 +182,9 @@ export class DraftSession {
     // How many times each field was removed: an editor going after its field was removed keeps nothing of it.
     /** @type {Map<string, number>} */
     this.removals = new Map();
+    // Editors a later one of their field replaced, not gone yet: what they hold is unsent until they go.
+    /** @type {{ field: string, adapter: Adapter }[]} */
+    this.replaced = [];
     // The failures said in the console: the network failing again and again says so once.
     /** @type {Set<string>} */
     this.said = new Set();
@@ -510,7 +513,9 @@ export class DraftSession {
    */
   hidden(name, value) {
     // The hidden inputs this session added: a host's own control of the name, or the id, is not the session's.
-    // One a host took out of the form is forgotten, and added again.
+    // One a host took out of the form is added again; one it moved into another form, where it would post this
+    // draft's grant and revision, is taken out of there.
+    for (const added of this.added) if (added.form !== this.form) added.remove();
     this.added = this.added.filter((added) => added.form === this.form);
     let control = this.added.find((added) => added.name === name);
     if (!control) {
@@ -763,6 +768,7 @@ export class DraftSession {
    */
   detachField(name) {
     this.removals.set(name, (this.removals.get(name) ?? 0) + 1);
+    this.replaced = this.replaced.filter((other) => other.field !== name);
     this.retiring = this.retiring.filter((retired) => retired.field !== name);
     this.adapters.get(name)?.destroy?.();
     this.adapters.delete(name);
@@ -784,6 +790,8 @@ export class DraftSession {
       throw new Error('Collaborate editor initialization differs from the stored draft.');
     }
     const removals = this.removals.get(name) ?? 0;
+    const prior = this.adapters.get(name);
+    if (prior && prior !== buffer) this.replaced.push({ field: name, adapter: prior });
     this.adapters.set(name, buffer);
     // What an editor of the field gone held unsent (one at most): taken over where the draft was when it went.
     const index = this.retiring.findIndex((retired) => retired.field === name);
@@ -809,6 +817,7 @@ export class DraftSession {
     return () => {
       const current = this.adapters.get(name) === buffer;
       if (current) this.adapters.delete(name);
+      this.replaced = this.replaced.filter((other) => other.adapter !== buffer);
       // A field removed meanwhile keeps nothing of it.
       if (removals !== (this.removals.get(name) ?? 0)) return;
       // What its editor typed last and had not sent (a format switched within the 150 ms edits wait): the field's
@@ -1259,6 +1268,7 @@ export class DraftSession {
   sent() {
     return (
       !this.retiring.length &&
+      this.replaced.every((other) => !other.adapter.hasPending?.()) &&
       Array.from(this.adapters.values()).every((adapter) =>
         adapter.hasPending ? !adapter.hasPending() : !adapter.next()
       )

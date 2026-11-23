@@ -897,6 +897,14 @@ test('a save field a host took out of the form is added again', async () => {
   form.querySelector('[name="_collaborate_revision"]').remove();
   session.hidden('_collaborate_revision', '4');
   expect(/** @type {HTMLInputElement} */ (form.elements.namedItem('_collaborate_revision')).value).toBe('4');
+  // One moved into another form would post this draft's grant there: taken out of it.
+  const other = document.createElement('form');
+  document.body.append(other);
+  other.append(/** @type {HTMLInputElement} */ (form.elements.namedItem('_collaborate_revision')));
+  session.hidden('_collaborate_revision', '5');
+  expect(other.querySelector('[name="_collaborate_revision"]')).toBeNull();
+  expect(/** @type {HTMLInputElement} */ (form.elements.namedItem('_collaborate_revision')).value).toBe('5');
+  other.remove();
 });
 
 test("the draft's save fields are its own: a host's control of the name is left as it is", async () => {
@@ -1947,6 +1955,8 @@ test('what an editor gone held is dropped, said, for a next editor with edits of
   session.register(name, rowNext.buffer);
   row.model.change((writer) => writer.insertText('Row', row.paragraph(), 0));
   session.detachField(name);
+  // The row removed, what its replaced editor holds is nothing the page owes the draft.
+  expect(session.sent()).toBe(true);
   // An entry added again under its key meanwhile: its editor takes nothing of the removed row's.
   const added = editor();
   session.register(name, added.buffer);
@@ -2001,6 +2011,8 @@ test('a replaced editor hands over what follows its batch the draft acknowledged
   state.events.push({ kind: 'operations', ...sent, field: name, revision: ++state.revision });
   await session.pull();
   a.model.change((writer) => writer.insertText('!', a.paragraph(), 4));
+  // Replaced, not gone yet: what it holds is unsent.
+  expect(session.sent()).toBe(false);
   leaveA();
   expect(warned).not.toHaveBeenCalled();
   expect(b.buffer.held().groups).toHaveLength(1);
@@ -2018,6 +2030,8 @@ test('a replaced editor hands over what follows its batch the draft acknowledged
   leaveE();
   leaveD();
   expect(warned).not.toHaveBeenCalled();
+  // Gone, it is owed nothing more.
+  expect(session.replaced.some((other) => other.adapter === d.buffer)).toBe(false);
   expect(session.retiring).toEqual([]);
   for (const each of [d, e]) each.model.destroy();
   // One taken over as the next editor registers, which cannot apply it: the draft stops; the editor is registered.

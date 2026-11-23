@@ -160,10 +160,9 @@ versions follow [Semantic Versioning](https://semver.org/).
   them over as its own: sent, retried and rebased on others' edits as any of
   its edits. Before, they were lost. Meanwhile the next editor is awaited as
   any is, a Save with it; none coming in time, the draft stops and the form
-  saves the ordinary way, its field holding that text. An editor replaced
-  before it goes hears the draft until then. Edits a next editor cannot take
-  over (it has typed already, or the one replaced could not follow the
-  draft) are dropped, and the console says so.
+  saves the ordinary way, its field holding that text. Edits a next editor
+  cannot take over (it has typed already, or the draft moved on since an
+  editor it replaced was built) are dropped, and the console says so.
 - A draft reloading its page stops and says so. A page that stays (a
   leave-page prompt answered by staying) keeps telling its user to reload, and
   its Save posts the form the ordinary way, without the draft's save fields.

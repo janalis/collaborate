@@ -48,21 +48,6 @@ final class CollaborateBundle extends AbstractBundle
     /** Named, not imported: symfony/mercure-bundle is optional. */
     private const string MERCURE_BUNDLE = 'Symfony\\Bundle\\MercureBundle\\MercureBundle';
 
-    /**
-     * Region name => root selector, EasyAdmin's layout.
-     *
-     * @deprecated since 0.5, use {@see Bridge::regions()}: the default regions are the bridge's
-     */
-    public const array REGIONS = [
-        'modal' => '.modal.show',
-        'header' => '.content-top',
-        'mobile-header' => '.responsive-header',
-        // `.ea-sidebar` from EasyAdmin 5.6, `.sidebar` before.
-        'sidebar' => '.ea-sidebar, .sidebar',
-        'content' => '.content-wrapper',
-        'body' => 'body',
-    ];
-
     public const array ANCHOR_ATTRIBUTES = ['data-id', 'data-column', 'name', 'id'];
 
     public const array IGNORED_PARAMETERS = ['_locale', '_token', '_switch_user'];

@@ -140,6 +140,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Removed
 
+- **Breaking:** the deprecated names of the classes 0.5 moved,
+  `Janalis\Collaborate\EasyAdmin\{EasyAdminFormContext,SaveSubscriber,DraftRefreshSubscriber}`
+  (now under `Bridge\EasyAdmin`) and `EasyAdmin\UpdatesSubscriber` (now
+  `Updates\UpdatesSubscriber`), and `CollaborateBundle::REGIONS`:
+  `Bridge::EasyAdmin->regions()`.
 - `DraftSession::editorReady()`: the `Collaborate` plugin tells the draft
   its editor is ready.
 - `assets/drupal.js`: the Drupal module loads its own entry,

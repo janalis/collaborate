@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Janalis\Collaborate\Tests\Unit\Bridge;
 
 use Janalis\Collaborate\Bridge\Bridge;
-use Janalis\Collaborate\CollaborateBundle;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -58,10 +57,8 @@ final class BridgeTest extends TestCase
         }
     }
 
-    public function testTheEasyAdminRegionsAreTheRegionsOfBefore(): void
+    public function testEachBridgeNamesItsLayoutsRegions(): void
     {
-        // @mago-expect analysis:deprecated-class-constant the constant of before 0.5 holds the EasyAdmin bridge's
-        self::assertSame(CollaborateBundle::REGIONS, Bridge::EasyAdmin->regions());
         self::assertSame('.ea-sidebar, .sidebar', Bridge::EasyAdmin->regions()['sidebar']);
         self::assertSame('.ui-dialog', Bridge::Drupal->regions()['modal']);
         self::assertSame('main, [role=main]', Bridge::None->regions()['content']);

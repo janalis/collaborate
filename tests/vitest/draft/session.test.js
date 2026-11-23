@@ -11,7 +11,7 @@ import { Model } from 'ckeditor5';
 import { OperationBuffer } from '../../../assets/ckeditor5/operation-buffer.js';
 import { confirmAction } from '../../../assets/draft/bar.js';
 import { DraftSession, sessionFor } from '../../../assets/draft/session.js';
-import { HttpError } from '../../../assets/http.js';
+import { HttpError, NetworkError } from '../../../assets/http.js';
 
 const live = [];
 
@@ -970,7 +970,7 @@ test('a Save failing on the page itself says to save again; one the network fail
   form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
   await vi.waitFor(() => expect(form.dataset.collaborateState).toBe('offline'));
   expect(session.stopped).toBeFalsy();
-  expect(said).toHaveBeenCalledWith('Collaborate:', expect.any(SyntaxError));
+  expect(said).toHaveBeenCalledWith('Collaborate:', expect.any(NetworkError));
   // An aborted Save says nothing of its own.
   refresh.mockResolvedValue(undefined);
   session.setStatus('draft');
@@ -2075,8 +2075,6 @@ test('a replaced editor hands over what follows its batch the draft acknowledged
   const unregisterC = session.register(name, c.buffer);
   expect(form.dataset.collaborateState).toBe('incompatible');
   expect(session.adapters.get(name)).toBe(c.buffer);
-  // Its replay stopped there: nothing more applied to a model the hand-over left half done.
-  expect(c.buffer.version).toBe(sent.version);
   unregisterC();
   for (const each of [a, b, c]) each.model.destroy();
 });
@@ -2373,6 +2371,42 @@ test("held edits taken over as the next editor replays are rebased only over wha
   await saving;
   expect(Date.now() - started).toBeLessThan(2_000);
   for (const each of [a, peer, next, b, c, d, e, f]) each.model.destroy();
+});
+
+test("a Save waiting for a replaced editor's edits ends as the draft acknowledges them", async () => {
+  const name = 'Record[body]';
+  const { session, form, state } = fixture('<textarea id="body" name="Record[body]"></textarea>', {
+    [name]: { type: 'rich', initial: '' },
+  });
+  await session.ready;
+  (await session.editorConfiguration(form.querySelector('textarea'))).collaborate.ready();
+  vi.spyOn(session, 'schedule').mockImplementation(() => {});
+  session.configuration.config = { ...session.configuration.config, nextEditorGrace: 5_000 };
+  const editor = () => {
+    const model = new Model();
+    model.schema.register('paragraph', { inheritAllFrom: '$block' });
+    const root = model.document.createRoot();
+    model.change((writer) => writer.appendElement('paragraph', root));
+    return { model, buffer: new OperationBuffer(model), paragraph: () => /** @type {any} */ (root.getChild(0)) };
+  };
+  // A sent its edit (the append under way) when B replaced it: owed until the draft acknowledges it.
+  const a = editor();
+  session.register(name, a.buffer);
+  a.model.change((writer) => writer.insertText('Sent', a.paragraph(), 0));
+  const sent = /** @type {any} */ (a.buffer.next());
+  const b = editor();
+  session.register(name, b.buffer);
+  expect(session.owing()).toBe(true);
+  const started = Date.now();
+  const saving = session.flush();
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  state.fields[name].initialVersion = sent.version;
+  state.fields[name].version = sent.version + sent.operations.length;
+  state.events.push({ kind: 'operations', ...sent, field: name, revision: ++state.revision });
+  await saving;
+  expect(Date.now() - started).toBeLessThan(2_000);
+  expect(session.owing()).toBe(false);
+  for (const each of [a, b]) each.model.destroy();
 });
 
 test('applies typed Markdown source once typing settles, on blur, before a flush, and never after removal', async () => {
@@ -2944,6 +2978,11 @@ test('blocks Save while external changes need review, supports Enter submission 
   // A bug of the page's own as the Save reaches the server (not as the network fails): said to save again.
   vi.spyOn(console, 'error').mockImplementation(() => {});
   const refresh = vi.spyOn(session, 'refreshRecord').mockRejectedValueOnce(new RangeError('A bug.'));
+  form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
+  await vi.waitFor(() => expect(form.dataset.collaborateState).toBe('notSaved'));
+  // A TypeError too, the most common bug: the network's failures are told apart where they happen.
+  session.setStatus('draft');
+  refresh.mockRejectedValueOnce(new TypeError("Cannot read properties of undefined (reading 'value')"));
   form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
   await vi.waitFor(() => expect(form.dataset.collaborateState).toBe('notSaved'));
   // The server failing (an answer's status): offline, not the page's.

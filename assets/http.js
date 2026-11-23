@@ -28,6 +28,31 @@ export function statusOf(error) {
   return error instanceof HttpError ? error.status : null;
 }
 
+/** A failure of the network, reaching the server or reading its answer: never the page's own. */
+export class NetworkError extends Error {
+  /** @param {unknown} cause */
+  constructor(cause) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause });
+    this.name = 'NetworkError';
+  }
+}
+
+/**
+ * Runs a step of a request, its failure (an abort aside) the network's.
+ *
+ * @template T
+ * @param {() => Promise<T>} step
+ * @returns {Promise<T>}
+ */
+export async function reach(step) {
+  try {
+    return await step();
+  } catch (error) {
+    if (/** @type {{ name?: string }} */ (error)?.name === 'AbortError') throw error;
+    throw new NetworkError(error);
+  }
+}
+
 /**
  * A JSON request the way every endpoint of the bundle takes one: POSTed with the session's cookies and the CSRF
  * token the page was given.

@@ -416,10 +416,11 @@ export const test = base.extend({
       await carol.page.goto(carol.routes.edit(id));
       await fill(carol);
       const response = await carol.save({ force: true });
-      // Accepted, it redirects: a form refused (whatever its theme renders errors as) fails here, not as a
-      // conflict never shown later.
-      const status = response?.status() ?? 0;
-      expect(status >= 300 && status < 400, `the outside save answered ${status}`).toBe(true);
+      // Accepted (a redirect, or the page again): a form refused (whatever its theme renders errors as) fails
+      // here, not as a conflict never shown later.
+      const status = response?.status();
+      expect(status, 'the outside save was answered').toBeDefined();
+      expect(/** @type {number} */ (status) < 400, `the outside save answered ${status}`).toBe(true);
       await expect(carol.page.locator('.invalid-feedback, .form-error-message')).toHaveCount(0);
       return carol;
     });

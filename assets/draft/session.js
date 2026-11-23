@@ -1,6 +1,6 @@
 import { bridge } from '../bridge.js';
 import { hasPendingUpload } from '../ckeditor5/source.js';
-import { backgroundFetch, HttpError, isAccepted, isDenied, postJson, statusOf } from '../http.js';
+import { backgroundFetch, HttpError, isAccepted, isDenied, NetworkError, postJson, reach, statusOf } from '../http.js';
 import { hubFor } from '../hub.js';
 import { CollaborateBar, confirmAction, STATES } from './bar.js';
 import { initializeCollections } from './collections.js';
@@ -361,8 +361,8 @@ export class DraftSession {
   }
 
   /**
-   * Whether a Save's failure is the page's own: no answer's status, not as the network fails (a TypeError, which a
-   * bug may throw too, is the network's), nor an answer that is not JSON, an abort, or the draft stopping.
+   * Whether a Save's failure is the page's own: no answer's status, not the network's (reaching the server or
+   * reading its answer: a NetworkError), nor an abort, nor the draft stopping.
    *
    * @param {unknown} error
    */
@@ -372,8 +372,7 @@ export class DraftSession {
       !this.stopped &&
       !this.suspended &&
       failure?.status === undefined &&
-      !(error instanceof TypeError) &&
-      !(error instanceof SyntaxError) &&
+      !(error instanceof NetworkError) &&
       failure?.name !== 'AbortError'
     );
   }
@@ -390,12 +389,14 @@ export class DraftSession {
     const grant = this.configuration.grant;
     // Once the server has verified this grant, its signature stands for the whole field schema.
     const short = this.acknowledged === grant;
-    const response = await postJson(
-      this.fetcher,
-      this.configuration.url.replace('__action__', action),
-      this.configuration.csrf,
-      { grant: short ? grant.split('.')[1] : grant, ...body },
-      { signal }
+    const response = await reach(() =>
+      postJson(
+        this.fetcher,
+        this.configuration.url.replace('__action__', action),
+        this.configuration.csrf,
+        { grant: short ? grant.split('.')[1] : grant, ...body },
+        { signal }
+      )
     );
     signal.throwIfAborted();
     if (short && response.status === 412) {
@@ -416,7 +417,7 @@ export class DraftSession {
       if (response.status === 413) this.halt('full');
       throw new HttpError(`Collaborate ${action}: ${response.status}`, response.status);
     }
-    return response.status === 204 ? null : response.json();
+    return response.status === 204 ? null : reach(() => response.json());
   }
 
   async start() {
@@ -833,20 +834,15 @@ export class DraftSession {
     // An editor (one that can hold edits) replaced, not gone yet: a field's value control has no going to wait for.
     if (prior && prior !== buffer && prior.held) this.replaced.push({ field: name, adapter: prior });
     this.adapters.set(name, buffer);
-    // What an editor of the field gone held unsent (one at most): taken over where the draft was when it went.
-    // What editors of the field gone held unsent (one replaced going after the one that replaced it: two): each
-    // taken over where the draft was when it went, or after the replay, rebased over what it applied since.
-    const helds = this.retiring.filter((retired) => retired.field === name).map((retired) => retired.held);
+    // What editors of the field gone held unsent (one replaced going after the one that replaced it: two), less what
+    // the draft acknowledged since: taken over once the replay is done, each rebased over what the editor applied
+    // since it was made (another held taken over before it included). One that cannot be applied stops the draft, and what follows is not taken.
+    const helds = this.retiring
+      .filter((retired) => retired.field === name)
+      .map((retired) => this.remaining(name, retired.held));
     this.retiring = this.retiring.filter((retired) => retired.field !== name);
     try {
-      for (const event of this.history.get(name) || []) {
-        // Taken over before the draft's first edit after it went: one of its own the draft has already acknowledges
-        // it, under its id, as any of the editor's own. One that cannot be applied stops the draft, this editor
-        // left registered, to go as any.
-        if (helds.length && /** @type {number} */ (event.version) >= helds[0].version)
-          if (!this.takeOver(name, buffer, /** @type {Held} */ (helds.shift()))) break;
-        buffer.receive(event);
-      }
+      for (const event of this.history.get(name) || []) buffer.receive(event);
       helds.every((held) => this.takeOver(name, buffer, held));
     } catch (error) {
       this.incompatible('replay', name, messageOf(error));
@@ -890,12 +886,24 @@ export class DraftSession {
    * @returns {Held | null}
    */
   unsent(name, buffer) {
-    let kept = buffer.held?.() ?? null;
+    const held = buffer.held?.();
+    return held ? this.remaining(name, held) : null;
+  }
+
+  /**
+   * What is held less what the draft acknowledged of it: the rest follows that.
+   *
+   * @param {string} name
+   * @param {Held} held
+   * @returns {Held}
+   */
+  remaining(name, held) {
+    let kept = held;
     for (const event of this.history.get(name) || []) {
       const batch = /** @type {{ id?: string, version: number, operations: unknown[] }} */ (
         /** @type {unknown} */ (event)
       );
-      if (kept && kept.groups[0]?.id === batch.id)
+      if (kept.groups[0]?.id === batch.id)
         kept = { version: batch.version + batch.operations.length, groups: kept.groups.slice(1) };
     }
     return kept;
@@ -1208,8 +1216,8 @@ export class DraftSession {
           // A refusal, or a failure as the network's while online (a sign-in on another origin), renews nothing;
           // the server busy or failing, a body the network cut, or the browser offline, is retried.
           const status = /** @type {{ status?: number }} */ (error)?.status ?? 0;
-          const transient =
-            status === 429 || status >= 500 || error instanceof SyntaxError || navigator.onLine === false;
+          const cut = error instanceof NetworkError && error.cause instanceof SyntaxError;
+          const transient = status === 429 || status >= 500 || cut || navigator.onLine === false;
           return transient ? Promise.reject(error) : false;
         }
       )
@@ -1224,12 +1232,14 @@ export class DraftSession {
     if (this.stopped) return;
     // The action the form posts to answers its grant and CSRF tokens alone (the `X-Collaborate-Refresh` header);
     // a new-record form's action carries the draft key its grant names.
-    const response = await this.fetcher(this.form.action, {
-      credentials: 'same-origin',
-      cache: 'no-store',
-      signal: this.abort.signal,
-      headers: { Accept: 'application/json', 'X-Collaborate-Refresh': '1' },
-    });
+    const response = await reach(() =>
+      this.fetcher(this.form.action, {
+        credentials: 'same-origin',
+        cache: 'no-store',
+        signal: this.abort.signal,
+        headers: { Accept: 'application/json', 'X-Collaborate-Refresh': '1' },
+      })
+    );
     // A transient failure keeps the session; Save retries the refresh.
     if (!response.ok && !response.redirected && ![401, 403, 404].includes(response.status)) {
       throw new HttpError(`Collaborate record refresh: ${response.status}`, response.status);
@@ -1239,7 +1249,9 @@ export class DraftSession {
     const refreshed = isAccepted(response)
       ? await response
           .json()
-          .catch((error) => (response.headers.get('Content-Type')?.includes('json') ? Promise.reject(error) : null))
+          .catch((error) =>
+            response.headers.get('Content-Type')?.includes('json') ? Promise.reject(new NetworkError(error)) : null
+          )
       : null;
     if (!refreshed?.configuration) {
       this.halt('denied');
@@ -1579,11 +1591,13 @@ export class DraftSession {
         if (!outgoing) {
           // Everything else sent: a replaced editor holding edits it has not sent (a host building the next before
           // destroying it) is waited for to go, its edits handed over and sent, as long as an editor is; then the
-          // Save goes on without them. Its going, a field removed or an acknowledgement ends the wait.
+          // Save goes on without them. Its going, a field removed or an acknowledgement (read on each look) ends the
+          // wait.
           deadline ??= Date.now() + this.setting('nextEditorGrace', 10_000);
           const left = deadline - Date.now();
           if (!this.owing() || left <= 0) return;
-          await Promise.race([new Promise((later) => setTimeout(later, Math.min(left, 50))), this.stopping]);
+          await Promise.race([new Promise((later) => setTimeout(later, Math.min(left, 250))), this.stopping]);
+          await this.pull();
           continue;
         }
         this.setStatus('pending');

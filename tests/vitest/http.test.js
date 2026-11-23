@@ -1,4 +1,4 @@
-import { HttpError, isAccepted, isDenied, postJson } from '../../assets/http.js';
+import { HttpError, isAccepted, isDenied, NetworkError, postJson, reach } from '../../assets/http.js';
 
 const answer = (status, redirected = false) => ({ status, ok: status >= 200 && status < 300, redirected });
 
@@ -32,4 +32,30 @@ test('a refusal is a 401, a 403 or a redirect; an acceptance a success answered 
   expect(isAccepted(answer(200, true))).toBe(false);
   const error = new HttpError('Collaborate join: 409', 409);
   expect([error.message, error.status, error instanceof Error]).toEqual(['Collaborate join: 409', 409, true]);
+});
+
+test("a request's step failing is the network's, an abort passing as it is", async () => {
+  await expect(reach(async () => 'answer')).resolves.toBe('answer');
+  const failed = reach(async () => {
+    throw new TypeError('Failed to fetch');
+  });
+  await expect(failed).rejects.toBeInstanceOf(NetworkError);
+  await expect(failed).rejects.toMatchObject({ message: 'Failed to fetch', name: 'NetworkError' });
+  const cause = new SyntaxError('Unexpected end of JSON input');
+  await expect(
+    reach(async () => {
+      throw cause;
+    })
+  ).rejects.toMatchObject({ cause });
+  await expect(
+    reach(async () => {
+      throw 'refused';
+    })
+  ).rejects.toMatchObject({ message: 'refused' });
+  const abort = new DOMException('Aborted.', 'AbortError');
+  await expect(
+    reach(async () => {
+      throw abort;
+    })
+  ).rejects.toBe(abort);
 });

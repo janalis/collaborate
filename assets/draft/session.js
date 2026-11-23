@@ -73,7 +73,8 @@ import { initializeText, initializeValue, valueAdapter } from './fields.js';
  *
  * @typedef {object} Adapter
  * @property {() => object | null} next the batch to send, marked as sent
- * @property {(event: any) => void} [acknowledge] what an editor gone hears of the draft: its own edits acknowledged
+ * @property {() => Held} [held] what its editor holds unsent, for the field's next editor should it go
+ * @property {(held: Held) => void} [hold] takes over what an editor gone held, made on its version
  * @property {(event: any) => void} receive
  * @property {number} [version]
  * @property {() => boolean} [hasPending]
@@ -81,7 +82,7 @@ import { initializeText, initializeValue, valueAdapter } from './fields.js';
  * @property {() => void} [destroy]
  */
 
-/** @typedef {Adapter & { acknowledge: (event: any) => void }} RetiringAdapter */
+/** @typedef {import('../ckeditor5/operation-buffer.js').Held} Held */
 
 /**
  * @typedef {{ ready: boolean, claimed?: boolean, grace?: ReturnType<typeof setTimeout>, resolve: () => void,
@@ -175,7 +176,7 @@ export class DraftSession {
     /** @type {Set<string>} */
     this.reported = new Set();
     // Editors gone with edits not sent yet (a format switched, their last ~150 ms): sent still, before any other.
-    /** @type {{ field: string, adapter: RetiringAdapter }[]} */
+    /** @type {{ field: string, held: Held }[]} */
     this.retiring = [];
     // The failures said in the console: the network failing again and again says so once.
     /** @type {Set<string>} */
@@ -778,21 +779,49 @@ export class DraftSession {
       throw new Error('Collaborate editor initialization differs from the stored draft.');
     }
     this.adapters.set(name, buffer);
+    // What an editor of the field gone held unsent: taken over where the draft was when it went.
+    let held = this.retiring.find((retired) => retired.field === name)?.held ?? null;
+    this.retiring = this.retiring.filter((retired) => retired.field !== name);
     try {
-      for (const event of this.history.get(name) || []) buffer.receive(event);
+      for (const event of this.history.get(name) || []) {
+        // Taken over before the draft's first edit after it went: one of its own the draft has already acknowledges
+        // it, under its id, as any of the editor's own.
+        if (held && /** @type {number} */ (event.version) >= held.version) {
+          this.handOver(name, buffer, held);
+          held = null;
+        }
+        buffer.receive(event);
+      }
+      if (held) this.handOver(name, buffer, held);
     } catch (error) {
       this.incompatible('replay', name, messageOf(error));
       throw error;
     }
     // A later editor of the field may have registered since: its adapter stays.
     return () => {
-      if (this.adapters.get(name) !== buffer) return;
-      this.adapters.delete(name);
-      // What its editor typed last and had not sent is sent still (the flush its typing scheduled sends it), until the
-      // draft acknowledges it: the field's next editor, built from the draft, receives it as the draft's.
-      if (buffer.acknowledge && buffer.hasPending?.())
-        this.retiring.push({ field: name, adapter: /** @type {RetiringAdapter} */ (buffer) });
+      if (this.adapters.get(name) === buffer) this.adapters.delete(name);
+      // What its editor typed last and had not sent (a format switched within the 150 ms edits wait): the field's
+      // next editor takes it over, or one already there, on the version it was made on.
+      const kept = buffer.held?.();
+      if (!kept?.groups.length) return;
+      const next = this.adapters.get(name);
+      if (next) this.handOver(name, next, kept);
+      else this.retiring.push({ field: name, held: kept });
     };
+  }
+
+  /**
+   * Hands what an editor gone held to the field's next editor, on the version it was made on; one on another
+   * version cannot take it over: it is dropped, and said.
+   *
+   * @param {string} name
+   * @param {Adapter} buffer
+   * @param {Held} held
+   */
+  handOver(name, buffer, held) {
+    if (buffer.hold && buffer.version === held.version) buffer.hold(held);
+    else
+      console.warn(`Collaborate: the last edits of ${name}'s editor, gone, could not be taken over and were dropped.`);
   }
 
   /**
@@ -1162,21 +1191,11 @@ export class DraftSession {
   /** Every edit made on this page reached the journal. */
   sent() {
     return (
-      this.retiring.every((retired) => !retired.adapter.hasPending?.()) &&
+      !this.retiring.length &&
       Array.from(this.adapters.values()).every((adapter) =>
         adapter.hasPending ? !adapter.hasPending() : !adapter.next()
       )
     );
-  }
-
-  /**
-   * What an editor gone held, the draft moving on without it: dropped, and said.
-   *
-   * @param {{ field: string, adapter: RetiringAdapter }} retired
-   */
-  dropRetired(retired) {
-    this.retiring = this.retiring.filter((other) => other !== retired);
-    console.warn(`Collaborate: the last edits of ${retired.field}'s editor, gone, crossed another's and were dropped.`);
   }
 
   // EasyAdmin's DirtyForm prompts for any form edited since it loaded, a peer's edits included; the draft or
@@ -1308,8 +1327,6 @@ export class DraftSession {
       // The server names a Discard only to the pages showing a field it reset.
       if (event.kind === 'discard') this.superseded(event);
       try {
-        // An editor gone hears its own edits acknowledged; what it holds after another's, the draft refuses.
-        for (const retired of this.retiring) if (retired.field === event.field) retired.adapter.acknowledge(event);
         this.adapters.get(event.field)?.receive(event);
       } catch (error) {
         this.halt('incompatible');
@@ -1399,27 +1416,12 @@ export class DraftSession {
         // A flush already under way when the form was posted sends nothing more.
         if (this.composing || this.posted) return;
         let outgoing;
-        // An editor gone sends what it held first, until the draft acknowledges it: the field's next editor is built
-        // on it.
-        this.retiring = this.retiring.filter((other) => other.adapter.hasPending?.());
-        const retired = this.retiring[0];
-        const held = retired?.adapter.next();
-        if (retired && held) {
-          outgoing = {
-            kind: 'operations',
-            ...held,
-            field: retired.field,
-            generation: this.generation,
-            seen: this.revision,
-          };
-        } else {
-          for (const [field, adapter] of this.adapters) {
-            const batch = adapter.next();
-            if (batch) {
-              // `seen` names the revision this edit was made on: one made before a Discard reset its field is refused.
-              outgoing = { kind: 'operations', ...batch, field, generation: this.generation, seen: this.revision };
-              break;
-            }
+        for (const [field, adapter] of this.adapters) {
+          const batch = adapter.next();
+          if (batch) {
+            // `seen` names the revision this edit was made on: one made before a Discard reset its field is refused.
+            outgoing = { kind: 'operations', ...batch, field, generation: this.generation, seen: this.revision };
+            break;
           }
         }
         if (!outgoing) return;
@@ -1430,8 +1432,6 @@ export class DraftSession {
           // A refusal names its field to the report it may end in.
           if (error instanceof HttpError) error.field = outgoing.field;
           if (statusOf(error) !== 409) throw error;
-          // Refused for a draft that moved on (another's edit first): an editor gone cannot rebase what it held.
-          if (retired && held) this.dropRetired(retired);
         }
         await this.pull();
       }

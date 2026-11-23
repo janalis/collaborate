@@ -19,6 +19,12 @@ import { MergeOperation, MoveOperation, NoOperation, transformOperationSets } fr
  * @typedef {{ id: string, version: number, operations: unknown[] }} JournalBatch
  */
 
+/**
+ * What an editor gone held unsent: its groups, as JSON, made from `version` on.
+ *
+ * @typedef {{ version: number, groups: { id: string, operations: unknown[] }[] }} Held
+ */
+
 /** Optimistic client of an append-only, compare-and-swap operation journal. */
 export class OperationBuffer {
   /**
@@ -38,12 +44,18 @@ export class OperationBuffer {
     this.batches = new WeakMap();
     /** @type {WeakSet<Operation>} */
     this.remoteOperations = new WeakSet();
+    /** @type {Group | null} the group an editor gone held, taken over whole: its operations go to it */
+    this.holding = null;
     /**
      * @param {unknown} _event
      * @param {[Operation]} args
      */
     this.capture = (_event, [operation]) => {
       if (this.remoteOperations.has(operation) || !operation.isDocumentOperation) return;
+      if (this.holding) {
+        this.holding.operations.push(operation);
+        return;
+      }
       // Applied operations belong to a batch.
       const batch = /** @type {Batch} */ (operation.batch);
       let group = this.batches.get(batch);
@@ -87,16 +99,42 @@ export class OperationBuffer {
     };
   }
 
+  /** @returns {Held} what this editor holds unsent, for the field's next editor should this one go */
+  held() {
+    return {
+      version: this.version,
+      groups: this.pending.map((group) => ({
+        id: group.id,
+        operations: group.operations.map((operation) => operation.toJSON()),
+      })),
+    };
+  }
+
   /**
-   * What an editor gone hears of the draft: its own batch acknowledged, its version moving on. Another's it cannot
-   * rebase without its editor: what it holds stays on its version, which the draft refuses.
+   * Takes over what an editor gone held, made on this editor's version: its edits applied as this editor's own,
+   * each group whole under its id, so the draft's acknowledgement, or another's edit to rebase them on, meets them
+   * as any of its own.
    *
-   * @param {JournalBatch} batch
+   * @param {Held} held
    */
-  acknowledge(batch) {
-    if (this.pending[0]?.id !== batch.id) return;
-    this.pending.shift();
-    this.version += batch.operations.length;
+  hold(held) {
+    for (const { id, operations } of held.groups) {
+      const group = { id, operations: [], sent: false };
+      this.pending.push(group);
+      this.holding = group;
+      try {
+        this.model.change((writer) => {
+          for (const json of operations) {
+            // Made on the version this editor is on: its document's own, built as that one was.
+            const operation = this.model.createOperationFromJSON(/** @type {any} */ (json));
+            writer.batch.addOperation(operation);
+            this.model.applyOperation(operation);
+          }
+        });
+      } finally {
+        this.holding = null;
+      }
+    }
   }
 
   /** @param {JournalBatch} batch */

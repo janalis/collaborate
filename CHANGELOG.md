@@ -170,9 +170,9 @@ versions follow [Semantic Versioning](https://semver.org/).
   it is offline says offline and is retried, instead of stopping the draft as
   denied; a refusal, or a failure as the network's while online (a sign-in on
   another origin), still stops it.
-- A save field a host moved into another form is taken out of it as the
-  draft writes its save fields again: it would post the draft's grant and
-  revision there.
+- A save field a host moved into another form is taken out of it as that
+  form posts, or as the draft writes its save fields again: it would post the
+  draft's grant and revision there.
 - A draft reloading its page stops and says so. A page that stays (a
   leave-page prompt answered by staying) keeps telling its user to reload, and
   its Save posts the form the ordinary way, without the draft's save fields.

@@ -274,6 +274,16 @@ export class DraftSession {
     };
     window.addEventListener('pagehide', this.unload);
     window.addEventListener('pageshow', this.restore);
+    // Another form posted with a save field of this draft a host moved into it would post this draft's grant and
+    // revision: taken out first. Kept as long as the page, a stopped draft keeping its save fields.
+    window.addEventListener(
+      'submit',
+      (event) => {
+        if (event.target === this.form) return;
+        for (const added of this.added) if (added.form === event.target) added.remove();
+      },
+      true
+    );
   }
 
   /**

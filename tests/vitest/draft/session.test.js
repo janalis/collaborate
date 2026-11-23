@@ -904,6 +904,22 @@ test('a save field a host took out of the form is added again', async () => {
   session.hidden('_collaborate_revision', '5');
   expect(other.querySelector('[name="_collaborate_revision"]')).toBeNull();
   expect(/** @type {HTMLInputElement} */ (form.elements.namedItem('_collaborate_revision')).value).toBe('5');
+  // Moved there again, and that form posted before any Save of this draft: taken out as it posts.
+  other.append(/** @type {HTMLInputElement} */ (form.elements.namedItem('_collaborate_revision')));
+  const posted = vi.fn((/** @type {SubmitEvent} */ event) => {
+    event.preventDefault();
+    return new FormData(other).has('_collaborate_revision');
+  });
+  other.addEventListener('submit', posted);
+  other.dispatchEvent(new SubmitEvent('submit', { cancelable: true, bubbles: true }));
+  expect(posted).toHaveReturnedWith(false);
+  // This draft's own form posting keeps them.
+  session.hidden('_collaborate_revision', '6');
+  const own = vi.fn((/** @type {SubmitEvent} */ event) => new FormData(form).has('_collaborate_revision'));
+  form.addEventListener('submit', own);
+  session.stop();
+  form.dispatchEvent(new SubmitEvent('submit', { cancelable: true, bubbles: true }));
+  expect(own).toHaveReturnedWith(true);
   other.remove();
 });
 

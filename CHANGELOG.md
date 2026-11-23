@@ -160,9 +160,11 @@ versions follow [Semantic Versioning](https://semver.org/).
   them over as its own: sent, retried and rebased on others' edits as any of
   its edits. Before, they were lost. Meanwhile the next editor is awaited as
   any is, a Save with it; none coming in time, the draft stops and the form
-  saves the ordinary way, its field holding that text. Edits a next editor
-  cannot take over (it has typed already, or the draft moved on since an
-  editor it replaced was built) are dropped, and the console says so.
+  saves the ordinary way, its field holding that text. Made on an earlier
+  version (the next editor typed already, or followed others' edits since),
+  they are rebased over what it applied since, as a peer's edits are. A Save
+  waits, as long as for an editor, for a replaced editor holding edits to go,
+  and sends them.
 - A Save under way as an editor goes holding edits (a format switched) waits
   for the field's next editor, as any Save waits for editors, and sends what
   it takes over before posting. A grant renewal that fails for the server's

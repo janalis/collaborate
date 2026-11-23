@@ -1887,7 +1887,7 @@ test("what an editor gone held is the next editor's own: rebased on a peer's edi
   for (const each of [next, peer, later, going, again, off]) each.model.destroy();
 });
 
-test('what an editor gone held is dropped, said, for a next editor with edits of its own or on another version; nothing for a field removed', async () => {
+test('what an editor gone held is rebased for a next editor that typed or followed the draft since, held for one to come; nothing for a field removed', async () => {
   const name = 'Record[body]';
   const { session, form, state } = fixture('<textarea id="body" name="Record[body]"></textarea>', {
     [name]: { type: 'rich', initial: '' },
@@ -1904,7 +1904,8 @@ test('what an editor gone held is dropped, said, for a next editor with edits of
     const buffer = new OperationBuffer(model, () => session.schedule());
     return { model, buffer, paragraph: () => /** @type {any} */ (root.getChild(0)) };
   };
-  // The next editor already typed in: what the one replaced held cannot be put under its edits.
+  const text = (/** @type {any} */ paragraph) => Array.from(paragraph.getChildren(), (node) => node.data).join('');
+  // The next editor already typed in: what the one replaced held is rebased over its edits, both kept.
   const going = editor();
   const leave = session.register(name, going.buffer);
   const next = editor();
@@ -1912,9 +1913,18 @@ test('what an editor gone held is dropped, said, for a next editor with edits of
   next.model.change((writer) => writer.insertText('Next', next.paragraph(), 0));
   going.model.change((writer) => writer.insertText('Gone', going.paragraph(), 0));
   leave();
-  expect(warned).toHaveBeenCalledTimes(1);
-  expect(next.buffer.held().groups).toHaveLength(1);
+  expect(warned).not.toHaveBeenCalled();
+  expect(next.buffer.held().groups).toHaveLength(2);
+  expect(text(next.paragraph())).toMatch(/^(NextGone|GoneNext)$/);
   // One replaced, a peer's edit reaching the draft before it goes: the next editor moved on from its version.
+  // (An edit of the draft before either came is under both, none of what the held edits are rebased over.)
+  const earlier = editor();
+  earlier.model.change((writer) => writer.insertText('Q', earlier.paragraph(), 0));
+  const earlierBatch = /** @type {any} */ (earlier.buffer.next());
+  state.fields[name].version = earlierBatch.version + earlierBatch.operations.length;
+  state.events.push({ kind: 'operations', ...earlierBatch, field: name, revision: ++state.revision });
+  await session.pull();
+  earlier.model.destroy();
   const third = editor();
   const replacedGoing = editor();
   const leaveReplaced = session.register(name, replacedGoing.buffer);
@@ -1927,20 +1937,26 @@ test('what an editor gone held is dropped, said, for a next editor with edits of
   state.fields[name].version = peerBatch.version + peerBatch.operations.length;
   state.events.push({ kind: 'operations', ...peerBatch, field: name, revision: ++state.revision });
   await session.pull();
+  const hold = vi.spyOn(third.buffer, 'hold');
   leaveReplaced();
-  expect(warned).toHaveBeenCalledTimes(2);
-  expect(third.buffer.hasPending()).toBe(false);
+  // Rebased over the peer's edit the next editor followed since, and only over it.
+  expect(hold).toHaveBeenCalledWith(expect.anything(), peerBatch.operations);
+  expect(warned).not.toHaveBeenCalled();
+  expect(third.buffer.held().groups).toHaveLength(1);
+  expect(text(third.paragraph())).toMatch(/^(POldQ|OldPQ)$/);
   for (const each of [replacedGoing, peer]) each.model.destroy();
-  // One replaced whose replacement went first: nothing takes over what it held; dropped, said.
-  const before = warned.mock.calls.length;
+  // One replaced whose replacement went first: held for the field's next editor, awaited.
   const first = editor();
   const leaveFirst = session.register(name, first.buffer);
   first.model.change((writer) => writer.insertText('First', first.paragraph(), 0));
   const second = editor();
   session.register(name, second.buffer)();
   leaveFirst();
-  expect(warned).toHaveBeenCalledTimes(before + 1);
-  expect(session.retiring).toEqual([]);
+  expect(warned).not.toHaveBeenCalled();
+  expect(session.retiring).toHaveLength(1);
+  expect(session.editorWaiters.get(name)?.ready).toBe(false);
+  session.retiring = [];
+  session.editorWaiters.get(name)?.resolve();
   for (const each of [first, second]) each.model.destroy();
   // Its field's wait, ready, running out (its editor released meanwhile): cleared, not stopping the draft later.
   const awaited = editor();
@@ -2241,6 +2257,47 @@ test('a reload keeps inert controls so; held edits go with their field; a replac
   session.startupControls = [control];
   session.rejoin();
   expect(control.hasAttribute('inert')).toBe(true);
+});
+
+test('a Save waits for a replaced editor holding edits to go, and sends them; one that never goes is waited for as long as an editor', async () => {
+  const name = 'Record[body]';
+  const { session, form, state } = fixture('<textarea id="body" name="Record[body]"></textarea>', {
+    [name]: { type: 'rich', initial: '' },
+  });
+  await session.ready;
+  (await session.editorConfiguration(form.querySelector('textarea'))).collaborate.ready();
+  vi.spyOn(session, 'schedule').mockImplementation(() => {});
+  const editor = () => {
+    const model = new Model();
+    model.schema.register('paragraph', { inheritAllFrom: '$block' });
+    const root = model.document.createRoot();
+    model.change((writer) => writer.appendElement('paragraph', root));
+    return { model, buffer: new OperationBuffer(model), paragraph: () => /** @type {any} */ (root.getChild(0)) };
+  };
+  // A host builds the next editor before destroying the one it replaces, which holds 'Old'; a Save meanwhile.
+  const a = editor();
+  const leaveA = session.register(name, a.buffer);
+  a.model.change((writer) => writer.insertText('Old', a.paragraph(), 0));
+  const b = editor();
+  session.register(name, b.buffer);
+  expect(session.owing()).toBe(true);
+  const saving = session.flush();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(state.events.filter((event) => event.field === name)).toHaveLength(0);
+  leaveA();
+  await saving;
+  expect(state.events.filter((event) => event.field === name)).toHaveLength(1);
+  expect(session.owing()).toBe(false);
+  // One never destroyed: the Save goes on once an editor's time ran out, without its edits.
+  session.configuration.config = { ...session.configuration.config, nextEditorGrace: 50 };
+  b.model.change((writer) => writer.insertText('!', b.paragraph(), 0));
+  const c = editor();
+  session.register(name, c.buffer);
+  const started = Date.now();
+  await session.flush();
+  expect(Date.now() - started).toBeGreaterThanOrEqual(40);
+  expect(session.owing()).toBe(true);
+  for (const each of [a, b, c]) each.model.destroy();
 });
 
 test('applies typed Markdown source once typing settles, on blur, before a flush, and never after removal', async () => {

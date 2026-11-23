@@ -111,23 +111,40 @@ export class OperationBuffer {
   }
 
   /**
-   * Takes over what an editor gone held, made on this editor's version: its edits applied as this editor's own,
-   * each group whole under its id, so the draft's acknowledgement, or another's edit to rebase them on, meets them
-   * as any of its own.
+   * Takes over what an editor gone held: its edits applied as this editor's own, each group whole under its id,
+   * so the draft's acknowledgement, or another's edit to rebase them on, meets them as any of its own. Made on an
+   * earlier version, they are rebased first over the draft's edits since (`since`, as JSON) and over this editor's
+   * own pending edits, as a peer's edits are over these.
    *
    * @param {Held} held
+   * @param {unknown[]} [since] the operations of the draft's batches from `held.version` to this editor's version
    */
-  hold(held) {
+  hold(held, since = []) {
+    /** @type {Operation[]} what this editor applied since the held edits were made */
+    let context = [
+      ...since.map((json) => this.model.createOperationFromJSON(/** @type {any} */ (json))),
+      ...this.pending.flatMap((group) => group.operations),
+    ];
     // One change, as its editor made them: what post-fixers add once it ends is this editor's own edit.
     try {
       this.model.change((writer) => {
         for (const { id, operations } of held.groups) {
+          let own = operations.map((json) => this.model.createOperationFromJSON(/** @type {any} */ (json)));
+          if (context.length) {
+            const result = transformOperationSets(own, context, {
+              document: this.model.document,
+              padWithNoOps: true,
+              useRelations: true,
+            });
+            own = result.operationsA;
+            // The next group was made after this one: what it is rebased over has this one under it.
+            context = result.operationsB;
+          }
           const group = { id, operations: [], sent: false };
           this.pending.push(group);
           this.holding = group;
-          for (const json of operations) {
-            // Made on the version this editor is on: its document's own, built as that one was.
-            const operation = this.model.createOperationFromJSON(/** @type {any} */ (json));
+          for (const operation of own) {
+            operation.baseVersion = this.model.document.version;
             writer.batch.addOperation(operation);
             this.model.applyOperation(operation);
           }

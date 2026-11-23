@@ -45,6 +45,7 @@ function fixture(rows = [row('p0', 'First'), row('t1')], members = { p0: { alive
     retiring: [],
     removals: new Map(),
     replaced: [],
+    goings: [],
     letGo: DraftSession.prototype.letGo,
     asked: new Map(),
     initializeControls: vi.fn(),

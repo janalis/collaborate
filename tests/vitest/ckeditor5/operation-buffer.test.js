@@ -317,3 +317,54 @@ test("edits another editor held are taken over whole under their ids; what post-
   gone.model.destroy();
   next.model.destroy();
 });
+
+test("edits another editor held are rebased over what the next one applied since: its own pending edits, the draft's", () => {
+  const build = () => {
+    const model = new Model();
+    model.schema.register('paragraph', { inheritAllFrom: '$block' });
+    const root = model.document.createRoot();
+    model.change((writer) => writer.appendElement('paragraph', root));
+    model.change((writer) => writer.insertText('ab', /** @type {any} */ (root.getChild(0)), 0));
+    const buffer = new OperationBuffer(model);
+    const paragraph = () => /** @type {any} */ (root.getChild(0));
+    const text = () => Array.from(paragraph().getChildren(), (/** @type {any} */ node) => node.data).join('');
+    return { model, buffer, paragraph, text };
+  };
+  // Over its own pending edit, two groups in turn: the second rebased over the first's rebase.
+  const gone = build();
+  gone.model.change((writer) => writer.insertText('XX', gone.paragraph(), 0));
+  gone.model.change((writer) => writer.insertText('Y', gone.paragraph(), 3));
+  const next = build();
+  next.model.change((writer) => writer.insertText('N', next.paragraph(), 2));
+  next.buffer.hold(gone.buffer.held());
+  expect(next.text()).toBe('XXaYbN');
+  // Its own pending edit before the held one's position moves it.
+  const end = build();
+  end.model.change((writer) => writer.insertText('Z', end.paragraph(), 2));
+  const ahead = build();
+  ahead.model.change((writer) => writer.insertText('N', ahead.paragraph(), 0));
+  ahead.buffer.hold(end.buffer.held());
+  expect(ahead.text()).toBe('NabZ');
+  expect(next.buffer.pending.map((group) => group.id).slice(1)).toEqual(
+    gone.buffer.held().groups.map((group) => group.id)
+  );
+  // Over the draft's edits since, a peer's the next editor followed.
+  const old = build();
+  old.model.change((writer) => writer.insertText('Old', old.paragraph(), 2));
+  const peer = build();
+  peer.model.change((writer) => writer.insertText('P', peer.paragraph(), 0));
+  const batch = /** @type {any} */ (peer.buffer.next());
+  const following = build();
+  following.buffer.receive(batch);
+  following.buffer.hold(old.buffer.held(), batch.operations);
+  expect(following.text()).toBe('PabOld');
+  // Applied on the version this editor's document is on, whatever version its own editor's was.
+  const stale = build();
+  const json = /** @type {any} */ (old.buffer.held().groups[0].operations[0]);
+  stale.buffer.hold({
+    version: stale.buffer.version,
+    groups: [{ id: 'stale', operations: [{ ...json, baseVersion: 999 }] }],
+  });
+  expect(stale.text()).toBe('abOld');
+  for (const each of [gone, next, end, ahead, old, peer, following, stale]) each.model.destroy();
+});

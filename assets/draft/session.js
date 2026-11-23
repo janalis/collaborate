@@ -74,7 +74,8 @@ import { initializeText, initializeValue, valueAdapter } from './fields.js';
  * @typedef {object} Adapter
  * @property {() => object | null} next the batch to send, marked as sent
  * @property {() => Held} [held] what its editor holds unsent, for the field's next editor should it go
- * @property {(held: Held) => void} [hold] takes over what an editor gone held, made on its version
+ * @property {(held: Held, since?: unknown[]) => void} [hold] takes over what an editor gone held, rebased over
+ *   the draft's operations since it was made
  * @property {(event: any) => void} receive
  * @property {number} [version]
  * @property {() => boolean} [hasPending]
@@ -185,6 +186,9 @@ export class DraftSession {
     // Editors a later one of their field replaced, not gone yet: what they hold is unsent until they go.
     /** @type {{ field: string, adapter: Adapter }[]} */
     this.replaced = [];
+    // What a Save waiting for replaced editors to go is told as one goes.
+    /** @type {(() => void)[]} */
+    this.goings = [];
     // The failures said in the console: the network failing again and again says so once.
     /** @type {Set<string>} */
     this.said = new Set();
@@ -834,7 +838,10 @@ export class DraftSession {
     return () => {
       const current = this.adapters.get(name) === buffer;
       if (current) this.adapters.delete(name);
-      this.replaced = this.replaced.filter((other) => other.adapter !== buffer);
+      if (this.replaced.some((other) => other.adapter === buffer)) {
+        this.replaced = this.replaced.filter((other) => other.adapter !== buffer);
+        for (const gone of this.goings.splice(0)) gone();
+      }
       // A field removed meanwhile keeps nothing of it.
       if (removals !== (this.removals.get(name) ?? 0)) return;
       // What its editor typed last and had not sent (a format switched within the 150 ms edits wait): the field's
@@ -846,11 +853,7 @@ export class DraftSession {
         this.takeOver(name, next, kept);
         return;
       }
-      // One replaced whose replacement went first: nothing takes it over.
-      if (!current) {
-        this.dropped(name);
-        return;
-      }
+      // One replaced whose replacement went first holds it for the field's next editor too.
       this.retiring.push({ field: name, held: kept });
       // Its next editor is awaited, a Save with it: what it held is in no editor meanwhile. None coming in time, the
       // draft stops, and the form, whose field its editor left holding that text, saves the ordinary way.
@@ -906,17 +909,22 @@ export class DraftSession {
   }
 
   /**
-   * Hands what an editor gone held to the field's next editor, on the version it was made on; one on another
-   * version, or with edits of its own, cannot take it over: it is dropped, and said. One that cannot apply it throws.
+   * Hands what an editor gone held to the field's next editor, rebased over what that one applied since; one on an
+   * earlier version than it was made on cannot take it over: it is dropped, and said. One that cannot apply it throws.
    *
    * @param {string} name
    * @param {Adapter} buffer
    * @param {Held} held
    */
   handOver(name, buffer, held) {
-    // An editor with edits of its own has moved on from that version: what it held cannot be put under them.
-    if (buffer.hold && !buffer.hasPending?.() && buffer.version === held.version) {
-      buffer.hold(held);
+    // Made on a version the editor has passed: rebased over the draft's edits since, and its own pending ones.
+    const version = /** @type {number} */ (buffer.version);
+    if (buffer.hold && version >= held.version) {
+      const since = (this.history.get(name) || []).flatMap((event) => {
+        const batch = /** @type {{ version: number, operations: unknown[] }} */ (/** @type {unknown} */ (event));
+        return batch.version >= held.version ? batch.operations : [];
+      });
+      buffer.hold(held, since);
       return;
     }
     this.dropped(name);
@@ -1295,12 +1303,17 @@ export class DraftSession {
   }
 
   /** Every edit made on this page reached the journal. */
+  /** Whether an editor replaced, not gone yet, holds edits the draft has not. */
+  owing() {
+    return this.replaced.some(
+      (other) => other.adapter.hasPending?.() && Boolean(this.unsent(other.field, other.adapter)?.groups.length)
+    );
+  }
+
   sent() {
     return (
       !this.retiring.length &&
-      this.replaced.every(
-        (other) => !other.adapter.hasPending?.() || !this.unsent(other.field, other.adapter)?.groups.length
-      ) &&
+      !this.owing() &&
       Array.from(this.adapters.values()).every((adapter) =>
         adapter.hasPending ? !adapter.hasPending() : !adapter.next()
       )
@@ -1525,6 +1538,8 @@ export class DraftSession {
       await editors();
       await this.pull();
       for (const settle of this.sources.values()) settle();
+      /** @type {number | undefined} */
+      let deadline;
       for (;;) {
         // A flush already under way when the form was posted sends nothing more.
         if (this.composing || this.posted) return;
@@ -1533,6 +1548,24 @@ export class DraftSession {
         if (Array.from(this.editorWaiters.values()).some((waiter) => !waiter.ready)) {
           await editors();
           continue;
+        }
+        // A replaced editor holding edits it has not sent (a host building the next before destroying it) is waited
+        // for to go, its edits handed over and sent, as long as an editor is: then the Save goes on without them.
+        if (this.owing()) {
+          deadline ??= Date.now() + this.setting('nextEditorGrace', 10_000);
+          const left = deadline - Date.now();
+          if (left > 0) {
+            /** @type {ReturnType<typeof setTimeout> | undefined} */
+            let timer;
+            await Promise.race([
+              new Promise((gone) => {
+                this.goings.push(() => gone(undefined));
+                timer = setTimeout(gone, left);
+              }),
+              this.stopping,
+            ]).finally(() => clearTimeout(timer));
+            continue;
+          }
         }
         let outgoing;
         for (const [field, adapter] of this.adapters) {

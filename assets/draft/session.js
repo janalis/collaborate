@@ -707,6 +707,8 @@ export class DraftSession {
    * @param {string} name
    */
   letGo(name) {
+    // What an editor of a field gone held has no field to go to.
+    this.retiring = this.retiring.filter((retired) => retired.field !== name);
     const waiter = this.editorWaiters.get(name);
     if (!waiter) return;
     clearTimeout(waiter.grace);
@@ -877,14 +879,6 @@ export class DraftSession {
   }
 
   /**
-   * Hands what an editor gone held to the field's next editor, on the version it was made on; one on another
-   * version, or with edits of its own, cannot take it over: it is dropped, and said. One that cannot apply it throws.
-   *
-   * @param {string} name
-   * @param {Adapter} buffer
-   * @param {Held} held
-   */
-  /**
    * Hands over, a failure stopping the draft as incompatible: whether it did not fail.
    *
    * @param {string} name
@@ -902,6 +896,9 @@ export class DraftSession {
   }
 
   /**
+   * Hands what an editor gone held to the field's next editor, on the version it was made on; one on another
+   * version, or with edits of its own, cannot take it over: it is dropped, and said. One that cannot apply it throws.
+   *
    * @param {string} name
    * @param {Adapter} buffer
    * @param {Held} held
@@ -1174,7 +1171,14 @@ export class DraftSession {
     this.renewal ??= this.refreshRecord(false)
       .then(
         () => true,
-        (error) => (navigator.onLine === false ? Promise.reject(error) : false)
+        (error) => {
+          // A refusal, or a failure as the network's while online (a sign-in on another origin), renews nothing;
+          // the server busy or failing, a body the network cut, or the browser offline, is retried.
+          const status = /** @type {{ status?: number }} */ (error)?.status ?? 0;
+          const transient =
+            status === 429 || status >= 500 || error instanceof SyntaxError || navigator.onLine === false;
+          return transient ? Promise.reject(error) : false;
+        }
       )
       .finally(() => {
         /** @type {Promise<boolean> | null} */
@@ -1284,7 +1288,9 @@ export class DraftSession {
   sent() {
     return (
       !this.retiring.length &&
-      this.replaced.every((other) => !this.unsent(other.field, other.adapter)?.groups.length) &&
+      this.replaced.every(
+        (other) => !other.adapter.hasPending?.() || !this.unsent(other.field, other.adapter)?.groups.length
+      ) &&
       Array.from(this.adapters.values()).every((adapter) =>
         adapter.hasPending ? !adapter.hasPending() : !adapter.next()
       )
@@ -1307,7 +1313,8 @@ export class DraftSession {
     // Stopped meanwhile, its requests aborted, and said: a page that stays (its own prompt answered by staying)
     // tells its user to reload it, nothing of the draft it left saying otherwise. Its form, no longer the draft's,
     // saves the ordinary way should its user choose to, without the save fields of the draft it left.
-    this.stop();
+    // Controls kept inert as it reloads (an editor still awaited) stay so: nothing typed there would be kept.
+    this.stop(false);
     this.forgetSaveFields();
     this.setStatus('reloading');
     location.reload();
@@ -1475,7 +1482,11 @@ export class DraftSession {
         for (const [name, value] of Object.entries(/** @type {Record<string, unknown>} */ (this.conflicts))) {
           const state = this.state.fields[name];
           const adapter = this.adapters.get(name);
-          const held = this.retiring.some((retired) => retired.field === name);
+          const held =
+            this.retiring.some((retired) => retired.field === name) ||
+            this.replaced.some(
+              (other) => other.field === name && Boolean(this.unsent(other.field, other.adapter)?.groups.length)
+            );
           if (state && state.version === (state.savedVersion ?? null) && !adapter?.next() && !held)
             adapter?.adopt?.(value);
         }
@@ -1701,8 +1712,9 @@ export class DraftSession {
     return this.resuming;
   }
 
-  stop() {
-    this.releaseControls();
+  /** @param {boolean} [release] whether the startup controls are released (not as the page reloads) */
+  stop(release = true) {
+    if (release) this.releaseControls();
     this.stopped = true;
     this.forgetGraces();
     this.suspend();

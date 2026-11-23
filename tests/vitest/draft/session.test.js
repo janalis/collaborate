@@ -2164,6 +2164,69 @@ test('a replaced editor owes nothing the draft acknowledged; only editors are ke
   for (const each of [a, b, c, d]) each.model.destroy();
 });
 
+test('a reload keeps inert controls so; held edits go with their field; a replaced editor holding edits keeps its field from the saved value; a renewal the server failed is retried', async () => {
+  const name = 'Record[body]';
+  const { session, form, fetcher } = fixture('<textarea id="body" name="Record[body]"></textarea>', {
+    [name]: { type: 'rich', initial: '' },
+  });
+  await session.ready;
+  (await session.editorConfiguration(form.querySelector('textarea'))).collaborate.ready();
+  // Held edits whose field left the form (its wait let go): nothing to go to, nothing owed.
+  session.retiring = [{ field: name, held: { version: 0, groups: [{ id: 'gone', operations: [] }] } }];
+  session.letGo(name);
+  expect(session.retiring).toEqual([]);
+  expect(session.sent()).toBe(true);
+  // A replaced editor with nothing pending is owed nothing, its edits not even looked at.
+  const unsent = vi.spyOn(session, 'unsent');
+  const idle = { next: () => null, receive() {}, hasPending: () => false, held: () => ({ version: 0, groups: [] }) };
+  session.replaced = [{ field: name, adapter: idle }];
+  expect(session.sent()).toBe(true);
+  expect(unsent).not.toHaveBeenCalled();
+  // One holding edits: a conflict kept does not give its field the saved value.
+  const holding = {
+    next: () => null,
+    receive() {},
+    hasPending: () => true,
+    held: () => ({ version: 0, groups: [{ id: 'unsent', operations: [] }] }),
+  };
+  session.replaced = [{ field: name, adapter: holding }];
+  expect(session.sent()).toBe(false);
+  const adopt = vi.fn();
+  session.adapters.set(name, { next: () => null, receive() {}, adopt });
+  session.state.fields[name].version = null;
+  session.conflicts = { [name]: 'Saved' };
+  const request = vi.spyOn(session, 'request').mockResolvedValue(null);
+  vi.spyOn(session, 'pull').mockResolvedValue(undefined);
+  const flush = vi.spyOn(session, 'flush').mockResolvedValue(undefined);
+  await session.reconcile(true);
+  expect(adopt).not.toHaveBeenCalled();
+  session.replaced = [];
+  request.mockRestore();
+  vi.mocked(session.pull).mockRestore();
+  flush.mockRestore();
+  // A renewal the server failed (busy, down), or whose answer the network cut: retried, not denied.
+  const transport = fetcher.getMockImplementation();
+  for (const answer of [
+    () => new Response('', { status: 503 }),
+    () => new Response('{"configura', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+  ]) {
+    fetcher.mockImplementation(async (url, options) => {
+      if (url === form.action) return answer();
+      if (url === '/replay') return new Response('', { status: 403 });
+      return transport(url, options);
+    });
+    await expect(session.pull()).rejects.not.toThrow('permission');
+    expect(session.stopped).toBeFalsy();
+  }
+  fetcher.mockImplementation(transport);
+  // A reload keeps the controls it found inert so: nothing typed there would be kept.
+  const control = /** @type {HTMLElement} */ (form.querySelector('textarea'));
+  control.setAttribute('inert', '');
+  session.startupControls = [control];
+  session.rejoin();
+  expect(control.hasAttribute('inert')).toBe(true);
+});
+
 test('applies typed Markdown source once typing settles, on blur, before a flush, and never after removal', async () => {
   const name = 'Record[body]';
   const { session, form } = fixture(

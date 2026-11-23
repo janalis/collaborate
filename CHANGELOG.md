@@ -165,9 +165,11 @@ versions follow [Semantic Versioning](https://semver.org/).
   editor it replaced was built) are dropped, and the console says so.
 - A Save under way as an editor goes holding edits (a format switched) waits
   for the field's next editor, as any Save waits for editors, and sends what
-  it takes over before posting. A grant renewal that fails while the browser
-  knows it is offline says offline and is retried, instead of stopping the
-  draft as denied.
+  it takes over before posting. A grant renewal that fails for the server's
+  sake (busy, down), whose answer the network cut, or while the browser knows
+  it is offline says offline and is retried, instead of stopping the draft as
+  denied; a refusal, or a failure as the network's while online (a sign-in on
+  another origin), still stops it.
 - A save field a host moved into another form is taken out of it as the
   draft writes its save fields again: it would post the draft's grant and
   revision there.

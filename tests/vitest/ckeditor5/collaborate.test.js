@@ -407,6 +407,25 @@ test('settles unapplied source typing before a remote edit lands, so an overlapp
   field.remove();
 });
 
+test('an editor going applies Markdown typed in its source first, so what it holds as it goes has it', async () => {
+  const a = await peer();
+  const plugin = a.editor.plugins.get(Collaborate);
+  /** @type {string[]} */
+  const order = [];
+  a.session.settleSource = vi.fn(() => order.push('settle'));
+  plugin.unregister = vi.fn(() => order.push('unregister'));
+  editors.splice(editors.indexOf(a.editor), 1);
+  await a.editor.destroy();
+  expect(order).toEqual(['settle', 'unregister']);
+  expect(a.session.settleSource).toHaveBeenCalledWith('body');
+  // One that follows nothing has nothing to settle.
+  const idle = await peer(undefined, [], false);
+  idle.session.settleSource = vi.fn();
+  editors.splice(editors.indexOf(idle.editor), 1);
+  await idle.editor.destroy();
+  expect(idle.session.settleSource).not.toHaveBeenCalled();
+});
+
 test('moves a focused source selection inside text a remote edit replaced to the end of the replacement', async () => {
   const a = await peer();
   const b = await peer();

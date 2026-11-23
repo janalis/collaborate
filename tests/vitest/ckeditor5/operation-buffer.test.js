@@ -285,3 +285,35 @@ describe('Collaborate real CKEditor operation protocol', () => {
     }
   });
 });
+
+test("edits another editor held are taken over whole under their ids; what post-fixers add after is the editor's own", () => {
+  /** @param {boolean} [fix] */
+  const build = (fix = false) => {
+    const model = new Model();
+    model.schema.register('paragraph', { inheritAllFrom: '$block' });
+    const root = model.document.createRoot();
+    model.change((writer) => writer.appendElement('paragraph', root));
+    let fixed = !fix;
+    // A post-fixer adding a mark once the held text is there, as list or table fixers would.
+    model.document.registerPostFixer((writer) => {
+      if (fixed || !root.getChild(0)?.childCount) return false;
+      fixed = true;
+      writer.insertText('#', /** @type {any} */ (root.getChild(0)), 'end');
+      return true;
+    });
+    return { model, buffer: new OperationBuffer(model), paragraph: () => /** @type {any} */ (root.getChild(0)) };
+  };
+  const gone = build();
+  gone.model.change((writer) => writer.insertText('Typed', gone.paragraph(), 0));
+  gone.model.change((writer) => writer.insertText('!', gone.paragraph(), 5));
+  const held = gone.buffer.held();
+  const next = build(true);
+  next.buffer.hold(held);
+  expect(next.buffer.pending.map((group) => group.id).slice(0, 2)).toEqual(held.groups.map((group) => group.id));
+  expect(next.buffer.pending[0].operations).toHaveLength(held.groups[0].operations.length);
+  expect(next.buffer.pending[1].operations).toHaveLength(held.groups[1].operations.length);
+  expect(next.buffer.pending).toHaveLength(3);
+  expect(next.buffer.holding).toBeNull();
+  gone.model.destroy();
+  next.model.destroy();
+});

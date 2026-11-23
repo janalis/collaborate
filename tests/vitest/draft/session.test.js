@@ -1755,8 +1755,11 @@ test("an editor gone before its last edits were sent (a format switched) sends t
   unregister();
   first.buffer.destroy();
   first.model.destroy();
+  // Awaited as any editor of the field: a Save waits for it, what it takes over in no editor meanwhile.
+  expect(session.editorWaiters.get(name)?.ready).toBe(false);
   const next = editor();
   session.register(name, next.buffer);
+  (await session.editorConfiguration(form.querySelector('textarea'))).collaborate.ready();
   next.model.change((writer) => writer.insertText('>', next.paragraph(), 0));
   const text = () =>
     /** @type {any[]} */ (Array.from(next.paragraph().getChildren())).map((node) => node.data).join('');
@@ -1806,6 +1809,7 @@ test("what an editor gone held is the next editor's own: rebased on a peer's edi
   // The next editor takes 'Mine' over as its own, rebased on the peer's edit, and sends it.
   const next = editor();
   session.register(name, next.buffer);
+  (await session.editorConfiguration(form.querySelector('textarea'))).collaborate.ready();
   expect(session.retiring).toEqual([]);
   await vi.waitFor(() => expect(events()).toHaveLength(2));
   await vi.waitFor(() => expect(next.buffer.hasPending()).toBe(false));
@@ -1818,9 +1822,19 @@ test("what an editor gone held is the next editor's own: rebased on a peer's edi
   going.model.change((writer) => writer.insertText('!', going.paragraph(), 0));
   const later = editor();
   session.register(name, later.buffer);
+  // A peer's edit meanwhile: the editor replaced, not gone yet, hears it too, and rebases what it holds on it.
+  const shown = text(next.paragraph());
+  const other = editor();
+  for (const event of events()) other.buffer.receive(event);
+  other.model.change((writer) => writer.insertText('P', other.paragraph(), shown.length));
+  const peerBatch = /** @type {any} */ (other.buffer.next());
+  state.fields[name].version = peerBatch.version + peerBatch.operations.length;
+  state.events.push({ kind: 'operations', ...peerBatch, field: name, revision: ++state.revision });
+  await session.pull();
   unregisterGoing();
   expect(later.buffer.hasPending()).toBe(true);
-  expect(text(later.paragraph())).toBe(`!${text(next.paragraph())}`);
+  expect(text(later.paragraph())).toBe(`!${shown}P`);
+  other.model.destroy();
   // What the draft has already (an acknowledgement on its way) is not taken over twice.
   const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
   const mine = events().find((event) => event.id !== batch.id);
@@ -1856,6 +1870,107 @@ test("what an editor gone held is the next editor's own: rebased on a peer's edi
   await session.reconcile(true);
   expect(adopt).toHaveBeenCalledWith('Saved');
   for (const each of [next, peer, later, going, again, off]) each.model.destroy();
+});
+
+test('what an editor gone held is dropped, said, for a next editor with edits of its own or one that could not follow; nothing for a field removed', async () => {
+  const name = 'Record[body]';
+  const { session, form, state } = fixture('<textarea id="body" name="Record[body]"></textarea>', {
+    [name]: { type: 'rich', initial: '' },
+  });
+  await session.ready;
+  (await session.editorConfiguration(form.querySelector('textarea'))).collaborate.ready();
+  vi.spyOn(session, 'schedule').mockImplementation(() => {});
+  const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const editor = () => {
+    const model = new Model();
+    model.schema.register('paragraph', { inheritAllFrom: '$block' });
+    const root = model.document.createRoot();
+    model.change((writer) => writer.appendElement('paragraph', root));
+    const buffer = new OperationBuffer(model, () => session.schedule());
+    return { model, buffer, paragraph: () => /** @type {any} */ (root.getChild(0)) };
+  };
+  // The next editor already typed in: what the one replaced held cannot be put under its edits.
+  const going = editor();
+  const leave = session.register(name, going.buffer);
+  const next = editor();
+  session.register(name, next.buffer);
+  next.model.change((writer) => writer.insertText('Next', next.paragraph(), 0));
+  going.model.change((writer) => writer.insertText('Gone', going.paragraph(), 0));
+  leave();
+  expect(warned).toHaveBeenCalledTimes(1);
+  expect(next.buffer.held().groups).toHaveLength(1);
+  // One replaced that could not follow the draft meanwhile: what it held is dropped as it goes.
+  const third = editor();
+  const lost = {
+    held: () => ({ version: third.buffer.version, groups: [{ id: 'lost', operations: [] }] }),
+    next: () => null,
+    receive() {
+      throw new Error('Cannot follow.');
+    },
+  };
+  const lose = session.register(name, lost);
+  session.register(name, third.buffer);
+  state.events.push({
+    kind: 'operations',
+    id: 'peer',
+    version: third.buffer.version,
+    operations: [],
+    field: name,
+    revision: ++state.revision,
+  });
+  await session.pull().catch(() => {});
+  // Lost once, it hears nothing more.
+  const receive = vi.spyOn(lost, 'receive');
+  state.events.push({
+    kind: 'operations',
+    id: 'peer2',
+    version: third.buffer.version,
+    operations: [],
+    field: name,
+    revision: ++state.revision,
+  });
+  await session.pull().catch(() => {});
+  expect(receive).not.toHaveBeenCalled();
+  lose();
+  expect(warned).toHaveBeenCalledTimes(2);
+  // One going before its field was awaited at all: its next editor is awaited from then.
+  session.editorWaiters.delete(name);
+  const early = editor();
+  const unregisterEarly = session.register(name, early.buffer);
+  early.model.change((writer) => writer.insertText('Early', early.paragraph(), 0));
+  session.adapters.set(name, early.buffer);
+  session.shadowed = [];
+  unregisterEarly();
+  expect(session.retiring).toHaveLength(1);
+  expect(session.editorWaiters.get(name)?.ready).toBe(false);
+  session.retiring = [];
+  early.model.destroy();
+  // A field removed, its editor destroyed after: nothing held, nothing awaited.
+  const row = editor();
+  const unregisterRow = session.register(name, row.buffer);
+  const rowNext = editor();
+  session.register(name, rowNext.buffer);
+  row.model.change((writer) => writer.insertText('Row', row.paragraph(), 0));
+  session.detachField(name);
+  unregisterRow();
+  rowNext.model.destroy();
+  expect(session.retiring).toEqual([]);
+  expect(session.editorWaiters.has(name)).toBe(false);
+  // A hand-over its next editor cannot apply: the draft stops, incompatible.
+  session.handOver(
+    name,
+    {
+      next: () => null,
+      receive() {},
+      version: 1,
+      hold() {
+        throw new Error('Cannot apply.');
+      },
+    },
+    { version: 1, groups: [{ id: 'x', operations: [] }] }
+  );
+  expect(form.dataset.collaborateState).toBe('incompatible');
+  for (const each of [going, next, third, row]) each.model.destroy();
 });
 
 test('applies typed Markdown source once typing settles, on blur, before a flush, and never after removal', async () => {

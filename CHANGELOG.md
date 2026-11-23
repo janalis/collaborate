@@ -155,11 +155,15 @@ versions follow [Semantic Versioning](https://semver.org/).
   instead of stopping the draft as denied; a grant renewal that fails, a
   sign-in on another origin included, still stops it as denied.
 - A CKEditor 5 editor destroyed before it sent its last edits (a field's
-  format switched, by a script, within the 150 ms edits wait) hands them to
-  the field's next editor, which takes them over as its own: sent, retried
-  and rebased on others' edits as any of its edits. Before, they were lost.
-  Only edits made on a version the next editor is not on (it is built from
-  another draft) are dropped, and the console says so.
+  format switched, by a script, within the 150 ms edits wait), Markdown typed
+  in its source included, hands them to the field's next editor, which takes
+  them over as its own: sent, retried and rebased on others' edits as any of
+  its edits. Before, they were lost. Meanwhile the next editor is awaited as
+  any is, a Save with it; none coming in time, the draft stops and the form
+  saves the ordinary way, its field holding that text. An editor replaced
+  before it goes hears the draft until then. Edits a next editor cannot take
+  over (it has typed already, or the one replaced could not follow the
+  draft) are dropped, and the console says so.
 - A draft reloading its page stops and says so. A page that stays (a
   leave-page prompt answered by staying) keeps telling its user to reload, and
   its Save posts the form the ordinary way, without the draft's save fields.

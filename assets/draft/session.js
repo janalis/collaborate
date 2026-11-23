@@ -175,9 +175,13 @@ export class DraftSession {
     this.history = new Map();
     /** @type {Set<string>} */
     this.reported = new Set();
-    // Editors gone with edits not sent yet (a format switched, their last ~150 ms): sent still, before any other.
+    // What editors gone held unsent (a format switched, their last ~150 ms), until the field's next editor takes it
+    // over.
     /** @type {{ field: string, held: Held }[]} */
     this.retiring = [];
+    // Editors a later one of their field replaced, not gone yet: they hear the draft until they go.
+    /** @type {{ field: string, adapter: Adapter, lost?: boolean }[]} */
+    this.shadowed = [];
     // The failures said in the console: the network failing again and again says so once.
     /** @type {Set<string>} */
     this.said = new Set();
@@ -759,6 +763,7 @@ export class DraftSession {
    */
   detachField(name) {
     this.retiring = this.retiring.filter((retired) => retired.field !== name);
+    this.shadowed = this.shadowed.filter((other) => other.field !== name);
     this.adapters.get(name)?.destroy?.();
     this.adapters.delete(name);
     this.letGo(name);
@@ -778,10 +783,13 @@ export class DraftSession {
       this.incompatible('version', name, `editor ${buffer.version}, draft ${state.initialVersion}`);
       throw new Error('Collaborate editor initialization differs from the stored draft.');
     }
+    // An editor of the field still there hears the draft until it goes: what it holds stays on the draft's version.
+    const prior = this.adapters.get(name);
+    if (prior && prior !== buffer && prior.held) this.shadowed.push({ field: name, adapter: prior });
     this.adapters.set(name, buffer);
     // What an editor of the field gone held unsent: taken over where the draft was when it went.
-    let held = this.retiring.find((retired) => retired.field === name)?.held ?? null;
-    this.retiring = this.retiring.filter((retired) => retired.field !== name);
+    const index = this.retiring.findIndex((retired) => retired.field === name);
+    let held = index < 0 ? null : this.retiring.splice(index, 1)[0].held;
     try {
       for (const event of this.history.get(name) || []) {
         // Taken over before the draft's first edit after it went: one of its own the draft has already acknowledges
@@ -799,29 +807,57 @@ export class DraftSession {
     }
     // A later editor of the field may have registered since: its adapter stays.
     return () => {
-      if (this.adapters.get(name) === buffer) this.adapters.delete(name);
+      const current = this.adapters.get(name) === buffer;
+      const shadowed = this.shadowed.find((other) => other.adapter === buffer);
+      if (current) this.adapters.delete(name);
+      this.shadowed = this.shadowed.filter((other) => other !== shadowed);
+      // A field removed meanwhile keeps nothing of it.
+      if (!current && !shadowed) return;
       // What its editor typed last and had not sent (a format switched within the 150 ms edits wait): the field's
       // next editor takes it over, or one already there, on the version it was made on.
       const kept = buffer.held?.();
       if (!kept?.groups.length) return;
+      if (shadowed?.lost) {
+        this.dropped(name);
+        return;
+      }
       const next = this.adapters.get(name);
-      if (next) this.handOver(name, next, kept);
-      else this.retiring.push({ field: name, held: kept });
+      if (next) {
+        this.handOver(name, next, kept);
+        return;
+      }
+      this.retiring.push({ field: name, held: kept });
+      // Its next editor is awaited, a Save with it: what it held is in no editor meanwhile. None coming in time, the
+      // draft stops, and the form, whose field its editor left holding that text, saves the ordinary way.
+      if (this.editorWaiters.get(name)?.ready) this.editorWaiters.delete(name);
+      this.editorWaiter(name);
     };
+  }
+
+  /** @param {string} name a field whose editor gone held edits no editor could take over */
+  dropped(name) {
+    console.warn(`Collaborate: the last edits of ${name}'s editor, gone, could not be taken over and were dropped.`);
   }
 
   /**
    * Hands what an editor gone held to the field's next editor, on the version it was made on; one on another
-   * version cannot take it over: it is dropped, and said.
+   * version, or with edits of its own, cannot take it over: it is dropped, and said.
    *
    * @param {string} name
    * @param {Adapter} buffer
    * @param {Held} held
    */
   handOver(name, buffer, held) {
-    if (buffer.hold && buffer.version === held.version) buffer.hold(held);
-    else
-      console.warn(`Collaborate: the last edits of ${name}'s editor, gone, could not be taken over and were dropped.`);
+    // An editor with edits of its own has moved on from that version: what it held cannot be put under them.
+    if (buffer.hold && !buffer.hasPending?.() && buffer.version === held.version) {
+      try {
+        buffer.hold(held);
+      } catch (error) {
+        this.incompatible('replay', name, messageOf(error));
+      }
+      return;
+    }
+    this.dropped(name);
   }
 
   /**
@@ -1326,6 +1362,15 @@ export class DraftSession {
       if (event.revision <= this.revision) continue;
       // The server names a Discard only to the pages showing a field it reset.
       if (event.kind === 'discard') this.superseded(event);
+      // An editor replaced, not gone yet, that cannot follow keeps what it holds on its version: it is dropped as it goes.
+      for (const other of this.shadowed) {
+        if (other.field !== event.field || other.lost) continue;
+        try {
+          other.adapter.receive(event);
+        } catch {
+          other.lost = true;
+        }
+      }
       try {
         this.adapters.get(event.field)?.receive(event);
       } catch (error) {

@@ -86,6 +86,8 @@ export default class Collaborate extends Plugin {
   }
 
   destroy() {
+    // Markdown typed in its source and not applied yet is part of what it holds as it goes.
+    if (this.buffer) this.session?.settleSource?.(this.field);
     this.unregister?.();
     this.buffer?.destroy();
     this.removeMode?.();

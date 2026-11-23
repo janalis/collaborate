@@ -118,22 +118,24 @@ export class OperationBuffer {
    * @param {Held} held
    */
   hold(held) {
-    for (const { id, operations } of held.groups) {
-      const group = { id, operations: [], sent: false };
-      this.pending.push(group);
-      this.holding = group;
-      try {
-        this.model.change((writer) => {
+    // One change, as its editor made them: what post-fixers add once it ends is this editor's own edit.
+    try {
+      this.model.change((writer) => {
+        for (const { id, operations } of held.groups) {
+          const group = { id, operations: [], sent: false };
+          this.pending.push(group);
+          this.holding = group;
           for (const json of operations) {
             // Made on the version this editor is on: its document's own, built as that one was.
             const operation = this.model.createOperationFromJSON(/** @type {any} */ (json));
             writer.batch.addOperation(operation);
             this.model.applyOperation(operation);
           }
-        });
-      } finally {
+        }
         this.holding = null;
-      }
+      });
+    } finally {
+      this.holding = null;
     }
   }
 

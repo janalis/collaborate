@@ -1772,6 +1772,128 @@ test("an editor gone before its last edits were sent (a format switched) sends t
   idle.model.destroy();
 });
 
+test("an editor gone retries what it held under the same id; a peer's edit first drops it, said; it counts as unsent until acknowledged", async () => {
+  const name = 'Record[body]';
+  const { session, form, state, fetcher } = fixture('<textarea id="body" name="Record[body]"></textarea>', {
+    [name]: { type: 'rich', initial: '' },
+  });
+  await session.ready;
+  (await session.editorConfiguration(form.querySelector('textarea'))).collaborate.ready();
+  const editor = () => {
+    const model = new Model();
+    model.schema.register('paragraph', { inheritAllFrom: '$block' });
+    const root = model.document.createRoot();
+    model.change((writer) => writer.appendElement('paragraph', root));
+    const buffer = new OperationBuffer(model, () => session.schedule());
+    return { model, buffer, paragraph: () => /** @type {any} */ (root.getChild(0)) };
+  };
+  const text = (/** @type {any} */ paragraph) => Array.from(paragraph.getChildren(), (node) => node.data).join('');
+  const transport = fetcher.getMockImplementation();
+  // The network fails its first send: sent again under the same id, once acknowledged.
+  let failures = 1;
+  fetcher.mockImplementation(async (url, options) => {
+    if (url === '/append' && failures-- > 0) throw new TypeError('Failed to fetch');
+    return transport(url, options);
+  });
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  const first = editor();
+  const unregister = session.register(name, first.buffer);
+  first.model.change((writer) => writer.insertText('Typed', first.paragraph(), 0));
+  unregister();
+  first.model.destroy();
+  // Not sent yet: the page holds edits.
+  expect(session.sent()).toBe(false);
+  const next = editor();
+  session.register(name, next.buffer);
+  await vi.waitFor(() => expect(text(next.paragraph())).toBe('Typed'));
+  expect(state.events.filter((event) => event.field === name)).toHaveLength(1);
+  expect(session.sent()).toBe(true);
+  // A peer's edit reaches the draft first: what the editor gone held, which it cannot rebase, is dropped and said.
+  const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const third = editor();
+  const unregisterThird = session.register(name, third.buffer);
+  expect(text(third.paragraph())).toBe('Typed');
+  third.model.change((writer) => writer.insertText('Lost', third.paragraph(), 0));
+  unregisterThird();
+  third.model.destroy();
+  const peer = editor();
+  for (const event of state.events.filter((event) => event.field === name)) peer.buffer.receive(event);
+  peer.model.change((writer) => writer.insertText('Peer', peer.paragraph(), 0));
+  const batch = /** @type {any} */ (peer.buffer.next());
+  state.fields[name].version = batch.version + batch.operations.length;
+  state.events.push({ kind: 'operations', ...batch, field: name, revision: ++state.revision });
+  await vi.waitFor(() => expect(warned).toHaveBeenCalledWith(expect.stringContaining('dropped')));
+  expect(session.retiring).toEqual([]);
+  // The field's next editor has the peer's edit, and nothing of what was dropped.
+  const fourth = editor();
+  const unregisterFourth = session.register(name, fourth.buffer);
+  expect(text(fourth.paragraph())).toBe('PeerTyped');
+  // A field removed drops what its editor gone held.
+  vi.spyOn(session, 'schedule').mockImplementation(() => {});
+  fourth.model.change((writer) => writer.insertText('!', fourth.paragraph(), 0));
+  unregisterFourth();
+  expect(session.retiring).toHaveLength(1);
+  session.detachField(name);
+  expect(session.retiring).toEqual([]);
+  for (const each of [next, peer, fourth]) each.model.destroy();
+});
+
+test('what an editor gone held, refused with nothing new to rebase on, is dropped; a field it holds keeps its edits on a conflict kept', async () => {
+  const name = 'Record[body]';
+  const { session, state, form } = fixture('<textarea id="body" name="Record[body]"></textarea>', {
+    [name]: { type: 'rich', initial: '' },
+  });
+  await session.ready;
+  (await session.editorConfiguration(form.querySelector('textarea'))).collaborate.ready();
+  const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const gone = () => ({
+    field: name,
+    adapter: {
+      hasPending: () => true,
+      next: () => ({ id: 'held', version: 7, operations: [{}] }),
+      acknowledge() {},
+      receive() {},
+    },
+  });
+  // The draft is on another version, and no event tells it which: refused, dropped, not sent for good.
+  state.fields[name].version = 3;
+  session.retiring = [gone()];
+  await session.flush();
+  expect(warned).toHaveBeenCalledWith(expect.stringContaining('dropped'));
+  expect(session.retiring).toEqual([]);
+  // An editor gone hears only its own field's edits.
+  const acknowledge = vi.fn();
+  session.retiring = [
+    { field: 'Record[other]', adapter: { hasPending: () => false, next: () => null, acknowledge, receive() {} } },
+  ];
+  state.fields[name].version = 8;
+  state.events.push({
+    kind: 'operations',
+    id: 'peer',
+    version: 7,
+    operations: [],
+    field: name,
+    revision: ++state.revision,
+  });
+  await session.pull().catch(() => {});
+  expect(acknowledge).not.toHaveBeenCalled();
+  // A conflict kept: the field whose editor gone holds edits is not given the saved value.
+  const adopt = vi.fn();
+  session.adapters.set(name, { next: () => null, receive() {}, adopt });
+  state.fields[name].version = null;
+  session.state.fields[name].version = null;
+  session.conflicts = { [name]: 'Saved' };
+  vi.spyOn(session, 'request').mockResolvedValue(null);
+  vi.spyOn(session, 'pull').mockResolvedValue(undefined);
+  vi.spyOn(session, 'flush').mockResolvedValue(undefined);
+  session.retiring = [gone()];
+  await session.reconcile(true);
+  expect(adopt).not.toHaveBeenCalled();
+  session.retiring = [];
+  await session.reconcile(true);
+  expect(adopt).toHaveBeenCalledWith('Saved');
+});
+
 test('applies typed Markdown source once typing settles, on blur, before a flush, and never after removal', async () => {
   const name = 'Record[body]';
   const { session, form } = fixture(

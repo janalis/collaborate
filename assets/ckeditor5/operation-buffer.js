@@ -88,13 +88,15 @@ export class OperationBuffer {
   }
 
   /**
-   * The batch to send, taken as acknowledged: an editor gone sends what it had not, the draft's acknowledgement
-   * reaching the field's next editor instead.
+   * What an editor gone hears of the draft: its own batch acknowledged, its version moving on. Another's it cannot
+   * rebase without its editor: what it holds stays on its version, which the draft refuses.
+   *
+   * @param {JournalBatch} batch
    */
-  take() {
-    const batch = this.next();
-    if (batch) this.version += /** @type {{ operations: unknown[] }} */ (this.pending.shift()).operations.length;
-    return batch;
+  acknowledge(batch) {
+    if (this.pending[0]?.id !== batch.id) return;
+    this.pending.shift();
+    this.version += batch.operations.length;
   }
 
   /** @param {JournalBatch} batch */

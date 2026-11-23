@@ -156,8 +156,10 @@ versions follow [Semantic Versioning](https://semver.org/).
   sign-in on another origin included, still stops it as denied.
 - A CKEditor 5 editor destroyed before it sent its last edits (a field's
   format switched, by a script, within the 150 ms edits wait) sends them
-  still; the field's next editor receives them from the draft. Before, they
-  were lost.
+  still, retried until the draft acknowledges them; the field's next editor
+  receives them from the draft. Before, they were lost. Should another's edit
+  to the field reach the draft first, they cannot be rebased without their
+  editor: they are dropped, and the console says so.
 - A draft reloading its page stops and says so. A page that stays (a
   leave-page prompt answered by staying) keeps telling its user to reload, and
   its Save posts the form the ordinary way, without the draft's save fields.

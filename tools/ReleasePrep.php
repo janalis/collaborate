@@ -8,7 +8,9 @@ namespace Janalis\Collaborate\Tools;
  * Prepares a release: resolves the new version (an explicit X.Y.Z, or a patch, minor or major bump of the
  * latest vX.Y.Z tag), turns the changelog's [Unreleased] section into that version's section, keeps the
  * comparison links at the bottom of the changelog current and writes the section, unwrapped, as release notes. With
- * `--module`, the Drupal module released in lockstep requires that version of the bundle (`^X.Y.Z`).
+ * `--module`, the Drupal module released in lockstep requires that version of the bundle (`^X.Y.Z`). With `--site`, the
+ * test site that installs both from this repository names them by the new version's series (`X.Y.x-dev`), which
+ * the module's requirement accepts.
  * {@see run()} prints `version=`, `tag=` and `module_tag=` (drupal.org's tags carry no `v`) lines for
  * $GITHUB_OUTPUT.
  */
@@ -16,9 +18,9 @@ final class ReleasePrep
 {
     public const string UNRELEASED = '## [Unreleased]';
 
-    private const string USAGE = 'usage: relprep.php --bump X.Y.Z|patch|minor|major [--date YYYY-MM-DD] [--notes file] [--changelog file] [--git dir] [--module composer.json]';
+    private const string USAGE = 'usage: relprep.php --bump X.Y.Z|patch|minor|major [--date YYYY-MM-DD] [--notes file] [--changelog file] [--git dir] [--module composer.json] [--site composer.json]';
 
-    private const array OPTIONS = ['bump', 'date', 'notes', 'changelog', 'git', 'module'];
+    private const array OPTIONS = ['bump', 'date', 'notes', 'changelog', 'git', 'module', 'site'];
 
     /** A line that starts a block of its own: a heading, a list item, a quote, a table row or a link reference. */
     private const string BLOCK = '/^(?:#{1,6}(?: |$)|[-*+] |\d+[.)] |>|\||\[[^\]]+\]: )/';
@@ -55,6 +57,7 @@ final class ReleasePrep
                 $options['changelog'] ?? 'CHANGELOG.md',
                 $options['git'] ?? '.',
                 $options['module'] ?? null,
+                $options['site'] ?? null,
             );
         } catch (\RuntimeException $error) {
             fwrite($stderr, 'relprep: ' . $error->getMessage() . "\n");
@@ -74,6 +77,7 @@ final class ReleasePrep
         string $changelog,
         string $gitDirectory,
         ?string $module = null,
+        ?string $site = null,
     ): string {
         $parsed = \DateTimeImmutable::createFromFormat('!Y-m-d', $date);
         if (false === $parsed || $parsed->format('Y-m-d') !== $date) {
@@ -85,12 +89,16 @@ final class ReleasePrep
             throw new \RuntimeException(\sprintf('cannot read %s', $changelog));
         }
         [$updated, $body] = $this->cutChangelog($contents, $version, $date);
+        // Every file is worked out before any is written: a release refused leaves them all as they were.
+        $writes = [];
         if (null !== $module) {
-            $composer = is_file($module) ? file_get_contents($module) : false;
-            if (false === $composer) {
-                throw new \RuntimeException(\sprintf('cannot read %s', $module));
-            }
-            $this->write($module, $this->requireBundle($composer, $version));
+            $writes[$module] = $this->requireBundle($this->read($module), $version);
+        }
+        if (null !== $site) {
+            $writes[$site] = $this->series($this->read($site), $version);
+        }
+        foreach ($writes as $path => $written) {
+            $this->write($path, $written);
         }
         if (null !== $notes) {
             $this->write($notes, $this->unwrap($body) . "\n");
@@ -223,6 +231,39 @@ final class ReleasePrep
         }
 
         return $updated;
+    }
+
+    /**
+     * The test site's composer.json naming the bundle and the module (`janalis/collaborate*`) by the released version's
+     * series, `X.Y.x-dev`: the versions its path repositories give them and its requirements of them.
+     */
+    private function series(string $composer, string $version): string
+    {
+        // nextVersion() returned X.Y.Z.
+        [$major, $minor] = explode('.', $version);
+        $count = 0;
+        $updated = preg_replace(
+            '/("' . preg_quote(self::BUNDLE, '/') . '(?:_drupal)?"\s*:\s*)"\d+\.\d+\.x-dev"/',
+            '${1}"' . $major . '.' . $minor . '.x-dev"',
+            $composer,
+            -1,
+            $count,
+        );
+        if (0 === $count || null === $updated) {
+            throw new \RuntimeException('the test site\'s composer.json names no ' . self::BUNDLE . ' X.Y.x-dev');
+        }
+
+        return $updated;
+    }
+
+    private function read(string $path): string
+    {
+        $contents = is_file($path) ? file_get_contents($path) : false;
+        if (false === $contents) {
+            throw new \RuntimeException(\sprintf('cannot read %s', $path));
+        }
+
+        return $contents;
     }
 
     /** [Unreleased] now starts at the new tag, which gets its own link from the previous one (or its tag page). */

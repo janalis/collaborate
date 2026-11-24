@@ -36,7 +36,7 @@ final class ReleasePrepTest extends TestCase
 
         MD;
 
-    private const string USAGE = 'usage: relprep.php --bump X.Y.Z|patch|minor|major [--date YYYY-MM-DD] [--notes file] [--changelog file] [--git dir] [--module composer.json]';
+    private const string USAGE = 'usage: relprep.php --bump X.Y.Z|patch|minor|major [--date YYYY-MM-DD] [--notes file] [--changelog file] [--git dir] [--module composer.json] [--site composer.json]';
 
     /** The Drupal module's composer.json, as far as the release reads it. */
     private const string MODULE = <<<'JSON'
@@ -46,6 +46,23 @@ final class ReleasePrepTest extends TestCase
                 "php": "^8.4",
                 "janalis/collaborate": "^0.5@dev"
             }
+        }
+
+        JSON;
+
+    private const string SITE = <<<'JSON'
+        {
+            "repositories": [
+                {"type": "path", "url": "../../..", "options": {"versions": {"janalis/collaborate": "0.5.x-dev"}}},
+                {"type": "path", "url": "../../../drupal", "options": {"versions": {"janalis/collaborate_drupal": "0.5.x-dev"}}}
+            ],
+            "require": {
+                "drupal/core-recommended": "^11.3",
+                "janalis/collaborate": "0.5.x-dev",
+                "janalis/collaborate_drupal": "0.5.x-dev",
+                "janalis/collaborate_other": "0.5.x-dev"
+            },
+            "suggest": {"janalis/collaborate": "^0.5"}
         }
 
         JSON;
@@ -371,6 +388,66 @@ final class ReleasePrepTest extends TestCase
         );
     }
 
+    public function testRunNamesTheTestSitesPackagesByTheNewSeries(): void
+    {
+        $this->git('init', '-q');
+        file_put_contents($this->directory . '/CHANGELOG.md', self::CHANGELOG);
+        file_put_contents($this->directory . '/site.json', self::SITE);
+
+        [$status] = $this->relprep(['--bump', '0.6.0', '--site', $this->directory . '/site.json']);
+
+        self::assertSame(0, $status);
+        // The bundle and the module, wherever named by their series; another package and a constraint stay.
+        self::assertSame(
+            str_replace(
+                ['"janalis/collaborate": "0.5.x-dev"', '"janalis/collaborate_drupal": "0.5.x-dev"'],
+                ['"janalis/collaborate": "0.6.x-dev"', '"janalis/collaborate_drupal": "0.6.x-dev"'],
+                self::SITE,
+            ),
+            file_get_contents($this->directory . '/site.json'),
+        );
+        self::assertSame(4, substr_count((string) file_get_contents($this->directory . '/site.json'), '0.6.x-dev'));
+    }
+
+    public function testAPatchKeepsTheTestSitesSeries(): void
+    {
+        $this->git('init', '-q');
+        $this->git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'x');
+        $this->git('tag', 'v0.5.0');
+        file_put_contents($this->directory . '/CHANGELOG.md', self::CHANGELOG);
+        file_put_contents($this->directory . '/site.json', self::SITE);
+
+        [$status] = $this->relprep(['--bump', 'patch', '--site', $this->directory . '/site.json']);
+
+        self::assertSame(0, $status);
+        self::assertSame(self::SITE, file_get_contents($this->directory . '/site.json'));
+    }
+
+    public function testARefusedTestSiteWritesNothingElse(): void
+    {
+        $this->git('init', '-q');
+        file_put_contents($this->directory . '/CHANGELOG.md', self::CHANGELOG);
+        file_put_contents($this->directory . '/composer.json', self::MODULE);
+        file_put_contents($this->directory . '/site.json', '{"require": {"janalis/collaborate": "^0.5"}}');
+
+        [$status, , $stderr] = $this->relprep([
+            '--bump',
+            '0.6.0',
+            '--notes',
+            $this->directory . '/notes.md',
+            '--module',
+            $this->directory . '/composer.json',
+            '--site',
+            $this->directory . '/site.json',
+        ]);
+
+        self::assertSame(1, $status);
+        self::assertSame("relprep: the test site's composer.json names no janalis/collaborate X.Y.x-dev\n", $stderr);
+        self::assertSame(self::MODULE, file_get_contents($this->directory . '/composer.json'));
+        self::assertSame(self::CHANGELOG, file_get_contents($this->directory . '/CHANGELOG.md'));
+        self::assertFileDoesNotExist($this->directory . '/notes.md');
+    }
+
     public function testRunDefaultsToTodayAndWritesNoNotes(): void
     {
         $this->git('init', '-q');
@@ -424,6 +501,7 @@ final class ReleasePrepTest extends TestCase
         yield 'not a repository' => [['--git', '{dir}/missing'], 'relprep: git tag: '];
         yield 'bad version' => [['--bump', 'next'], 'relprep: bad version "next"'];
         yield 'missing module' => [['--module', '{dir}/missing.json'], 'relprep: cannot read {dir}/missing.json'];
+        yield 'missing test site' => [['--site', '{dir}/missing.json'], 'relprep: cannot read {dir}/missing.json'];
         yield 'a module that does not require the bundle' => [
             ['--module', '{dir}/other.json'],
             "relprep: the module's composer.json does not require janalis/collaborate",

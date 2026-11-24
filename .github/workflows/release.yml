@@ -1,6 +1,7 @@
 name: release
 # Actions → release → Run workflow (on main). Verifies, moves CHANGELOG's [Unreleased] section to the new
-# version, makes the Drupal module require it (drupal/composer.json), commits and tags it, then publishes the
+# version, makes the Drupal module require it (drupal/composer.json) and the Drupal test site install its series
+# (tests/Application/Drupal/composer.json), commits and tags it, then publishes the
 # GitHub release with that section as its notes, pings Packagist (janalis/collaborate, from the tag), pushes the
 # module's split with the same version (drupal-split.yml: janalis/collaborate_drupal, drupal.org), opens the
 # issue that hands drupal.org's "Create release" to a maintainer, and refreshes the documentation site.
@@ -62,7 +63,9 @@ jobs:
       - id: relprep
         env:
           BUMP: ${{ inputs.version }}
-        run: php tools/relprep.php --bump "$BUMP" --notes "$RUNNER_TEMP/notes.md" --module drupal/composer.json | tee -a "$GITHUB_OUTPUT"
+        run: >-
+          php tools/relprep.php --bump "$BUMP" --notes "$RUNNER_TEMP/notes.md" --module drupal/composer.json
+          --site tests/Application/Drupal/composer.json | tee -a "$GITHUB_OUTPUT"
       - run: git diff
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

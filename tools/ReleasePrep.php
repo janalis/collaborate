@@ -246,8 +246,7 @@ final class ReleasePrep
             '/("' . preg_quote(self::BUNDLE, '/') . '(?:_drupal)?"\s*:\s*)"\d+\.\d+\.x-dev"/',
             '${1}"' . $major . '.' . $minor . '.x-dev"',
             $composer,
-            -1,
-            $count,
+            count: $count,
         );
         if (0 === $count || null === $updated) {
             throw new \RuntimeException('the test site\'s composer.json names no ' . self::BUNDLE . ' X.Y.x-dev');

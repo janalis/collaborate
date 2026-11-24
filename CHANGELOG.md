@@ -5,6 +5,13 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `cursors/geometry.js` loads without a document again, as a host's Node
+  scripts import it (a Playwright helper reading `CURSOR_SHAPES`): since 0.5
+  it asked the page's bridge as it loaded, and threw `document is not
+  defined`. Without a document, the layer names no bridge.
+
 ## [0.6.0] - 2026-11-23
 
 ### Added

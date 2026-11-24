@@ -104,8 +104,12 @@ let readConfig;
 /** @type {string | null} */
 let readName = null;
 
-/** The bridge the layer names, from its `data-config`; null without a layer or a readable configuration. */
+/**
+ * The bridge the layer names, from its `data-config`; null without a layer or a readable configuration, or without a
+ * document (Node, a worker: a module that asks as it loads, `cursors/geometry.js`, is imported there for its constants).
+ */
 function named() {
+  if (typeof document === 'undefined') return null;
   const config = document.querySelector('[data-collaborate-layer]')?.getAttribute('data-config');
   if (config !== readConfig) {
     const name = parseSettings(config).bridge;

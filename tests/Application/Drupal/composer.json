@@ -14,7 +14,7 @@
             "options": {
                 "symlink": true,
                 "versions": {
-                    "janalis/collaborate": "0.5.x-dev"
+                    "janalis/collaborate": "0.6.x-dev"
                 }
             }
         },
@@ -24,7 +24,7 @@
             "options": {
                 "symlink": true,
                 "versions": {
-                    "janalis/collaborate_drupal": "0.5.x-dev"
+                    "janalis/collaborate_drupal": "0.6.x-dev"
                 }
             }
         }
@@ -36,8 +36,8 @@
         "drupal/inline_entity_form": "^3.0",
         "drupal/paragraphs": "^1.23",
         "drush/drush": "^13.6",
-        "janalis/collaborate": "0.5.x-dev",
-        "janalis/collaborate_drupal": "0.5.x-dev",
+        "janalis/collaborate": "0.6.x-dev",
+        "janalis/collaborate_drupal": "0.6.x-dev",
         "minishlink/web-push": "^11.0",
         "nyholm/psr7": "^1.8",
         "ratchet/rfc6455": "^0.4.1",

@@ -1,8 +1,7 @@
 // @ts-check
-import { Model, ModelLivePosition } from 'ckeditor5';
 import { bridge } from '../bridge.js';
-import { OperationBuffer } from '../ckeditor5/operation-buffer.js';
 import { textChange } from '../ckeditor5/text-change.js';
+import { TextAdapter } from './text-adapter.js';
 
 // The journal's label length (`config.labelLength`), in code points: a split surrogate pair is not valid JSON for PHP.
 const LABEL_LENGTH = 255;
@@ -35,38 +34,26 @@ const LABEL_LENGTH = 255;
  * @param {import('./session.js').DraftField} state
  */
 export function initializeText(session, control, name, state) {
-  const model = new Model();
-  const root = model.document.createRoot();
-  model.schema.register('paragraph', { inheritAllFrom: '$block' });
-  model.change((writer) => {
-    const paragraph = writer.createElement('paragraph');
-    writer.append(paragraph, root);
-    if (state.initial) writer.insertText(state.initial, paragraph, 0);
-  });
-  const paragraph = /** @type {any} */ (root.getChild(0));
-  const value = () => Array.from(paragraph.getChildren(), (node) => node.data).join('');
-  const buffer = new OperationBuffer(model, () => session.schedule());
+  const buffer = new TextAdapter(state.initial || '', () => session.schedule());
+  const value = () => buffer.value;
   const receive = buffer.receive.bind(buffer);
   buffer.receive = (event) => {
     const focused = document.activeElement === control;
     const start = control.selectionStart;
     const end = control.selectionEnd;
-    const from =
-      focused && start !== null ? ModelLivePosition.fromPosition(model.createPositionAt(paragraph, start)) : null;
-    const to = focused && end !== null ? ModelLivePosition.fromPosition(model.createPositionAt(paragraph, end)) : null;
+    const range = focused && start !== null && end !== null ? buffer.track(start, end) : null;
     try {
       receive(event);
       // Tagify dispatches change while it reloads the value; that is not a local edit.
       session.withApplying(() => {
         control.value = value();
         /** @type {any} */ (control).__tagify?.loadOriginalValues(control.value);
-        if (from && to) control.setSelectionRange(from.offset, to.offset);
+        if (range) control.setSelectionRange(range.start, range.end);
         control.dispatchEvent(new Event('input', { bubbles: true }));
         control.dispatchEvent(new Event('change', { bubbles: true }));
       });
     } finally {
-      from?.detach();
-      to?.detach();
+      range?.detach();
     }
   };
   session.register(name, buffer);
@@ -77,13 +64,7 @@ export function initializeText(session, control, name, state) {
     const after = control.value;
     if (before === after) return;
     const { prefix, end, inserted } = textChange(before, after);
-    model.change((writer) => {
-      if (end > prefix)
-        writer.remove(
-          writer.createRange(writer.createPositionAt(paragraph, prefix), writer.createPositionAt(paragraph, end))
-        );
-      if (inserted) writer.insertText(inserted, paragraph, prefix);
-    });
+    buffer.transact([{ start: prefix, end, text: inserted }]);
   };
   buffer.adopt = (text) => {
     control.value = text;
@@ -108,7 +89,6 @@ export function initializeText(session, control, name, state) {
     owner?.removeEventListener('input', follow);
     owner?.removeEventListener('click', follow);
     buffer.destroy();
-    model.destroy();
   });
 }
 

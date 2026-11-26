@@ -62,6 +62,7 @@ export default defineConfig({
             { text: 'Configuration', link: '/guide/configuration' },
             { text: 'Identity and access', link: '/guide/identity-and-access' },
             { text: 'Rich text and scripts', link: '/guide/rich-text' },
+            { text: 'Headless source editors', link: '/guide/headless' },
             { text: 'Bridges', link: '/guide/bridges' },
             { text: 'EasyAdmin', link: '/guide/easyadmin' },
             { text: 'Drupal', link: '/guide/drupal' },

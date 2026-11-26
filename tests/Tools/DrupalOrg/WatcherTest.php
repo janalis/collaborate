@@ -79,6 +79,47 @@ final class WatcherTest extends TestCase
         self::assertStringStartsWith('usage: drupalorg.php', $error);
     }
 
+    public function testMirroredIssueBodiesSkipMalformedRowsBeforeLaterValidIssues(): void
+    {
+        $runner = $this->createMock(Runner::class);
+        $runner
+            ->expects($this->once())
+            ->method('run')
+            ->willReturn([
+                0,
+                json_encode([['body' => null], ['body' => 123], ['body' => 'later valid body']], \JSON_THROW_ON_ERROR),
+                '',
+            ]);
+
+        self::assertSame(['later valid body'], new GitHub($runner, 'janalis/collaborate')->mirroredIssues());
+    }
+
+    public function testOpenIssuesFilterUnrelatedAndMalformedRowsWithoutStopping(): void
+    {
+        $runner = $this->createMock(Runner::class);
+        $runner
+            ->expects($this->once())
+            ->method('run')
+            ->willReturn([
+                0,
+                json_encode(
+                    [
+                        ['number' => 1, 'body' => 'unrelated issue'],
+                        ['number' => '2', 'body' => '<!-- wanted -->'],
+                        ['number' => 3, 'body' => null],
+                        ['number' => 4, 'body' => 'before <!-- wanted --> after'],
+                    ],
+                    \JSON_THROW_ON_ERROR,
+                ),
+                '',
+            ]);
+
+        self::assertSame(
+            [['number' => 4, 'body' => 'before <!-- wanted --> after']],
+            new GitHub($runner, 'janalis/collaborate')->openIssuesWith('<!-- wanted -->'),
+        );
+    }
+
     public function testNeedsTheRepository(): void
     {
         [$status] = $this->watch(['mrs'], repository: '');

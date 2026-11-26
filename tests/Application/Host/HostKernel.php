@@ -127,6 +127,7 @@ class HostKernel extends AppKernel
             ->public();
         $services->set(LibraryController::class)->tag('controller.service_arguments');
         $services->set(HostLocales::class);
+        $services->set(TextController::class)->tag('controller.service_arguments');
         $services->set(HostStreamGuard::class);
         if ('test' === $this->environment) {
             $services->set(RecordingPushSender::class)->decorate(PushSenderInterface::class)->public();
@@ -163,6 +164,16 @@ class HostKernel extends AppKernel
             ->controller([LibraryController::class, 'listing'])
             ->requirements(['folder' => '[a-z]+'])
             ->methods(['GET']);
+        $routes
+            ->add('host_text', '/admin/text/{record}')
+            ->controller([TextController::class, 'page'])
+            ->requirements(['record' => '[a-z0-9-]{1,64}'])
+            ->methods(['GET']);
+        $routes
+            ->add('host_text_events', '/admin/text/{record}/events')
+            ->controller([TextController::class, 'events'])
+            ->requirements(['record' => '[a-z0-9-]{1,64}'])
+            ->methods(['POST']);
         if ('test' !== $this->environment) {
             $routes
                 ->add('e2e_notify', '/e2e/notify')

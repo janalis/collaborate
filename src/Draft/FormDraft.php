@@ -145,6 +145,7 @@ final readonly class FormDraft
         return [
             'id' => $this->access->draftId($record['class'], $identity),
             'entity' => $record['class'],
+            'record' => $new ? null : $record['id'],
             'permission' => $permission,
             'new' => $new,
             'draft' => $draft,
@@ -237,7 +238,7 @@ final readonly class FormDraft
             $user,
             $this->clock->now()->getTimestamp(),
         );
-        if ($scope['id'] !== $authorized['id']) {
+        if (($authorized['headless'] ?? false) || $scope['id'] !== $authorized['id']) {
             throw new AccessDeniedHttpException('Collaborate grant belongs to another form.');
         }
         $values = array_map(static fn(array $field): mixed => $field['initial'], $scope['fields']);

@@ -4,14 +4,22 @@ declare(strict_types=1);
 
 namespace Janalis\Collaborate\Tests\Functional\Draft;
 
+use Doctrine\Common\EventManager;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Exception\LockWaitTimeoutException;
+use Doctrine\ORM\EntityManager;
+use Doctrine\ORM\Events;
+use Doctrine\ORM\ORMSetup;
+use Doctrine\ORM\Tools\SchemaTool;
+use Janalis\Collaborate\Doctrine\PortableSchema;
 use Janalis\Collaborate\Draft\Dialect\JournalDialect;
 use Janalis\Collaborate\Draft\Dialect\MySqlDialect;
+use Janalis\Collaborate\Draft\Dialect\SqliteDialect;
 use Janalis\Collaborate\Draft\DraftBusyException;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftLocks;
+use Janalis\Collaborate\Draft\DraftSource;
 use Janalis\Collaborate\Draft\DraftText;
 use Janalis\Collaborate\Draft\DraftTooLargeException;
 use Janalis\Collaborate\Draft\DraftValues;
@@ -21,6 +29,7 @@ use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\Draft\FieldNames;
 use Janalis\Collaborate\Draft\JournalStore;
 use Janalis\Collaborate\Draft\RecordAlreadyCreatedException;
+use Janalis\Collaborate\Entity\Draft;
 use Janalis\Collaborate\Tests\Fixtures\Draft\InterleavingConnection;
 use Janalis\Collaborate\Tests\Fixtures\Draft\JsonAssertions;
 use Janalis\Collaborate\Tests\Fixtures\Draft\StatementRecordingConnection;
@@ -42,6 +51,9 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 #[CoversClass(EventValidator::class)]
 #[CoversClass(FieldDefinitions::class)]
 #[UsesClass(DraftText::class)]
+#[UsesClass(DraftSource::class)]
+#[UsesClass(PortableSchema::class)]
+#[UsesClass(SqliteDialect::class)]
 #[CoversClass(JournalDialect::class)]
 #[CoversClass(MySqlDialect::class)]
 #[CoversClass(DraftLocks::class)]
@@ -371,9 +383,10 @@ final class DraftJournalBoundariesTest extends TestCase
         $waits = function (): array {
             $waits = [];
             foreach ($this->db->queries as $index => $sql) {
-                if (str_contains($sql, 'GET_LOCK')) {
-                    $waits[] = $this->db->queryParameters[$index];
+                if (!str_contains($sql, 'GET_LOCK')) {
+                    continue;
                 }
+                $waits[] = $this->db->queryParameters[$index];
             }
 
             return $waits;
@@ -443,7 +456,7 @@ final class DraftJournalBoundariesTest extends TestCase
         );
         $release = $position('RELEASE_LOCK');
         self::assertGreaterThan(-1, $release);
-        self::assertGreaterThan($release, $position('SELECT payload FROM collaborate_draft_event'));
+        self::assertGreaterThan($release, $position('SELECT revision, payload FROM collaborate_draft_event'));
     }
 
     public function testANestedLockIsReleasedByItsLastUnlockAndAnUnheldOneIsNotReleased(): void
@@ -565,9 +578,10 @@ final class DraftJournalBoundariesTest extends TestCase
         // It does not wait for a draft in use: it asks for its lock without a timeout, well before the save's 10 s.
         $waits = [];
         foreach ($this->db->queries as $index => $sql) {
-            if (str_contains($sql, 'GET_LOCK')) {
-                $waits[] = $this->db->queryParameters[$index][1] ?? null;
+            if (!str_contains($sql, 'GET_LOCK')) {
+                continue;
             }
+            $waits[] = $this->db->queryParameters[$index][1] ?? null;
         }
         self::assertSame([0, 0, 0], $waits);
         self::assertLessThan(5, microtime(true) - $started);
@@ -1303,7 +1317,7 @@ final class DraftJournalBoundariesTest extends TestCase
 
     public function testAReplayTakesNoRowLock(): void
     {
-        self::assertFalse($this->outsideUpdateBlocks('SELECT payload', fn(
+        self::assertFalse($this->outsideUpdateBlocks('SELECT revision, payload', fn(
             DraftJournal $journal,
             string $id,
         ) => $journal->replay($id, $this->fields, 0)));
@@ -1586,5 +1600,273 @@ final class DraftJournalBoundariesTest extends TestCase
         $this->journal->saved('other', ['choice' => 'b']);
 
         self::assertSame(['body', 'choice'], array_keys($this->journal->replay('record', $this->fields, 0)['fields']));
+    }
+
+    public function testTextSourceLimitRejectsTheWholeBatchWithoutChangingItsRevision(): void
+    {
+        $fields = ['source' => ['type' => 'text', 'initial' => 'abc']];
+        $this->journal->join('bounded', $fields);
+        $event = $this->event([
+            'field' => 'source',
+            'operations' => [[
+                '__className' => 'InsertOperation',
+                'baseVersion' => 2,
+                'position' => ['root' => 'main', 'path' => [0, 3]],
+                'nodes' => [['data' => 'é']],
+            ]],
+        ]);
+        try {
+            $this->journal->append('bounded', $fields, $event, 1, 'Alice', 4);
+            self::fail('Oversized source accepted.');
+        } catch (DraftTooLargeException) {
+            $view = $this->journal->replay('bounded', $fields, 0);
+            self::assertSame('abc', $view['fields']['source']['value']);
+            self::assertSame(0, $view['revision']);
+        }
+        $this->journal->append('bounded', $fields, $event, 1, 'Alice', 5);
+        self::assertSame('abcé', $this->journal->replay('bounded', $fields, 0)['fields']['source']['value']);
+    }
+
+    public function testSourceInitialVersionCannotDivergeFromItsSnapshotEventCount(): void
+    {
+        $fields = ['source' => ['type' => 'source', 'initial' => 'a']];
+        $this->journal->join('source-version', $fields);
+        $id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+        $operation = [
+            '__className' => 'SourceTransaction',
+            'id' => $id,
+            'clock' => 1,
+            'baseVersion' => 42,
+            'inserts' => [['id' => $id . ':0', 'after' => null, 'text' => 'x']],
+            'deletes' => [],
+        ];
+        $event = $this->event(['field' => 'source', 'version' => 42, 'operations' => [$operation]]);
+        try {
+            $this->journal->append('source-version', $fields, $event, 1, 'Alice');
+            self::fail('A source session with a nonzero initial version was accepted.');
+        } catch (BadRequestHttpException) {
+            $unchanged = $this->journal->replay('source-version', $fields, 0);
+            self::assertSame(0, $unchanged['revision']);
+            self::assertNull($unchanged['fields']['source']['version']);
+            self::assertSame('a', $unchanged['fields']['source']['value']);
+        }
+        $event['version'] = 0;
+        $operation['baseVersion'] = 0;
+        $event['operations'] = [$operation];
+        $this->journal->append('source-version', $fields, $event, 1, 'Alice');
+        $state = $this->journal->replay('source-version', $fields, 0)['fields']['source'];
+        self::assertSame(1, $state['version']);
+        self::assertCount(1, $state['sourceEvents'] ?? []);
+    }
+
+    public function testSourceTransactionsPersistProvenanceAndRejectOversizedMaterialization(): void
+    {
+        $fields = ['source' => ['type' => 'source', 'initial' => 'ab']];
+        $this->journal->join('source', $fields);
+        $operation = [
+            '__className' => 'SourceTransaction',
+            'id' => 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+            'clock' => 1,
+            'baseVersion' => 0,
+            'inserts' => [[
+                'id' => 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:0',
+                'text' => '😀',
+                'after' => ['run' => 'initial', 'offset' => 0],
+            ]],
+            'deletes' => [],
+            'actor' => 99,
+        ];
+        $event = $this->event(['field' => 'source', 'version' => 0, 'operations' => [$operation]]);
+        try {
+            $this->journal->append('source', $fields, $event, 1, 'Alice', 5);
+            self::fail('Oversized source accepted.');
+        } catch (DraftTooLargeException) {
+            self::assertSame('ab', $this->journal->replay('source', $fields, 0)['fields']['source']['value']);
+        }
+        $accepted = $this->journal->append('source', $fields, $event, 1, 'Alice', 6);
+        self::assertSame(1, $accepted['operations'][0]['actor'] ?? null);
+        $state = $this->journal->replay('source', $fields, 0)['fields']['source'];
+        self::assertSame('a😀b', $state['value']);
+        self::assertSame(1, $state['sourceEvents'][0]['actor'] ?? null);
+    }
+
+    public function testSourceReopenDetectsStoredChangesAndReconciliationPreservesOrReplacesProvenance(): void
+    {
+        $fields = ['source' => ['type' => 'source', 'initial' => 'old']];
+        $this->journal->join('source-conflict', $fields);
+        $id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+        $this->journal->append(
+            'source-conflict',
+            $fields,
+            $this->event([
+                'field' => 'source',
+                'version' => 0,
+                'operations' => [[
+                    '__className' => 'SourceTransaction',
+                    'id' => $id,
+                    'clock' => 1,
+                    'baseVersion' => 0,
+                    'inserts' => [[
+                        'id' => $id . ':0',
+                        'after' => ['run' => 'initial', 'offset' => 2],
+                        'text' => ' local',
+                    ]],
+                    'deletes' => [],
+                ]],
+            ]),
+            1,
+            'Alice',
+        );
+        $external = ['source' => ['type' => 'source', 'initial' => 'external']];
+        $readAt = microtime(true);
+        $view = $this->journal->join('source-conflict', $external, $readAt);
+        self::assertSame(['source' => 'external'], $view['conflicts']);
+        $kept = $this->journal->reconcile('source-conflict', 1, $view['revision'], $external, true, $readAt);
+        self::assertSame('old local', $kept['fields']['source']['value']);
+        self::assertSame('external', $kept['fields']['source']['saved']);
+        self::assertCount(1, $kept['fields']['source']['sourceEvents'] ?? []);
+        self::assertSame(-1, $kept['savedRevision']);
+        $newer = ['source' => ['type' => 'source', 'initial' => 'newer external']];
+        $replaced = $this->journal->reconcile('source-conflict', 1, $kept['revision'], $newer, false, microtime(true));
+        self::assertSame('newer external', $replaced['fields']['source']['value']);
+        self::assertArrayNotHasKey('sourceEvents', $replaced['fields']['source']);
+        self::assertSame($replaced['revision'], $replaced['savedRevision']);
+
+        $clean = $this->journal->join('clean-source', $fields);
+        $changed = $this->journal->join('clean-source', $external, microtime(true));
+        self::assertSame(['source' => 'external'], $changed['conflicts']);
+        self::assertSame($clean['revision'], $changed['revision']);
+    }
+
+    public function testSourceAppendRetainsEarlierRunAnchorsAcrossRequests(): void
+    {
+        $fields = ['source' => ['type' => 'source', 'initial' => 'a']];
+        $this->journal->join('source-history', $fields);
+        $first = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+        $second = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+        foreach ([$first, $second] as $version => $id) {
+            $this->journal->append(
+                'source-history',
+                $fields,
+                $this->event([
+                    'id' => $id,
+                    'field' => 'source',
+                    'version' => $version,
+                    'operations' => [[
+                        '__className' => 'SourceTransaction',
+                        'id' => $id,
+                        'clock' => $version + 1,
+                        'baseVersion' => $version,
+                        'inserts' => [[
+                            'id' => $id . ':0',
+                            'after' => ['run' => 0 === $version ? 'initial' : $first . ':0', 'offset' => 0],
+                            'text' => 'x',
+                        ]],
+                        'deletes' => [],
+                    ]],
+                ]),
+                1,
+                'Alice',
+            );
+        }
+        $state = $this->journal->replay('source-history', $fields, 0)['fields']['source'];
+        self::assertSame('axx', $state['value']);
+        self::assertCount(2, $state['sourceEvents'] ?? []);
+    }
+
+    public function testSourceUpdatesAllowALargePasteWithoutWideningOrdinaryFormLimits(): void
+    {
+        $fields = ['source' => ['type' => 'source', 'initial' => '']];
+        $this->journal->join('large-source', $fields);
+        $id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+        $text = str_repeat('x', 270_000);
+        $event = $this->event([
+            'field' => 'source',
+            'version' => 0,
+            'operations' => [[
+                '__className' => 'SourceTransaction',
+                'id' => $id,
+                'clock' => 1,
+                'baseVersion' => 0,
+                'inserts' => [['id' => $id . ':0', 'after' => null, 'text' => $text]],
+                'deletes' => [],
+            ]],
+        ]);
+        $this->journal->append('large-source', $fields, $event, 1, 'Alice');
+        self::assertSame($text, $this->journal->replay('large-source', $fields, 0)['fields']['source']['value']);
+        $regular = ['source' => ['type' => 'text', 'initial' => '']];
+        $this->journal->join('regular-source', $regular);
+        $this->expectException(DraftTooLargeException::class);
+        $this->journal->append('regular-source', $regular, $event, 1, 'Alice');
+    }
+
+    public function testMaximumDecodedSourceAllowsWorstCaseJsonEscaping(): void
+    {
+        // Exercise the protocol/JSON bound independently of a network database's packet capacity.
+        $db = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]);
+        $this->connections[] = $db;
+        $config = ORMSetup::createAttributeMetadataConfig([\dirname(
+            (string) new \ReflectionClass(Draft::class)->getFileName(),
+        )]);
+        $config->enableNativeLazyObjects(true);
+        $events = new EventManager();
+        $events->addEventListener(Events::loadClassMetadata, new PortableSchema());
+        $manager = new EntityManager($db, $config, $events);
+        new SchemaTool($manager)->createSchema($manager->getMetadataFactory()->getAllMetadata());
+        $journal = new DraftJournal($db, firstGeneration: 1);
+        $fields = ['source' => ['type' => 'source', 'initial' => '']];
+        $journal->join('escaped-source', $fields);
+        $id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+        $text = str_repeat("\0", DraftSource::MAX_BYTES);
+        $event = $this->event([
+            'field' => 'source',
+            'version' => 0,
+            'operations' => [[
+                '__className' => 'SourceTransaction',
+                'id' => $id,
+                'clock' => 1,
+                'baseVersion' => 0,
+                'inserts' => [['id' => $id . ':0', 'after' => null, 'text' => $text]],
+                'deletes' => [],
+            ]],
+        ]);
+        self::assertGreaterThan(10_485_760, \strlen(JournalStore::encode($event)));
+        $journal->append('escaped-source', $fields, $event, 1, 'Alice');
+        self::assertSame($text, $journal->replay('escaped-source', $fields, 0)['fields']['source']['value']);
+    }
+
+    public function testIdleSavedSourceCompactionResetsProvenanceAndGenerationWithoutLosingText(): void
+    {
+        $journal = new DraftJournal($this->db, limits: ['compact' => ['bytes' => 1, 'idle' => 0]], firstGeneration: 1);
+        $fields = ['source' => ['type' => 'source', 'initial' => 'a']];
+        $journal->join('compact-source', $fields);
+        $id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+        $journal->append(
+            'compact-source',
+            $fields,
+            $this->event([
+                'field' => 'source',
+                'version' => 0,
+                'operations' => [[
+                    '__className' => 'SourceTransaction',
+                    'id' => $id,
+                    'clock' => 1,
+                    'baseVersion' => 0,
+                    'inserts' => [['id' => $id . ':0', 'after' => ['run' => 'initial', 'offset' => 0], 'text' => 'b']],
+                    'deletes' => [],
+                ]],
+            ]),
+            1,
+            'Alice',
+        );
+        $journal->saved('compact-source', ['source' => 'ab']);
+        $this->db->executeStatement("UPDATE collaborate_draft SET updated_at = '2000-01-01' WHERE id = ?", [
+            'compact-source',
+        ]);
+        $compacted = $journal->join('compact-source', ['source' => ['type' => 'source', 'initial' => 'ab']]);
+        self::assertSame(2, $compacted['generation']);
+        self::assertSame('ab', $compacted['fields']['source']['value']);
+        self::assertSame('ab', $compacted['fields']['source']['initial']);
+        self::assertArrayNotHasKey('sourceEvents', $compacted['fields']['source']);
     }
 }

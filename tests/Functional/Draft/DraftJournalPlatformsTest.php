@@ -40,6 +40,7 @@ use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
 /**
  * The journal on each database it speaks to, its tables created from the bundle's mapping: SQLite always,
  * PostgreSQL when `COLLABORATE_POSTGRES_URL` names a test database, MariaDB or MySQL with `COLLABORATE_DATABASE_URL`.
+ * Parallel workers use `<database>_t<TEST_TOKEN>` on both servers, isolating schema resets and named locks.
  */
 #[CoversClass(DraftJournal::class)]
 #[CoversClass(JournalDialect::class)]
@@ -74,6 +75,9 @@ final class DraftJournalPlatformsTest extends TestCase
     private array $connections = [];
 
     private ?string $file = null;
+
+    /** @var array<string, true> databases this process created for its parallel test token */
+    private static array $created = [];
 
     /** @return iterable<string, array{string}> */
     public static function platforms(): iterable
@@ -213,19 +217,46 @@ final class DraftJournalPlatformsTest extends TestCase
         if ('sqlite' === $platform) {
             $this->file ??= sys_get_temp_dir() . '/collaborate-journal-' . bin2hex(random_bytes(4)) . '.sqlite';
             $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $this->file]);
+        } elseif ('mysql' === $platform) {
+            $url =
+                $_SERVER['COLLABORATE_DATABASE_URL']
+                ?? $_ENV['COLLABORATE_DATABASE_URL']
+                ?? getenv('COLLABORATE_DATABASE_URL');
+            if (!\is_string($url) || '' === $url) {
+                self::markTestSkipped('COLLABORATE_DATABASE_URL names no test database.');
+            }
+            // Use the same TEST_TOKEN database and lock namespace as the other MySQL fixtures.
+            $connection = DraftJournalTest::connection();
         } else {
-            $variable = 'pgsql' === $platform ? 'COLLABORATE_POSTGRES_URL' : 'COLLABORATE_DATABASE_URL';
+            $variable = 'COLLABORATE_POSTGRES_URL';
             $url = $_SERVER[$variable] ?? $_ENV[$variable] ?? getenv($variable);
             if (!\is_string($url) || '' === $url) {
                 self::markTestSkipped($variable . ' names no test database.');
             }
-            $connection = DriverManager::getConnection(new DsnParser([
-                'mysql' => 'pdo_mysql',
-                'mariadb' => 'pdo_mysql',
+            $params = new DsnParser([
                 'postgres' => 'pdo_pgsql',
                 'postgresql' => 'pdo_pgsql',
                 'pgsql' => 'pdo_pgsql',
-            ])->parse($url));
+            ])->parse($url);
+            $token = $_SERVER['TEST_TOKEN'] ?? getenv('TEST_TOKEN');
+            $name = $params['dbname'] ?? null;
+            if (\is_string($token) && '' !== $token && null !== $name) {
+                $params['dbname'] = $name . '_t' . (string) preg_replace('/\W/', '_', $token);
+                if (!isset(self::$created[$params['dbname']])) {
+                    // Connect to the existing base database to create the worker's separate database.
+                    $server = DriverManager::getConnection(['dbname' => $name] + $params);
+                    if (
+                        false === $server->fetchOne('SELECT 1 FROM pg_database WHERE datname = ?', [$params['dbname']])
+                    ) {
+                        $server->executeStatement(
+                            'CREATE DATABASE ' . $server->quoteSingleIdentifier($params['dbname']),
+                        );
+                    }
+                    $server->close();
+                    self::$created[$params['dbname']] = true;
+                }
+            }
+            $connection = DriverManager::getConnection($params);
         }
         $this->connections[] = $connection;
 

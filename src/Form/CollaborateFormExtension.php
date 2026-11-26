@@ -7,6 +7,7 @@ namespace Janalis\Collaborate\Form;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Janalis\Collaborate\Access\DraftAccessCheckerInterface;
+use Janalis\Collaborate\Access\RecordDraftAccessCheckerInterface;
 use Janalis\Collaborate\CollaborateBundle;
 use Janalis\Collaborate\Doctrine\RecordIdentifier;
 use Janalis\Collaborate\Draft\DraftAccess;
@@ -359,7 +360,16 @@ final class CollaborateFormExtension extends AbstractTypeExtension
             return null;
         }
         $permission = $record['new'] ? DraftAccessCheckerInterface::CREATE : DraftAccessCheckerInterface::UPDATE;
-        if (!$this->checker->canEdit($user, $permission, $record['class'])) {
+        if (
+            !$this->checker->canEdit($user, $permission, $record['class'])
+            || $this->checker instanceof RecordDraftAccessCheckerInterface
+            && !$this->checker->canEditRecord(
+                $user,
+                $permission,
+                $record['class'],
+                $record['new'] ? null : $record['id'],
+            )
+        ) {
             return null;
         }
 
@@ -412,7 +422,7 @@ final class CollaborateFormExtension extends AbstractTypeExtension
                 $keys = [];
                 foreach ($child as $key => $entry) {
                     $keys[] = $key;
-                    $fields[FieldNames::member($path, (string) $key)] =
+                    $fields[FieldNames::member($path, $key)] =
                         [
                             'type' => 'member',
                             'initial' => [

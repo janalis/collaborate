@@ -86,6 +86,8 @@ collaborate:
         grant_cache: cache.app
         max_request_bytes: 2097152
         max_update_bytes: 262144
+        max_source_update_bytes: 16777216
+        max_source_draft_bytes: 33554432
         max_draft_bytes: 10485760
         max_fields: 10000
         max_value_depth: 8
@@ -213,6 +215,8 @@ Read with `transport: websocket` alone. The application and
 | `grant_cache` | `cache.app` | PSR-6 pool that remembers verified grants. With several servers, a pool they share avoids full resends. |
 | `max_request_bytes` | `2097152` (min 65536) | Largest draft or session request body. A form whose field grant would not fit beside one update is edited without a shared draft, and a warning naming its entity is logged. |
 | `max_update_bytes` | `262144` (min 4096) | Largest single update, counted in stored UTF-8 bytes (413 beyond). |
+| `max_source_update_bytes` | `16777216` (min 4096, max 16777216) | Largest encoded source transaction; decoded source remains limited to 2 MiB. Ordinary form updates retain `max_update_bytes`. |
+| `max_source_draft_bytes` | `33554432` (min 65536, max 33554432) | Maximum source journal bytes, including provenance and author metadata. |
 | `max_draft_bytes` | `10485760` (min 65536) | Largest journal of one draft (the draft is then *full*: 413). |
 | `max_fields` | `10000` (min 10) | Most field states one draft holds; collection entries added beyond it are refused. |
 | `max_value_depth` | `8` (min 1) | Deepest nesting of a value in an update. |
@@ -341,3 +345,21 @@ The limits above are an example. Size them to your users: one tab sends up
 to ten cursor events a second while its pointer moves (`cursors.throttle`),
 a typing editor sends its changes in batches 150 ms apart, and every open
 form replays the draft every `drafts.replay.connected` seconds.
+
+## Record-level draft access
+
+The service configured as `collaborate.access` can implement
+`Janalis\Collaborate\Access\RecordDraftAccessCheckerInterface` in addition to the
+class-level policy. Its `canEditRecord(user, permission, entityClass, identity)`
+method receives the host's signed record identity, or `null` for a create operation.
+Both policies must permit access. Record grants bind that identity to the draft ID;
+older grants without an identity are refused by a record-aware checker.
+
+Form rendering checks both policies. Every subsequent grant verification, including
+cached-signature requests and subscription renewal, asks the checker again, so a
+host can revoke an individual record's access without changing the user's roles.
+The checker must resolve current permissions rather than cache an initial answer.
+Headless sessions require this record-aware policy; the default role-only checker
+cannot authorize them. Hosts issuing grants directly must verify the grant with the
+current user before initializing or reading the journal. Grant issuance only signs
+server-supplied scope data; it does not authorize that data.

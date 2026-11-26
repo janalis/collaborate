@@ -15,6 +15,7 @@ use Janalis\Collaborate\Draft\JournalStore;
 use Janalis\Collaborate\Grant;
 use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Identity\SecurityCollaboratorProvider;
+use Janalis\Collaborate\Tests\Fixtures\RecordAccessChecker;
 use Janalis\Collaborate\Tests\Fixtures\TestUser;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -52,6 +53,7 @@ final class FormDraftTest extends TestCase
 
         self::assertSame(hash('sha256', 'node:article:5'), $scope['id']);
         self::assertSame('node:article', $scope['entity']);
+        self::assertSame('5', $scope['record'] ?? null);
         self::assertSame('update', $scope['permission']);
         self::assertFalse($scope['new']);
         self::assertNull($scope['draft']);
@@ -64,6 +66,8 @@ final class FormDraftTest extends TestCase
         $named = str_repeat('ab', 16);
         $scope = $this->draft()->scope($this->record(draft: $named), 'create', new Request(), []);
         self::assertSame($named, $scope['draft']);
+        self::assertArrayHasKey('record', $scope);
+        self::assertNull($scope['record'] ?? null);
         self::assertSame(hash('sha256', 'node:article:new:' . $named), $scope['id']);
 
         $request = new Request();
@@ -182,6 +186,30 @@ final class FormDraftTest extends TestCase
         $this->draft()->begin($request, new TestUser(7), $scope, static fn(): array => []);
     }
 
+    public function testHeadlessGrantCannotSaveThroughAForm(): void
+    {
+        $access = new DraftAccess(
+            'secret',
+            true,
+            new Topics(),
+            new SecurityCollaboratorProvider(),
+            new RecordAccessChecker(),
+        );
+        $draft = $this->draft(access: $access);
+        $request = Request::create('/node/5/edit', 'POST');
+        $user = new TestUser(7);
+        $scope = $draft->scope($this->record(new: false), 'update', $request, self::FIELDS);
+        $request->request->set('_collaborate_grant', $access->issue(
+            ['headless' => true] + $scope,
+            7,
+            time(),
+            $user->getRoles(),
+        ));
+        $this->expectException(AccessDeniedHttpException::class);
+        $this->expectExceptionMessage('Collaborate grant belongs to another form.');
+        $draft->begin($request, $user, $scope, static fn(): array => []);
+    }
+
     /** @return array{entity: object, class: string, new: bool, id: string|null, draft: string|null} */
     private function record(bool $new = true, ?string $draft = null, string $id = '5'): array
     {
@@ -195,7 +223,7 @@ final class FormDraftTest extends TestCase
     }
 
     /** @param array{max_update_bytes?: int, replay?: array{connected?: int}, label_length?: int} $options */
-    private function draft(array $options = [], ?DraftSave $save = null): FormDraft
+    private function draft(array $options = [], ?DraftSave $save = null, ?DraftAccess $access = null): FormDraft
     {
         $collaborators = new SecurityCollaboratorProvider();
         $urls = $this->createStub(UrlGeneratorInterface::class);
@@ -225,7 +253,7 @@ final class FormDraftTest extends TestCase
         };
 
         return new FormDraft(
-            new DraftAccess('secret', true, new Topics(), $collaborators, new RoleDraftAccessChecker()),
+            $access ?? new DraftAccess('secret', true, new Topics(), $collaborators, new RoleDraftAccessChecker()),
             $save ?? $this->createStub(DraftSave::class),
             $collaborators,
             $urls,

@@ -445,6 +445,8 @@ final class CollaborateBundleConfigurationTest extends TestCase
             'drafts.signature_ttl' => [900, 10],
             'drafts.max_request_bytes' => [2_097_152, 65_536],
             'drafts.max_update_bytes' => [262_144, 4096],
+            'drafts.max_source_update_bytes' => [16_777_216, 4096],
+            'drafts.max_source_draft_bytes' => [33_554_432, 65_536],
             'drafts.max_draft_bytes' => [10_485_760, 65_536],
             'drafts.max_fields' => [10_000, 10],
             'drafts.max_value_depth' => [8, 1],
@@ -481,6 +483,21 @@ final class CollaborateBundleConfigurationTest extends TestCase
 
         $this->expectException(InvalidConfigurationException::class);
         $this->process(array_replace_recursive($renewed, self::option($path, $minimum - 1)));
+    }
+
+    /** @return iterable<string, array{string, int}> */
+    public static function sourceMaximums(): iterable
+    {
+        yield 'source request' => ['drafts.max_source_update_bytes', 16_777_216];
+        yield 'source journal' => ['drafts.max_source_draft_bytes', 33_554_432];
+    }
+
+    #[DataProvider('sourceMaximums')]
+    public function testSourceLimitsAcceptTheirMaximumAndRejectOneByteMore(string $path, int $maximum): void
+    {
+        self::assertSame($maximum, self::at($this->process(self::option($path, $maximum)), $path));
+        $this->expectException(InvalidConfigurationException::class);
+        $this->process(self::option($path, $maximum + 1));
     }
 
     /** @return array<string, mixed> the configuration setting `$path` to `$value` */

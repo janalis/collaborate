@@ -41,6 +41,9 @@ the same admin page at once:
   included), choices and collections stay in sync. Save goes through the
   form's usual validation and persistence; a conflicting save elsewhere opens
   a review, and Discard resets the draft for everyone.
+- **Headless source editors.** Custom XML, code and visual interfaces share one
+  source with atomic range edits, record-scoped access and selective collaborative
+  undo. See [headless text sessions](docs/guide/headless.md).
 - **Presence and cursors.** The header shows who else is on the page; their
   pointers, carets, selections and the field each one is in are drawn in
   their color.

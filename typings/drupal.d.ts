@@ -15,15 +15,13 @@ export interface DrupalGlobals {
     ajax?: { instances: (DrupalAjax | null)[] };
     behaviors: Record<string, { attach(context: Document | Element): void }>;
     /** Attaches a field's editor for its text format: `format.editor` names it. */
-    // biome-ignore lint/suspicious/noExplicitAny: Drupal's editor settings, which each text format shapes
-    editorAttach?: (element: HTMLTextAreaElement, format: any) => unknown;
+    editorAttach?: (element: HTMLTextAreaElement, format: unknown) => unknown;
     /** Drupal's editors by name; `format` is its settings for a field's text format. */
-    // biome-ignore lint/suspicious/noExplicitAny: Drupal's editor settings, which each text format shapes
     editors?: {
       ckeditor5?: {
-        attach(this: unknown, element: HTMLTextAreaElement, format: any): unknown;
+        attach(this: unknown, element: HTMLTextAreaElement, format: unknown): unknown;
         /** `trigger` is `serialize` when Drupal only reads the editor's data back into its field. */
-        detach(this: unknown, element: HTMLTextAreaElement, format: any, trigger?: string): unknown;
+        detach(this: unknown, element: HTMLTextAreaElement, format: unknown, trigger?: string): unknown;
       };
     };
   };
@@ -31,9 +29,8 @@ export interface DrupalGlobals {
   drupalSettings?: { editor?: { formats?: Record<string, { editor?: string }> } };
   jQuery?: (element: Element) => { trigger(event: string): unknown };
   /** The DLL's modules are typed by the bundle's own `ckeditor5` imports, not here. */
-  // biome-ignore lint/suspicious/noExplicitAny: a module of the DLL, whichever its path names
   CKEditor5?: {
-    dll?: (path: string) => any;
+    dll?: (path: string) => Record<string, unknown>;
     collaborate?: object;
     /** The editor class Drupal creates its editors with. */
     editorClassic?: { ClassicEditor: { create(...args: unknown[]): Promise<unknown> } };

@@ -75,6 +75,9 @@ final readonly class DraftController
             $user,
             $this->clock->now()->getTimestamp(),
         );
+        if (true === ($scope['headless'] ?? false)) {
+            throw new AccessDeniedException('Headless drafts require their host endpoints.');
+        }
         // The session stays open until Symfony writes the security token on
         // kernel.response. Hub publishes wait for kernel.terminate.
         $id = $scope['id'];

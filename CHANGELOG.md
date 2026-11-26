@@ -5,6 +5,23 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Headless collaborative source sessions for custom editors, with record-scoped
+  authorization, compact grants and exact-revision save checkpoints.
+- Public native text and source adapters. Source transactions preserve peer
+  insertions through selective undo, track ranges and capture composition edits.
+- Separate source request and journal limits for large documents, without
+  increasing ordinary form limits, plus a two-view host integration example.
+- Explicit headless reconciliation of external storage changes, with storage-read
+  timestamps and digest-based replay to omit unchanged source snapshots.
+
+### Fixed
+
+- Source adapter callbacks preserve committed edits and undo history when a
+  subscriber or scheduler throws; rejected and unchanged edits do not consume clocks.
+- Unicode source projection reuses codepoint indexes across spans.
+
 ## [0.6.1] - 2026-11-24
 
 ### Fixed

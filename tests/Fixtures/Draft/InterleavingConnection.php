@@ -8,7 +8,7 @@ use Doctrine\DBAL\Connection;
 
 /**
  * A DBAL wrapper (`wrapperClass`) that runs another connection's work once, just before the first
- * `fetchFirstColumn()` query or `executeStatement()` statement containing `$pattern`: a race between
+ * `fetchFirstColumn()` or `fetchAllAssociative()` query or `executeStatement()` statement containing `$pattern`: a race between
  * two statements made deterministic.
  */
 final class InterleavingConnection extends Connection
@@ -23,6 +23,13 @@ final class InterleavingConnection extends Connection
         $this->interleave($query);
 
         return parent::fetchFirstColumn($query, $params, $types);
+    }
+
+    public function fetchAllAssociative(string $query, array $params = [], array $types = []): array
+    {
+        $this->interleave($query);
+
+        return parent::fetchAllAssociative($query, $params, $types);
     }
 
     public function executeStatement(string $sql, array $params = [], array $types = []): int|string

@@ -107,6 +107,8 @@ final class CollaborateFormExtensionTest extends TypeTestCase
     private bool $granted = true;
     private bool $canEdit = true;
     private bool $canEditRecord = true;
+    /** @var list<string|null> */
+    private array $recordIdentities = [];
     /** @var array<string, list<string>> what the edited record's draft saved for its plain lists */
     private array $listKeys = [];
     /** @var array<string, array<array-key, string>> the keys the edited record's draft gave its collections' entries, by record id */
@@ -135,7 +137,17 @@ final class CollaborateFormExtensionTest extends TypeTestCase
             ->willReturnCallback(fn(mixed $role): bool => $this->granted && 'ROLE_EDITOR' === $role);
         $checker = $this->createStub(RecordDraftAccessCheckerInterface::class);
         $checker->method('canEdit')->willReturnCallback(fn(): bool => $this->canEdit);
-        $checker->method('canEditRecord')->willReturnCallback(fn(): bool => $this->canEditRecord);
+        $checker
+            ->method('canEditRecord')
+            ->willReturnCallback(function (
+                UserInterface $user,
+                string $permission,
+                string $entityClass,
+                ?string $identity,
+            ): bool {
+                $this->recordIdentities[] = $identity;
+                return $this->canEditRecord;
+            });
         $urls = $this->createStub(UrlGeneratorInterface::class);
         $urls->method('generate')->willReturnCallback(static fn(
             string $route,
@@ -302,6 +314,23 @@ final class CollaborateFormExtensionTest extends TypeTestCase
     {
         $this->canEditRecord = false;
         self::assertArrayNotHasKey('data-collaborate', self::vars($this->form()->createView(), 'attr'));
+    }
+
+    public function testSubmittedKeysDoNotReorderOrdinaryFormChildren(): void
+    {
+        $form = $this->form();
+        $children = array_keys($form->all());
+        $form->submit(['body' => 'Body', 'title' => 'Title']);
+        self::assertSame($children, array_keys($form->all()));
+    }
+
+    public function testEditFormChecksThePersistedRecordIdentity(): void
+    {
+        $this->page->page = PageContext::EDIT;
+        $this->page->id = 'record-42';
+        self::assertArrayHasKey('data-collaborate', self::vars($this->form()->createView(), 'attr'));
+        self::assertNotEmpty($this->recordIdentities);
+        self::assertSame(['record-42'], array_values(array_unique($this->recordIdentities)));
     }
 
     public function testEditorSchemaRequiresAPinnedCkeditor(): void

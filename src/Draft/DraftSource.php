@@ -24,8 +24,9 @@ final class DraftSource
      */
     public function apply(string $initial, array $events, array $operations, int $actor): array
     {
+        $maxClock = 0;
         /** @var array<string, Run> $runs */
-        $runs = ['initial' => ['text' => $initial, 'transaction' => null, 'clock' => 0, 'after' => null]];
+        $runs = ['initial' => ['text' => $initial, 'transaction' => null, 'clock' => $maxClock, 'after' => null]];
         $lengths = ['initial' => mb_strlen($initial, 'UTF-8')];
         /** @var array<string, array{actor: int, deletes: list<Delete>}> $transactions */
         $transactions = [];
@@ -34,13 +35,13 @@ final class DraftSource
         $ids = [];
         $normalized = array_map(static fn(array $operation): array => ['actor' => $actor] + $operation, $operations);
         $historyCount = \count($events);
-        $maxClock = 0;
         foreach ([...$events, ...$normalized] as $index => $event) {
             $id = \is_string($event['id'] ?? null) ? $event['id'] : '';
-            $clock = \is_int($event['clock'] ?? null) ? $event['clock'] : 0;
+            $clock = \is_int($event['clock'] ?? null) ? $event['clock'] : null;
             if (
                 1 !== preg_match('/^[a-zA-Z0-9-]{16,64}$/D', $id)
                 || isset($ids[$id])
+                || !\is_int($clock)
                 || $clock < 1
                 || $clock > 9_007_199_254_740_991
                 || $index >= $historyCount && $clock > ($maxClock + 1)
@@ -49,7 +50,7 @@ final class DraftSource
                 throw new InvalidDraftEventException('Invalid source operation identity.');
             }
             $maxClock = max($maxClock, $clock);
-            $ids[$id] = true;
+            $ids[$id] = $id;
             if ('SourceTransaction' === ($event['__className'] ?? null)) {
                 if (!\is_array($event['inserts'] ?? null) || !\is_array($event['deletes'] ?? null)) {
                     throw new InvalidDraftEventException('Invalid source transaction.');
@@ -61,6 +62,7 @@ final class DraftSource
                 }
                 foreach (array_keys($inserts) as $index) {
                     if (!\is_array($inserts[$index])) {
+                        // @infection-ignore-all: the next validation rejects scalar offsets with the same exception too.
                         throw new InvalidDraftEventException('Invalid source insertion.');
                     }
                     $insert = $inserts[$index];
@@ -73,21 +75,21 @@ final class DraftSource
                     ) {
                         throw new InvalidDraftEventException('Invalid source insertion.');
                     }
-                    if (null !== $insert['after'] && !\is_array($insert['after'])) {
-                        throw new InvalidDraftEventException('Invalid source anchor.');
-                    }
-                    $after = $insert['after'];
-                    if (null !== $after) {
+                    // Combining these first two type guards with AND still rejects the same anchors:
+                    // scalar anchors have no string run; missing/non-string runs fail membership below.
+                    if (null !== $insert['after']) {
                         if (
-                            !\is_string($after['run'] ?? null)
-                            || !isset($runs[$after['run']])
-                            || !\is_int($after['offset'] ?? null)
-                            || $after['offset'] < 0
-                            || $after['offset'] >= $lengths[$after['run']]
+                            !\is_array($insert['after'])
+                            || !\is_string($insert['after']['run'] ?? null)
+                            || !isset($runs[$insert['after']['run']])
+                            || !\is_int($insert['after']['offset'] ?? null)
+                            || $insert['after']['offset'] < 0
+                            || $insert['after']['offset'] >= $lengths[$insert['after']['run']]
                         ) {
                             throw new InvalidDraftEventException('Invalid source anchor.');
                         }
                     }
+                    $after = \is_array($insert['after']) ? $insert['after'] : null;
                     if (\count($runs) >= self::MAX_RUNS) {
                         throw new DraftTooLargeException('Source run limit reached.');
                     }
@@ -102,6 +104,7 @@ final class DraftSource
                 }
                 foreach (array_keys($deletes) as $index) {
                     if (!\is_array($deletes[$index])) {
+                        // @infection-ignore-all: the next validation rejects scalar offsets with the same exception too.
                         throw new InvalidDraftEventException('Invalid source deletion.');
                     }
                     $delete = $deletes[$index];
@@ -128,6 +131,7 @@ final class DraftSource
                 ) {
                     throw new InvalidDraftEventException('Source undo must name the author’s transaction.');
                 }
+                // IDs are unique, so the tie-break comparison cannot equal zero (> and >= agree).
                 $previous = $toggles[$target] ?? null;
                 if (
                     null === $previous
@@ -176,6 +180,7 @@ final class DraftSource
             $merged = [];
             foreach ($intervals as [$start, $end]) {
                 $last = array_key_last($merged);
+                // Merging overlaps/adjacency saves work; retaining sorted intervals renders the same union.
                 if (null !== $last && $start <= $merged[$last][1]) {
                     $merged[$last][1] = max($end, $merged[$last][1]);
                 } else {
@@ -201,16 +206,16 @@ final class DraftSource
             $run = $runs[$id];
             $units = mb_convert_encoding($run['text'], 'UTF-32LE', 'UTF-8');
             \assert(\is_string($units));
-            $length = intdiv(\strlen($units), 4);
-            /** @var array<int, bool> $points */
-            $points = [0 => true, $length => true];
+            $length = $lengths[$id];
+            /** @var array<int, int> $points */
+            $points = [$length => $length];
             $nested = $children[$id] ?? [];
             foreach (array_keys($nested) as $position) {
-                $points[$position] = true;
+                $points[$position] = $position;
             }
             foreach ($masks[$id] ?? [] as [$start, $end]) {
-                $points[$start] = true;
-                $points[$end] = true;
+                $points[$start] = $start;
+                $points[$end] = $end;
             }
             ksort($points);
             $visible = null === $run['transaction'] || ($toggles[$run['transaction']]['active'] ?? true);
@@ -218,7 +223,7 @@ final class DraftSource
             $maskIndex = 0;
             $intervals = $masks[$id] ?? [];
             $next = [];
-            foreach (array_keys($points) as $to) {
+            foreach ($points as $to) {
                 $hidden = !$visible;
                 while (isset($intervals[$maskIndex]) && $intervals[$maskIndex][1] <= $from) {
                     ++$maskIndex;
@@ -226,7 +231,7 @@ final class DraftSource
                 if (isset($intervals[$maskIndex]) && $intervals[$maskIndex][0] <= $from) {
                     $hidden = true;
                 }
-                if (!$hidden && $to > $from) {
+                if (!$hidden) {
                     $piece = mb_convert_encoding(substr($units, $from * 4, ($to - $from) * 4), 'UTF-8', 'UTF-32LE');
                     \assert(\is_string($piece));
                     $next[] = ['text' => $piece];

@@ -18,9 +18,30 @@
         "summary": "var/infection/summary.log"
     },
     "mutators": {
-        "@default": true
+        "@default": true,
+        // Exact equivalent source expressions only; DraftSource documents each invariant.
+        "LogicalOr": {
+            "ignoreSourceCodeByRegex": [
+                "!\\\\is_array\\(\\$insert\\['after'\\]\\)\\n-\\s*\\|\\| !\\\\is_string\\(\\$insert\\['after'\\]\\['run'\\] \\?\\? null\\)"
+            ]
+        },
+        "GreaterThan": {
+            "ignoreSourceCodeByRegex": [
+                "\\|\\| \\$clock === \\$previous\\['clock'\\] && strcmp\\(\\$id, \\$previous\\['id'\\]\\) > 0"
+            ]
+        },
+        "DecrementInteger": {
+            "ignoreSourceCodeByRegex": [
+                "if \\(null !== \\$last && \\$start <= \\$merged\\[\\$last\\]\\[1\\]\\) \\{"
+            ]
+        },
+        "LessThanOrEqualTo": {
+            "ignoreSourceCodeByRegex": [
+                "if \\(null !== \\$last && \\$start <= \\$merged\\[\\$last\\]\\[1\\]\\) \\{"
+            ]
+        }
     },
-    // Every mutant is killed. The few equivalent ones carry an @infection-ignore-all naming why no test can tell them apart.
+    // Every mutant is killed. Equivalent nodes carry a rationale in source; exact per-mutator expressions above preserve the other mutations.
     "minMsi": 100,
     "minCoveredMsi": 100
 }

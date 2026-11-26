@@ -63,6 +63,29 @@ final class RecordDraftAccessTest extends TestCase
         }
     }
 
+    public function testRejectsMalformedCreateScopesEvenWithAMatchingDraftId(): void
+    {
+        $checker = $this->checker();
+        $access = $this->access(checker: $checker);
+        $user = $this->user();
+        foreach ([['42', 'abc'], [null, null], [null, '']] as [$record, $draft]) {
+            $scope =
+                [
+                    'record' => $record,
+                    'draft' => $draft,
+                    'new' => true,
+                    'permission' => 'create',
+                    'id' => $access->draftId(\stdClass::class, 'new:' . ($draft ?? '')),
+                ] + self::SCOPE;
+            try {
+                $access->verify($access->issue($scope, 7, 100, $user->getRoles()), $user, 101);
+                self::fail('A malformed create scope reached the record policy.');
+            } catch (AccessDeniedHttpException) {
+                self::assertSame([], $checker->identities);
+            }
+        }
+    }
+
     public function testCreatePermissionHasNullRecordAndBoundNewDraft(): void
     {
         $checker = $this->checker();

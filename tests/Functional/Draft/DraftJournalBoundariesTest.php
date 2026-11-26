@@ -1728,6 +1728,42 @@ final class DraftJournalBoundariesTest extends TestCase
         self::assertSame($clean['revision'], $changed['revision']);
     }
 
+    public function testSourceAppendRetainsEarlierRunAnchorsAcrossRequests(): void
+    {
+        $fields = ['source' => ['type' => 'source', 'initial' => 'a']];
+        $this->journal->join('source-history', $fields);
+        $first = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+        $second = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+        foreach ([$first, $second] as $version => $id) {
+            $this->journal->append(
+                'source-history',
+                $fields,
+                $this->event([
+                    'id' => $id,
+                    'field' => 'source',
+                    'version' => $version,
+                    'operations' => [[
+                        '__className' => 'SourceTransaction',
+                        'id' => $id,
+                        'clock' => $version + 1,
+                        'baseVersion' => $version,
+                        'inserts' => [[
+                            'id' => $id . ':0',
+                            'after' => ['run' => 0 === $version ? 'initial' : $first . ':0', 'offset' => 0],
+                            'text' => 'x',
+                        ]],
+                        'deletes' => [],
+                    ]],
+                ]),
+                1,
+                'Alice',
+            );
+        }
+        $state = $this->journal->replay('source-history', $fields, 0)['fields']['source'];
+        self::assertSame('axx', $state['value']);
+        self::assertCount(2, $state['sourceEvents'] ?? []);
+    }
+
     public function testSourceUpdatesAllowALargePasteWithoutWideningOrdinaryFormLimits(): void
     {
         $fields = ['source' => ['type' => 'source', 'initial' => '']];

@@ -108,6 +108,30 @@ final class HeadlessDraftTest extends TestCase
         self::assertSame([], $subject->reconcile($opened['grant'], $user, 1, 2, 'external source', false, 123.5));
     }
 
+    /** @return iterable<string, array{string}> */
+    public static function invalidReconciliationSources(): iterable
+    {
+        yield 'oversized' => [str_repeat('x', HeadlessDraft::MAX_SOURCE_BYTES + 1)];
+        yield 'invalid UTF-8' => ["\xFF"];
+    }
+
+    #[DataProvider('invalidReconciliationSources')]
+    public function testReconciliationRejectsInvalidSourceBeforeChangingTheJournal(string $persistedSource): void
+    {
+        $user = $this->user();
+        $checker = $this->createStub(RecordDraftAccessCheckerInterface::class);
+        $checker->method('canEdit')->willReturn(true);
+        $checker->method('canEditRecord')->willReturn(true);
+        $access = $this->access(checker: $checker);
+        $journal = $this->createMock(DraftJournal::class);
+        $journal->method('join')->willReturn([]);
+        $journal->expects($this->never())->method('reconcile');
+        $subject = new HeadlessDraft($access, $journal, new SecurityCollaboratorProvider());
+        $opened = $subject->open($user, \stdClass::class, '1', 'stored source');
+        $this->expectException(DraftTooLargeException::class);
+        $subject->reconcile($opened['grant'], $user, 1, 2, $persistedSource, false);
+    }
+
     public function testCannotOpenWithTheDefaultClassOnlyChecker(): void
     {
         $journal = $this->createMock(DraftJournal::class);

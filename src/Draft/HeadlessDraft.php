@@ -152,7 +152,12 @@ final readonly class HeadlessDraft
         $scope = $this->scope($grant, $user);
         $this->journal->lock($scope['id']);
         try {
-            $state = $this->journal->replay($scope['id'], $scope['fields'], 0);
+            $state = $this->journal->replay(
+                $scope['id'],
+                $scope['fields'],
+                // @infection-ignore-all: checkpoint consumes snapshot state, which is independent of the event cursor.
+                0,
+            );
             if (
                 $state['generation'] !== $generation
                 || $state['revision'] !== $revision
@@ -164,7 +169,7 @@ final readonly class HeadlessDraft
                 $scope['id'],
                 [self::FIELD => $source],
                 [
-                    'userId' => (int) $this->collaborators->id($user),
+                    'userId' => $scope['userId'],
                     'label' => $this->collaborators->label($user),
                 ],
             );

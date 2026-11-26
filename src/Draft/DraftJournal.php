@@ -354,7 +354,7 @@ class DraftJournal implements ResetInterface
             $version = $state['version'];
             if (null === $version) {
                 $version = $event['version'];
-                if ($version < 0 || $version > 100_000) {
+                if ($version < 0 || $version > 100_000 || 'source' === $state['type'] && 0 !== $version) {
                     throw new InvalidDraftEventException('Invalid initial model version.');
                 }
                 $state['initialVersion'] = $version;

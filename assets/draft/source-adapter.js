@@ -346,7 +346,8 @@ export class SourceAdapter {
         deleted.set(removal.run, ranges);
       }
     }
-    if ([...children.values()].reduce((count, runs) => count + runs.length, 0) > 10_000)
+    // Include the implicit initial run, as the server's provenance limit does.
+    if ([...children.values()].reduce((count, runs) => count + runs.length, 1) > 10_000)
       throw new RangeError('Collaborate source run limit reached.');
     for (const siblings of children.values())
       siblings.sort((a, b) => b.clock - a.clock || Number(a.id > b.id) - Number(a.id < b.id));

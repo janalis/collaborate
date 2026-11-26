@@ -1615,6 +1615,38 @@ final class DraftJournalBoundariesTest extends TestCase
         self::assertSame('abcé', $this->journal->replay('bounded', $fields, 0)['fields']['source']['value']);
     }
 
+    public function testSourceInitialVersionCannotDivergeFromItsSnapshotEventCount(): void
+    {
+        $fields = ['source' => ['type' => 'source', 'initial' => 'a']];
+        $this->journal->join('source-version', $fields);
+        $id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+        $operation = [
+            '__className' => 'SourceTransaction',
+            'id' => $id,
+            'clock' => 1,
+            'baseVersion' => 42,
+            'inserts' => [['id' => $id . ':0', 'after' => null, 'text' => 'x']],
+            'deletes' => [],
+        ];
+        $event = $this->event(['field' => 'source', 'version' => 42, 'operations' => [$operation]]);
+        try {
+            $this->journal->append('source-version', $fields, $event, 1, 'Alice');
+            self::fail('A source session with a nonzero initial version was accepted.');
+        } catch (BadRequestHttpException) {
+            $unchanged = $this->journal->replay('source-version', $fields, 0);
+            self::assertSame(0, $unchanged['revision']);
+            self::assertNull($unchanged['fields']['source']['version']);
+            self::assertSame('a', $unchanged['fields']['source']['value']);
+        }
+        $event['version'] = 0;
+        $operation['baseVersion'] = 0;
+        $event['operations'] = [$operation];
+        $this->journal->append('source-version', $fields, $event, 1, 'Alice');
+        $state = $this->journal->replay('source-version', $fields, 0)['fields']['source'];
+        self::assertSame(1, $state['version']);
+        self::assertCount(1, $state['sourceEvents'] ?? []);
+    }
+
     public function testSourceTransactionsPersistProvenanceAndRejectOversizedMaterialization(): void
     {
         $fields = ['source' => ['type' => 'source', 'initial' => 'ab']];

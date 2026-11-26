@@ -475,3 +475,27 @@ test('one replacement and undo span more than 2048 source runs atomically', () =
   expect(a.value).toBe('x'.repeat(2050));
   expect(a.next().operations).toHaveLength(1);
 });
+
+test('the run bound includes the implicit initial run and fails atomically', () => {
+  const id = 'transaction-0000000000000000';
+  const events = [
+    {
+      __className: 'SourceTransaction',
+      id,
+      clock: 1,
+      inserts: Array.from({ length: 9999 }, (_, index) => ({ id: `${id}:${index}`, text: 'x', after: null })),
+      deletes: [],
+    },
+  ];
+  const a = new SourceAdapter({ initial: '', events });
+  adapters.push(a);
+  expect(a.value).toBe('x'.repeat(9999));
+  expect(() => a.transact([{ start: 0, end: 0, text: 'one too many' }])).toThrow('run limit');
+  expect(a.value).toBe('x'.repeat(9999));
+  expect(a.hasPending()).toBe(false);
+  expect(a.canUndo).toBe(false);
+  expect(a.clock).toBe(1);
+  a.transact([{ start: 0, end: 1, text: '' }]);
+  expect(a.value).toBe('x'.repeat(9998));
+  expect(a.next().operations[0].clock).toBe(2);
+});

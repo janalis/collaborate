@@ -64,9 +64,25 @@ export class SourceAdapter {
     return () => this.listeners.delete(listener);
   }
 
-  changed() {
+  /** @param {boolean} schedule */
+  changed(schedule) {
     this.revision++;
-    for (const listener of this.listeners) listener(this);
+    const errors = [];
+    for (const listener of [...this.listeners]) {
+      try {
+        listener(this);
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (schedule) {
+      try {
+        this.schedule();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (errors.length) throw errors[0];
   }
   assertActive() {
     if (this.disposed) throw new Error('Collaborate source adapter disposed.');
@@ -84,8 +100,7 @@ export class SourceAdapter {
       this.projection = null;
       throw error;
     }
-    this.changed();
-    this.schedule();
+    this.clock = event.clock;
   }
 
   next() {
@@ -116,8 +131,7 @@ export class SourceAdapter {
       if (!this.events.some((known) => known.id === event.id)) this.events.push(event);
     }
     this.version += batch.operations.length;
-    this.changed();
-    if (this.pending.length) this.schedule();
+    this.changed(this.pending.length > 0);
   }
 
   /** @param {import('./text-adapter.js').TextSplice[]} splices @param {number} [revision] */
@@ -146,7 +160,7 @@ export class SourceAdapter {
     }
     const id = crypto.randomUUID();
     /** @type {Transaction} */
-    const event = { __className: 'SourceTransaction', id, clock: ++this.clock, inserts: [], deletes: [] };
+    const event = { __className: 'SourceTransaction', id, clock: this.clock + 1, inserts: [], deletes: [] };
     for (const splice of ordered) {
       if (text.slice(splice.start, splice.end) === splice.text) continue;
       /** @type {Anchor|null} */
@@ -183,6 +197,7 @@ export class SourceAdapter {
       this.redoStack = redo;
       throw error;
     }
+    this.changed(true);
   }
 
   undo() {
@@ -198,12 +213,13 @@ export class SourceAdapter {
     if (!target) return;
     to.push(target);
     try {
-      this.enqueue({ __className: 'SourceToggle', id: crypto.randomUUID(), clock: ++this.clock, target, active });
+      this.enqueue({ __className: 'SourceToggle', id: crypto.randomUUID(), clock: this.clock + 1, target, active });
     } catch (error) {
       to.pop();
       from.push(target);
       throw error;
     }
+    this.changed(true);
   }
 
   /** @param {number} start @param {number} end @param {string} text */
@@ -362,7 +378,9 @@ export class SourceAdapter {
       const run = job.run;
       if (visited.has(run.id)) throw new RangeError('Collaborate source anchor cycle.');
       visited.add(run.id);
-      const length = this.codepoints(run.text);
+      // Index a Unicode run once, rather than expanding the whole run for every span.
+      const units = /[\uD800-\uDBFF]/.test(run.text) ? Array.from(run.text) : run.text;
+      const length = units.length;
       const removals = deleted.get(run.id) || [];
       const points = new Set([0, length, ...(anchors.get(run.id) || [])]);
       for (const removal of removals) {
@@ -378,7 +396,9 @@ export class SourceAdapter {
         const visible =
           (!run.transaction || toggles.get(run.transaction)?.active !== false) &&
           !removals.some((range) => range.start <= start && start < range.end);
-        jobs.push({ kind: 'span', span: { run: run.id, start, end, text: this.slice(run.text, start, end), visible } });
+        const piece = units.slice(start, end);
+        const text = typeof piece === 'string' ? piece : piece.join('');
+        jobs.push({ kind: 'span', span: { run: run.id, start, end, text, visible } });
         for (const child of children.get(`${run.id}/${end - 1}`) || []) jobs.push({ kind: 'run', run: child });
       }
       for (let i = jobs.length - 1; i >= 0; --i) stack.push(jobs[i]);

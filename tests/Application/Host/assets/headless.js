@@ -11,6 +11,7 @@ const status = document.querySelector('#status');
 const field = session.state.fields.source;
 const adapter = new SourceAdapter({ initial: field.initial, events: field.sourceEvents || [] });
 let revision = session.state.revision;
+let digest = session.state.digest;
 let stopped = false;
 let composing = false;
 const receive = (event) => {
@@ -65,12 +66,13 @@ const tick = async () => {
   if (stopped) return;
   try {
     if (!composing) {
-      const state = await request('replay', { since: revision });
+      const state = await request('replay', { since: revision, digest });
       if (!state || state.generation !== session.state.generation) throw new Error('Reload to recover this session.');
       const selection =
         document.activeElement === source ? adapter.track(source.selectionStart, source.selectionEnd) : null;
       try {
         for (const event of state.events) receive(event);
+        digest = state.digest;
         if (selection) source.setSelectionRange(selection.start, selection.end);
       } finally {
         selection?.detach();

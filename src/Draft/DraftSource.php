@@ -33,7 +33,9 @@ final class DraftSource
         $toggles = [];
         $ids = [];
         $normalized = array_map(static fn(array $operation): array => ['actor' => $actor] + $operation, $operations);
-        foreach ([...$events, ...$normalized] as $event) {
+        $historyCount = \count($events);
+        $maxClock = 0;
+        foreach ([...$events, ...$normalized] as $index => $event) {
             $id = \is_string($event['id'] ?? null) ? $event['id'] : '';
             $clock = \is_int($event['clock'] ?? null) ? $event['clock'] : 0;
             if (
@@ -41,10 +43,12 @@ final class DraftSource
                 || isset($ids[$id])
                 || $clock < 1
                 || $clock > 9_007_199_254_740_991
+                || $index >= $historyCount && $clock > ($maxClock + 1)
                 || !\is_int($event['actor'] ?? null)
             ) {
                 throw new InvalidDraftEventException('Invalid source operation identity.');
             }
+            $maxClock = max($maxClock, $clock);
             $ids[$id] = true;
             if ('SourceTransaction' === ($event['__className'] ?? null)) {
                 if (!\is_array($event['inserts'] ?? null) || !\is_array($event['deletes'] ?? null)) {
@@ -52,12 +56,7 @@ final class DraftSource
                 }
                 $inserts = $event['inserts'];
                 $deletes = $event['deletes'];
-                if (
-                    !array_is_list($inserts)
-                    || !array_is_list($deletes)
-                    || (\count($inserts) + \count($deletes)) > 2048
-                    || [] === $inserts && [] === $deletes
-                ) {
+                if (!array_is_list($inserts) || !array_is_list($deletes) || [] === $inserts && [] === $deletes) {
                     throw new InvalidDraftEventException('Invalid source transaction.');
                 }
                 foreach (array_keys($inserts) as $index) {

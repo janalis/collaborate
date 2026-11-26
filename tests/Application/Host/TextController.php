@@ -70,7 +70,12 @@ final readonly class TextController
             return new JsonResponse($this->draft->append($grant, $user, $event));
         }
         if ('replay' === ($data['action'] ?? null) && \is_int($data['since'] ?? null)) {
-            return new JsonResponse($this->draft->replay($grant, $user, $data['since']));
+            return new JsonResponse($this->draft->replay(
+                $grant,
+                $user,
+                $data['since'],
+                \is_string($data['digest'] ?? null) ? $data['digest'] : null,
+            ));
         }
         throw new BadRequestHttpException('Unknown example action.');
     }

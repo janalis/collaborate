@@ -5,18 +5,31 @@ The host constructs the service with its `DraftAccess`, `DraftJournal`, collabor
 It must configure a `RecordDraftAccessCheckerInterface` that checks the current user's rights to the
 signed record identity; the default role-only checker cannot authorize headless grants.
 
-The host's authenticated endpoint resolves the resource and reads its persisted source, then calls
-`open($user, $entityClass, $recordIdentity, $source)`. The result contains a compact `grant` and the
+The host's authenticated endpoint resolves the resource, captures `$sourceReadStartedAt = microtime(true)`
+before reading its persisted source, then calls
+`open($user, $entityClass, $recordIdentity, $source, $sourceReadStartedAt)`. The timestamp defaults
+to the current time when omitted. Passing the time captured before the storage read prevents a
+concurrent save checkpoint from being mistaken for an external storage change. The result contains a compact `grant` and the
 journal `state`. Initial source is never embedded in the grant. A live journal retains unsaved edits;
 a journal recreated after purge starts from the host's current persisted source. Source is limited to
 2 MiB. Reopen through this host endpoint after a missing-journal conflict; never initialize it from a
 browser-supplied initial value.
 
-Subsequent host endpoints call `replay($grant, $user, $since)` and
+If `state.conflicts.source` is present, storage has changed outside the shared draft. Show that
+conflict to the user before persisting either version. Resolve it explicitly with
+`reconcile($grant, $user, $generation, $revision, $persistedSource, $keep, $sourceReadStartedAt)`,
+using a fresh server-side storage read and its start time. `keep: true` keeps the shared source as
+unsaved against the new persisted baseline; `keep: false` replaces it with persisted source and
+drops its provenance. Reopen adapters from the returned snapshot after replacement, preserving
+any pending local work for recovery. Reconciliation rejects an outdated generation or revision.
+
+Subsequent host endpoints call `replay($grant, $user, $since, $digest)` and
 `append($grant, $user, $event)`. Every call verifies current record access. The text field is named
 `source`; operations use the existing journal event protocol, including generation, revision and
 model version. Appends enforce the resulting source-size limit atomically under the journal lock.
-The normal form draft endpoints reject headless grants.
+The normal form draft endpoints reject headless grants. Pass the previous state's `digest` to
+replay so unchanged snapshots omit `fields` contents while still returning newly accepted events.
+Omitting the optional digest returns the full snapshot, including source provenance.
 
 The host endpoints must enforce authentication, CSRF, request-size bounds, rate limiting, and
 subscription authorization. Publish revision notifications through the configured hub only after a
@@ -52,7 +65,9 @@ regardless of the distances between them. An outdated revision throws; the host 
 transform the intended edit against current state. Identical replacements are no-ops.
 
 `subscribe(listener)` observes source changes and returns an unsubscribe function. A host should
-suppress editor echo while applying adapter changes. `track(start, end)` returns a live range with
+suppress editor echo while applying adapter changes. Listener and scheduler errors propagate after
+the adapter commits the change and invokes the remaining notifications; callers must not retry an
+edit solely because an observer threw. `track(start, end)` returns a live range with
 `start`, `end`, and `detach()`; its offsets follow local and transformed remote operations. Detach a
 range when its selection or gesture ends. Revalidate structural intent after source changes: tracked
 positions do not prove that a particular XML element still exists.
@@ -65,10 +80,10 @@ not tree validity: concurrent edits and undo can leave XML structurally invalid.
 and suspend visual structural actions when the source cannot be parsed.
 
 The adapter exposes `next()` / `receive()` scheduling with the journal, using source-provenance operations rather than native editor operations. The scheduler is called when local
-operations need delivery. `next()` returns the first pending operation batch and marks it sent;
+operations need delivery. `next()` returns a bounded batch of pending operations without consuming them;
 `receive(batch)` applies an ordered accepted batch or acknowledges the adapter's matching batch.
 Use the journal event's field version for this protocol, not its global revision. On append conflict,
-replay accepted batches before retrying the transformed pending batch. `hasPending()` reports
+replay accepted batches before retrying the pending provenance operations with their updated base versions. `hasPending()` reports
 unacknowledged operations. A scheduler must also handle network retry and the session's generation,
 global revision, and field name (`source`). It must not interpret successful local rendering as a
 server acknowledgement. The adapter belongs to a headless `source` field, not a native form `text` field. It does not
@@ -99,6 +114,12 @@ The server stores runs and deletion intervals rather than per-character objects.
 to 10,000 runs with iterative insertion traversal, in addition to the source-specific journal and request limits. Encoded source updates are bounded to 16 MiB and source journal history to 32 MiB; decoded source remains at most 2 MiB, including invalid XML drafts. Host request caps must accommodate this bounded JSON escaping overhead. Ordinary form limits are unchanged. These
 limits fail atomically. A saved, idle journal can be compacted; that starts a new generation and drops
 historical undo provenance, so existing sessions must reopen rather than replay old undo commands.
+
+For MySQL and MariaDB hosts, configure `max_allowed_packet = 268435456` (256 MiB) before
+opening application connections. A field stores its source baseline, current and saved values plus
+provenance together; JSON escaping and SQL encoding can exceed the default 16 MiB packet even
+when the decoded source and journal remain within their declared limits. Restart application
+connections after changing the server setting.
 
 ## Runnable example
 

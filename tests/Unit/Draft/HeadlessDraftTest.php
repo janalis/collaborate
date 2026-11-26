@@ -48,12 +48,12 @@ final class HeadlessDraftTest extends TestCase
         $journal
             ->expects($this->once())
             ->method('join')
-            ->with($id, ['source' => ['type' => 'source', 'initial' => $source]])
+            ->with($id, ['source' => ['type' => 'source', 'initial' => $source]], 123.5)
             ->willReturn([]);
         $journal
             ->expects($this->once())
             ->method('replay')
-            ->with($id, ['source' => ['type' => 'source', 'initial' => '']], 5)
+            ->with($id, ['source' => ['type' => 'source', 'initial' => '']], 5, 0.0, 'known-digest')
             ->willReturn([]);
         $journal
             ->expects($this->once())
@@ -73,11 +73,39 @@ final class HeadlessDraftTest extends TestCase
             new SecurityCollaboratorProvider(),
             new MockClock('2026-01-01'),
         );
-        $opened = $subject->open($user, \stdClass::class, 'document-1', $source);
+        $opened = $subject->open($user, \stdClass::class, 'document-1', $source, 123.5);
         self::assertLessThan(2048, \strlen($opened['grant']));
         self::assertSame([], $opened['state']);
-        self::assertSame([], $subject->replay($opened['grant'], $user, 5));
+        self::assertSame([], $subject->replay($opened['grant'], $user, 5, 'known-digest'));
         self::assertSame([], $subject->append($opened['grant'], $user, ['field' => 'source']));
+    }
+
+    public function testReconciliationUsesHostSourceAndRechecksRecordAccess(): void
+    {
+        $user = $this->user();
+        $checker = $this->createMock(RecordDraftAccessCheckerInterface::class);
+        $checker->method('canEdit')->willReturn(true);
+        $checker->expects($this->exactly(2))->method('canEditRecord')->willReturn(true);
+        $access = $this->access(checker: $checker);
+        $journal = $this->createMock(DraftJournal::class);
+        $journal->method('join')->willReturn([]);
+        $journal
+            ->expects($this->once())
+            ->method('reconcile')
+            ->with(
+                $access->draftId(\stdClass::class, '1'),
+                1,
+                2,
+                ['source' => ['type' => 'source', 'initial' => 'external source']],
+                false,
+                123.5,
+                7,
+                'alice',
+            )
+            ->willReturn([]);
+        $subject = new HeadlessDraft($access, $journal, new SecurityCollaboratorProvider());
+        $opened = $subject->open($user, \stdClass::class, '1', 'old');
+        self::assertSame([], $subject->reconcile($opened['grant'], $user, 1, 2, 'external source', false, 123.5));
     }
 
     public function testCannotOpenWithTheDefaultClassOnlyChecker(): void

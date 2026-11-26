@@ -5,11 +5,15 @@ How the parts of the bundle talk to each other. Every name here is fixed: PHP, T
 ## Headless source sessions
 
 `Draft\HeadlessDraft` opens server-initialized source sessions and exposes
-`replay()`, `append()` and `checkpointIfCurrent()`.
+`replay()`, `append()`, `reconcile()` and `checkpointIfCurrent()`.
 Its signed scope carries `headless: true`, a record identity and a `source`
 field schema; the source text stays in the journal, outside the grant.
 `Access\RecordDraftAccessCheckerInterface::canEditRecord()` rechecks the signed
 record scope on every operation. Hosts authorize access before opening a session.
+`open()` and `reconcile()` accept an optional `sourceReadStartedAt` captured before the host
+reads storage. External persisted-source changes appear in `conflicts`; reconciliation explicitly
+keeps the shared source or replaces its provenance with the persisted source.
+`replay()` accepts an optional prior `digest` to omit unchanged field snapshots.
 
 `Draft\DraftSource` validates and renders the `source` event protocol. The browser
 imports `SourceAdapter` from `@janalis/collaborate/draft/source-adapter.js` for

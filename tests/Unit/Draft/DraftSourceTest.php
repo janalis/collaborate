@@ -120,7 +120,7 @@ final class DraftSourceTest extends TestCase
         $state = $subject->apply(
             'x',
             $state['events'],
-            [$this->toggle(self::B, self::A, false, 3), $this->toggle(self::C, self::A, true, 2)],
+            [$this->toggle(self::B, self::A, false, 2), $this->toggle(self::C, self::A, true, 1)],
             1,
         );
         self::assertSame('x', $state['text']);
@@ -185,6 +185,38 @@ final class DraftSourceTest extends TestCase
             1,
         );
         self::assertSame('a' . str_repeat('x', 512), $result['text']);
+    }
+
+    public function testLargeDeletionDescriptorsAreAcceptedWithinTheJournalByteLimit(): void
+    {
+        $deletes = array_fill(0, 2050, ['run' => 'initial', 'start' => 0, 'end' => 1]);
+        $result = new DraftSource()->apply(
+            'abc',
+            [],
+            [[
+                '__className' => 'SourceTransaction',
+                'id' => self::A,
+                'clock' => 1,
+                'inserts' => [],
+                'deletes' => $deletes,
+            ]],
+            1,
+        );
+        self::assertSame('bc', $result['text']);
+        self::assertSame($deletes, $result['operations'][0]['deletes']);
+    }
+
+    public function testNewOperationsCannotJumpTheObservedLogicalClock(): void
+    {
+        $this->expectException(InvalidDraftEventException::class);
+        new DraftSource()->apply('a', [], [$this->insert(self::A, 'x', null, 9_007_199_254_740_991)], 1);
+    }
+
+    public function testStoredHistoryClocksRemainReplayableAndNewOperationsCanAdvanceOneStep(): void
+    {
+        $history = [$this->insert(self::A, 'x', null, 100) + ['actor' => 1]];
+        $result = new DraftSource()->apply('a', $history, [$this->insert(self::B, 'y', null, 101)], 1);
+        self::assertSame('yxa', $result['text']);
     }
 
     public function testRunCountIsBounded(): void

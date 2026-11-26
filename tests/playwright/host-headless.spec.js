@@ -7,6 +7,12 @@ test('headless source and structural controls converge across two editors', asyn
   const bob = await signedIn(browser, baseURL, 'bob', path);
   try {
     for (const page of [alice.page, bob.page]) await expect(page.getByRole('status')).toHaveText('Saved');
+    const idle = await alice.page.waitForResponse(async (response) => {
+      if (!response.url().endsWith('/events') || response.request().postDataJSON()?.action !== 'replay') return false;
+      const state = await response.json();
+      return state.events.length === 0 && Object.keys(state.fields).length === 0;
+    });
+    expect((await idle.json()).digest).toBeTruthy();
     await alice.page.getByLabel('Source', { exact: true }).fill('Hello shared world.');
     await expect(bob.page.getByLabel('Source', { exact: true })).toHaveValue('Hello shared world.');
     await bob.page.getByLabel('Source', { exact: true }).evaluate((input) => {

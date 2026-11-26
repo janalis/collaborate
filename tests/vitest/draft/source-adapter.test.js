@@ -372,3 +372,106 @@ test('coalesces pending keystrokes into bounded journal batches', () => {
   c.transact([{ start: 0, end: 0, text: 'y'.repeat(200000) }]);
   expect(c.next().operations).toHaveLength(1);
 });
+
+test('no-op and rejected edits leave the next causal clock available', () => {
+  const a = create('x'.repeat(2_097_152));
+  a.transact([]);
+  a.transact([{ start: 0, end: 1, text: 'x' }]);
+  expect(a.clock).toBe(0);
+  expect(() => a.transact([{ start: 0, end: 0, text: 'more' }])).toThrow('2 MiB');
+  expect(a.clock).toBe(0);
+  a.transact([{ start: 0, end: 1, text: '' }]);
+  expect(a.next().operations[0].clock).toBe(1);
+  a.undo();
+  expect(a.clock).toBe(2);
+  a.redo();
+  expect(a.clock).toBe(3);
+});
+
+test('listener failures preserve committed edits, undo history and scheduling', () => {
+  const schedule = vi.fn();
+  const a = create('abc', schedule);
+  const failure = new Error('render failed');
+  const stop = a.subscribe(() => {
+    throw failure;
+  });
+  const following = vi.fn();
+  a.subscribe(following);
+  expect(() => a.transact([{ start: 0, end: 0, text: 'X' }])).toThrow(failure);
+  expect(a.value).toBe('Xabc');
+  expect(a.hasPending()).toBe(true);
+  expect(a.canUndo).toBe(true);
+  expect(following).toHaveBeenCalledTimes(1);
+  expect(schedule).toHaveBeenCalledTimes(1);
+  expect(() => a.receive(a.next())).toThrow(failure);
+  expect(a.hasPending()).toBe(false);
+  expect(a.version).toBe(1);
+  expect(following).toHaveBeenCalledTimes(2);
+  expect(() => a.undo()).toThrow(failure);
+  expect(a.value).toBe('abc');
+  expect(a.canUndo).toBe(false);
+  expect(a.canRedo).toBe(true);
+  expect(schedule).toHaveBeenCalledTimes(2);
+  stop();
+  a.redo();
+  expect(a.value).toBe('Xabc');
+  expect(a.canUndo).toBe(true);
+});
+
+test('scheduler failures do not roll back a committed transaction', () => {
+  const a = create('abc', () => {
+    throw new Error('transport failed');
+  });
+  expect(() => a.transact([{ start: 0, end: 0, text: 'X' }])).toThrow('transport failed');
+  expect(a.value).toBe('Xabc');
+  expect(a.canUndo).toBe(true);
+  expect(a.clock).toBe(1);
+  expect(() => a.undo()).toThrow('transport failed');
+  expect(a.value).toBe('abc');
+  expect(a.canRedo).toBe(true);
+});
+
+test('a subscriber can synchronously undo the committed edit', () => {
+  const schedule = vi.fn();
+  const a = create('abc', schedule);
+  let undo = true;
+  a.subscribe(() => {
+    if (undo) {
+      undo = false;
+      a.undo();
+    }
+  });
+  a.transact([{ start: 0, end: 0, text: 'X' }]);
+  expect(a.value).toBe('abc');
+  expect(a.canUndo).toBe(false);
+  expect(a.canRedo).toBe(true);
+  expect(a.next().operations.map((event) => event.clock)).toEqual([1, 2]);
+  expect(schedule).toHaveBeenCalledTimes(2);
+  a.redo();
+  expect(a.value).toBe('Xabc');
+});
+
+test('one replacement and undo span more than 2048 source runs atomically', () => {
+  const events = Array.from({ length: 2050 }, (_, index) => {
+    const id = `transaction-${String(index).padStart(16, '0')}`;
+    const previous = `transaction-${String(index - 1).padStart(16, '0')}:0`;
+    return {
+      __className: 'SourceTransaction',
+      id,
+      clock: index + 1,
+      inserts: [{ id: `${id}:0`, text: 'x', after: index ? { run: previous, offset: 0 } : null }],
+      deletes: [],
+    };
+  });
+  const a = new SourceAdapter({ initial: '', events });
+  adapters.push(a);
+  a.transact([{ start: 0, end: 2050, text: 'replacement' }]);
+  expect(a.value).toBe('replacement');
+  const batch = a.next();
+  expect(batch.operations).toHaveLength(1);
+  expect(batch.operations[0].deletes).toHaveLength(2050);
+  a.receive(batch);
+  a.undo();
+  expect(a.value).toBe('x'.repeat(2050));
+  expect(a.next().operations).toHaveLength(1);
+});

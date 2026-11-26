@@ -1646,6 +1646,54 @@ final class DraftJournalBoundariesTest extends TestCase
         self::assertSame(1, $state['sourceEvents'][0]['actor'] ?? null);
     }
 
+    public function testSourceReopenDetectsStoredChangesAndReconciliationPreservesOrReplacesProvenance(): void
+    {
+        $fields = ['source' => ['type' => 'source', 'initial' => 'old']];
+        $this->journal->join('source-conflict', $fields);
+        $id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+        $this->journal->append(
+            'source-conflict',
+            $fields,
+            $this->event([
+                'field' => 'source',
+                'version' => 0,
+                'operations' => [[
+                    '__className' => 'SourceTransaction',
+                    'id' => $id,
+                    'clock' => 1,
+                    'baseVersion' => 0,
+                    'inserts' => [[
+                        'id' => $id . ':0',
+                        'after' => ['run' => 'initial', 'offset' => 2],
+                        'text' => ' local',
+                    ]],
+                    'deletes' => [],
+                ]],
+            ]),
+            1,
+            'Alice',
+        );
+        $external = ['source' => ['type' => 'source', 'initial' => 'external']];
+        $readAt = microtime(true);
+        $view = $this->journal->join('source-conflict', $external, $readAt);
+        self::assertSame(['source' => 'external'], $view['conflicts']);
+        $kept = $this->journal->reconcile('source-conflict', 1, $view['revision'], $external, true, $readAt);
+        self::assertSame('old local', $kept['fields']['source']['value']);
+        self::assertSame('external', $kept['fields']['source']['saved']);
+        self::assertCount(1, $kept['fields']['source']['sourceEvents'] ?? []);
+        self::assertSame(-1, $kept['savedRevision']);
+        $newer = ['source' => ['type' => 'source', 'initial' => 'newer external']];
+        $replaced = $this->journal->reconcile('source-conflict', 1, $kept['revision'], $newer, false, microtime(true));
+        self::assertSame('newer external', $replaced['fields']['source']['value']);
+        self::assertArrayNotHasKey('sourceEvents', $replaced['fields']['source']);
+        self::assertSame($replaced['revision'], $replaced['savedRevision']);
+
+        $clean = $this->journal->join('clean-source', $fields);
+        $changed = $this->journal->join('clean-source', $external, microtime(true));
+        self::assertSame(['source' => 'external'], $changed['conflicts']);
+        self::assertSame($clean['revision'], $changed['revision']);
+    }
+
     public function testSourceUpdatesAllowALargePasteWithoutWideningOrdinaryFormLimits(): void
     {
         $fields = ['source' => ['type' => 'source', 'initial' => '']];

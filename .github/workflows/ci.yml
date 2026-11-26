@@ -65,6 +65,9 @@ jobs:
           extensions: pdo_mysql, pdo_pgsql, pdo_sqlite, mbstring, intl, pcntl
           coverage: none
           tools: composer:v2, flex
+      # Source state repeats bounded source/provenance JSON; MariaDB defaults to 16 MiB packets.
+      - name: Accommodate bounded source journals
+        run: php -r '(new PDO("mysql:host=127.0.0.1;port=3306", "root", ""))->exec("SET GLOBAL max_allowed_packet = 268435456");'
       - uses: ./.github/actions/composer-cache
         with:
           key: php-${{ matrix.php }}-${{ matrix.symfony }}
@@ -118,6 +121,9 @@ jobs:
           extensions: pdo_mysql, pdo_pgsql, pdo_sqlite, mbstring, intl, pcntl
           coverage: pcov
           tools: composer:v2
+      # Source state repeats bounded source/provenance JSON; MariaDB defaults to 16 MiB packets.
+      - name: Accommodate bounded source journals
+        run: php -r '(new PDO("mysql:host=127.0.0.1;port=3306", "root", ""))->exec("SET GLOBAL max_allowed_packet = 268435456");'
       - uses: ./.github/actions/composer-cache
         with:
           key: lock
@@ -226,6 +232,9 @@ jobs:
           extensions: pdo_mysql, pdo_pgsql, pdo_sqlite, mbstring, intl, pcntl
           coverage: pcov
           tools: composer:v2
+      # Source state repeats bounded source/provenance JSON; MariaDB defaults to 16 MiB packets.
+      - name: Accommodate bounded source journals
+        run: php -r '(new PDO("mysql:host=127.0.0.1;port=3306", "root", ""))->exec("SET GLOBAL max_allowed_packet = 268435456");'
       - uses: ./.github/actions/composer-cache
         with:
           key: lock

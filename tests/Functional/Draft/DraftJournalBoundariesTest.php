@@ -4,11 +4,18 @@ declare(strict_types=1);
 
 namespace Janalis\Collaborate\Tests\Functional\Draft;
 
+use Doctrine\Common\EventManager;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Exception\LockWaitTimeoutException;
+use Doctrine\ORM\EntityManager;
+use Doctrine\ORM\Events;
+use Doctrine\ORM\ORMSetup;
+use Doctrine\ORM\Tools\SchemaTool;
+use Janalis\Collaborate\Doctrine\PortableSchema;
 use Janalis\Collaborate\Draft\Dialect\JournalDialect;
 use Janalis\Collaborate\Draft\Dialect\MySqlDialect;
+use Janalis\Collaborate\Draft\Dialect\SqliteDialect;
 use Janalis\Collaborate\Draft\DraftBusyException;
 use Janalis\Collaborate\Draft\DraftJournal;
 use Janalis\Collaborate\Draft\DraftLocks;
@@ -22,6 +29,7 @@ use Janalis\Collaborate\Draft\FieldDefinitions;
 use Janalis\Collaborate\Draft\FieldNames;
 use Janalis\Collaborate\Draft\JournalStore;
 use Janalis\Collaborate\Draft\RecordAlreadyCreatedException;
+use Janalis\Collaborate\Entity\Draft;
 use Janalis\Collaborate\Tests\Fixtures\Draft\InterleavingConnection;
 use Janalis\Collaborate\Tests\Fixtures\Draft\JsonAssertions;
 use Janalis\Collaborate\Tests\Fixtures\Draft\StatementRecordingConnection;
@@ -44,6 +52,8 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 #[CoversClass(FieldDefinitions::class)]
 #[UsesClass(DraftText::class)]
 #[UsesClass(DraftSource::class)]
+#[UsesClass(PortableSchema::class)]
+#[UsesClass(SqliteDialect::class)]
 #[CoversClass(JournalDialect::class)]
 #[CoversClass(MySqlDialect::class)]
 #[CoversClass(DraftLocks::class)]
@@ -1792,8 +1802,20 @@ final class DraftJournalBoundariesTest extends TestCase
 
     public function testMaximumDecodedSourceAllowsWorstCaseJsonEscaping(): void
     {
+        // Exercise the protocol/JSON bound independently of a network database's packet capacity.
+        $db = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]);
+        $this->connections[] = $db;
+        $config = ORMSetup::createAttributeMetadataConfig([\dirname(
+            (string) new \ReflectionClass(Draft::class)->getFileName(),
+        )]);
+        $config->enableNativeLazyObjects(true);
+        $events = new EventManager();
+        $events->addEventListener(Events::loadClassMetadata, new PortableSchema());
+        $manager = new EntityManager($db, $config, $events);
+        new SchemaTool($manager)->createSchema($manager->getMetadataFactory()->getAllMetadata());
+        $journal = new DraftJournal($db, firstGeneration: 1);
         $fields = ['source' => ['type' => 'source', 'initial' => '']];
-        $this->journal->join('escaped-source', $fields);
+        $journal->join('escaped-source', $fields);
         $id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
         $text = str_repeat("\0", DraftSource::MAX_BYTES);
         $event = $this->event([
@@ -1809,8 +1831,8 @@ final class DraftJournalBoundariesTest extends TestCase
             ]],
         ]);
         self::assertGreaterThan(10_485_760, \strlen(JournalStore::encode($event)));
-        $this->journal->append('escaped-source', $fields, $event, 1, 'Alice');
-        self::assertSame($text, $this->journal->replay('escaped-source', $fields, 0)['fields']['source']['value']);
+        $journal->append('escaped-source', $fields, $event, 1, 'Alice');
+        self::assertSame($text, $journal->replay('escaped-source', $fields, 0)['fields']['source']['value']);
     }
 
     public function testIdleSavedSourceCompactionResetsProvenanceAndGenerationWithoutLosingText(): void

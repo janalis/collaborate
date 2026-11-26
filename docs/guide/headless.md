@@ -115,11 +115,9 @@ to 10,000 runs with iterative insertion traversal, in addition to the source-spe
 limits fail atomically. A saved, idle journal can be compacted; that starts a new generation and drops
 historical undo provenance, so existing sessions must reopen rather than replay old undo commands.
 
-For MySQL and MariaDB hosts, configure `max_allowed_packet = 268435456` (256 MiB) before
-opening application connections. A field stores its source baseline, current and saved values plus
-provenance together; JSON escaping and SQL encoding can exceed the default 16 MiB packet even
-when the decoded source and journal remain within their declared limits. Restart application
-connections after changing the server setting.
+Database transport limits can impose a lower effective storage capacity than these protocol limits.
+A field stores baseline, current and saved values plus provenance together; JSON escaping increases
+the stored payload. The bundle does not change database server settings.
 
 ## Runnable example
 

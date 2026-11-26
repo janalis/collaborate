@@ -422,7 +422,7 @@ final class CollaborateFormExtension extends AbstractTypeExtension
                 $keys = [];
                 foreach ($child as $key => $entry) {
                     $keys[] = $key;
-                    $fields[FieldNames::member($path, (string) $key)] =
+                    $fields[FieldNames::member($path, $key)] =
                         [
                             'type' => 'member',
                             'initial' => [

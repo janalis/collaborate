@@ -373,9 +373,10 @@ final class DraftJournalBoundariesTest extends TestCase
         $waits = function (): array {
             $waits = [];
             foreach ($this->db->queries as $index => $sql) {
-                if (str_contains($sql, 'GET_LOCK')) {
-                    $waits[] = $this->db->queryParameters[$index];
+                if (!str_contains($sql, 'GET_LOCK')) {
+                    continue;
                 }
+                $waits[] = $this->db->queryParameters[$index];
             }
 
             return $waits;
@@ -567,9 +568,10 @@ final class DraftJournalBoundariesTest extends TestCase
         // It does not wait for a draft in use: it asks for its lock without a timeout, well before the save's 10 s.
         $waits = [];
         foreach ($this->db->queries as $index => $sql) {
-            if (str_contains($sql, 'GET_LOCK')) {
-                $waits[] = $this->db->queryParameters[$index][1] ?? null;
+            if (!str_contains($sql, 'GET_LOCK')) {
+                continue;
             }
+            $waits[] = $this->db->queryParameters[$index][1] ?? null;
         }
         self::assertSame([0, 0, 0], $waits);
         self::assertLessThan(5, microtime(true) - $started);

@@ -915,7 +915,7 @@ test('a save field a host took out of the form is added again', async () => {
   expect(posted).toHaveReturnedWith(false);
   // This draft's own form posting keeps them.
   session.hidden('_collaborate_revision', '6');
-  const own = vi.fn((/** @type {SubmitEvent} */ event) => new FormData(form).has('_collaborate_revision'));
+  const own = vi.fn(() => new FormData(form).has('_collaborate_revision'));
   form.addEventListener('submit', own);
   session.stop();
   form.dispatchEvent(new SubmitEvent('submit', { cancelable: true, bubbles: true }));

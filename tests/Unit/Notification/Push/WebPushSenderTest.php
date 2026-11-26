@@ -151,12 +151,13 @@ final class WebPushSenderTest extends TestCase
 
     private function header(int $request, string $name): string
     {
-        $headers = $this->requests[$request]['options']['normalized_headers'] ?? [];
-        self::assertIsArray($headers);
-        $lines = $headers[strtolower($name)] ?? [];
-        self::assertIsArray($lines);
-        $line = $lines[0] ?? '';
-        self::assertIsString($line);
+        self::assertIsArray($this->requests[$request]['options']['normalized_headers']);
+        $headers = $this->requests[$request]['options']['normalized_headers'];
+        $key = strtolower($name);
+        self::assertIsArray($headers[$key]);
+        $lines = $headers[$key];
+        self::assertIsString($lines[0]);
+        $line = $lines[0];
 
         return substr($line, \strlen($name) + 2);
     }
@@ -172,11 +173,17 @@ final class WebPushSenderTest extends TestCase
         }
         // The client reads a body it was given as a stream in chunks, an empty one ending at once.
         $read = '';
-        while ('' !== ($chunk = $body(16_384))) {
-            self::assertIsString($chunk);
+        while ('' !== ($chunk = self::chunk($body(16_384)))) {
             $read .= $chunk;
         }
 
         return $read;
+    }
+
+    private static function chunk(mixed $value): string
+    {
+        self::assertIsString($value);
+
+        return $value;
     }
 }

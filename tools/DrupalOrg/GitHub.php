@@ -94,9 +94,10 @@ final class GitHub
             '--json',
             'body',
         ]) as $issue) {
-            if (\is_string($issue['body'] ?? null)) {
-                $bodies[] = $issue['body'];
+            if (!\is_string($issue['body'] ?? null)) {
+                continue;
             }
+            $bodies[] = $issue['body'];
         }
 
         return $bodies;
@@ -123,12 +124,13 @@ final class GitHub
             'number,body',
         ]) as $issue) {
             if (
-                \is_int($issue['number'] ?? null)
-                && \is_string($issue['body'] ?? null)
-                && str_contains($issue['body'], $marker)
+                !\is_int($issue['number'] ?? null)
+                || !\is_string($issue['body'] ?? null)
+                || !str_contains($issue['body'], $marker)
             ) {
-                $issues[] = ['number' => $issue['number'], 'body' => $issue['body']];
+                continue;
             }
+            $issues[] = ['number' => $issue['number'], 'body' => $issue['body']];
         }
 
         return $issues;

@@ -2,6 +2,28 @@
 
 How the parts of the bundle talk to each other. Every name here is fixed: PHP, Twig and JS rely on it.
 
+## Headless source sessions
+
+`Draft\HeadlessDraft` opens server-initialized source sessions and exposes
+`replay()`, `append()` and `checkpointIfCurrent()`.
+Its signed scope carries `headless: true`, a record identity and a `source`
+field schema; the source text stays in the journal, outside the grant.
+`Access\RecordDraftAccessCheckerInterface::canEditRecord()` rechecks the signed
+record scope on every operation. Hosts authorize access before opening a session.
+
+`Draft\DraftSource` validates and renders the `source` event protocol. The browser
+imports `SourceAdapter` from `@janalis/collaborate/draft/source-adapter.js` for
+run-provenance transactions, tracked ranges, captured edits and selective undo.
+Native form fields keep their `text` protocol through the extracted
+`TextAdapter` in `@janalis/collaborate/draft/text-adapter.js`.
+
+`checkpointIfCurrent()` only settles the exact acknowledged generation, revision
+and source while holding the journal lock. The host persists its document before
+checkpointing and owns validation, persistence, CSRF and session endpoint routing.
+Source bounds are `drafts.max_source_update_bytes` and
+`drafts.max_source_draft_bytes`; form request bounds remain separate. See the
+[headless integration guide](../guide/headless.md) for the complete host lifecycle.
+
 ## PHP classes
 
 | Class | Role |

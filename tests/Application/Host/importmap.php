@@ -7,6 +7,9 @@ declare(strict_types=1);
  * the bare import they expect.
  */
 return [
+    '@janalis/collaborate/draft/source-adapter.js' => ['path' => '@janalis/collaborate/draft/source-adapter.js'],
+    '@janalis/collaborate/ckeditor5/text-change.js' => ['path' => '@janalis/collaborate/ckeditor5/text-change.js'],
+    'headless' => ['path' => './assets/headless.js', 'entrypoint' => true],
     'app' => ['path' => './assets/app.js', 'entrypoint' => true],
     '@janalis/collaborate/cursors/cursors.js' => ['path' => '@janalis/collaborate/cursors/cursors.js'],
     '@janalis/collaborate/notifications/bell.js' => ['path' => '@janalis/collaborate/notifications/bell.js'],

@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Shared text example</title>
+    {{ importmap('headless') }}
+</head>
+<body>
+<main id="shared-text" data-session="{{ session|json_encode }}" data-token="{{ token }}" data-endpoint="{{ endpoint }}">
+    <h1>Two views, one shared source</h1>
+    <label>Source <textarea id="source" rows="8" cols="50"></textarea></label>
+    <p id="preview" aria-label="Text preview"></p>
+    <button type="button" id="wrap">Wrap selected text</button>
+    <button type="button" id="undo">Undo</button>
+    <button type="button" id="redo">Redo</button>
+    <p id="status" role="status">Connecting</p>
+</main>
+</body>
+</html>

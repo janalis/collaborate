@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Janalis\Collaborate\Draft;
 
 use Janalis\Collaborate\Access\DraftAccessCheckerInterface;
+use Janalis\Collaborate\Access\RecordDraftAccessCheckerInterface;
 use Janalis\Collaborate\Grant;
 use Janalis\Collaborate\Hub\Topics;
 use Janalis\Collaborate\Identity\CollaboratorProviderInterface;
@@ -21,8 +22,8 @@ use Symfony\Component\Security\Core\User\UserInterface;
  *
  * @phpstan-import-type SchemaField from DraftJournal
  *
- * @phpstan-type Scope array{id: string, entity: string, permission: DraftAccessCheckerInterface::CREATE|DraftAccessCheckerInterface::UPDATE, new: bool, draft: string|null, fields: array<string, SchemaField>, requestedAt?: float}
- * @phpstan-type SignedScope array{id: string, entity: string, permission: DraftAccessCheckerInterface::CREATE|DraftAccessCheckerInterface::UPDATE, new: bool, draft: string|null, fields: array<string, SchemaField>, userId: int, expires: int, rolesHash: string, requestedAt?: float}
+ * @phpstan-type Scope array{id: string, entity: string, permission: DraftAccessCheckerInterface::CREATE|DraftAccessCheckerInterface::UPDATE, new: bool, draft: string|null, fields: array<string, SchemaField>, requestedAt?: float, record?: string|null, headless?: bool}
+ * @phpstan-type SignedScope array{id: string, entity: string, permission: DraftAccessCheckerInterface::CREATE|DraftAccessCheckerInterface::UPDATE, new: bool, draft: string|null, fields: array<string, SchemaField>, userId: int, expires: int, rolesHash: string, requestedAt?: float, record?: string|null, headless?: bool}
  */
 final readonly class DraftAccess
 {
@@ -87,11 +88,37 @@ final readonly class DraftAccess
             || $scope['expires'] <= $now
             || $scope['rolesHash'] !== Grant::authorizationHash($this->collaborators->authorization($user))
             || !$this->checker->canEdit($user, $scope['permission'], $scope['entity'])
+            || !$this->recordAllowed($scope, $user)
         ) {
             throw new AccessDeniedHttpException('Collaborate permission expired.');
         }
 
         return $scope;
+    }
+
+    /** @param SignedScope $scope */
+    private function recordAllowed(array $scope, UserInterface $user): bool
+    {
+        if (!$this->checker instanceof RecordDraftAccessCheckerInterface) {
+            return !($scope['headless'] ?? false);
+        }
+        // Old grants cannot acquire record-level authority merely because the host upgrades its checker.
+        if (!array_key_exists('record', $scope)) {
+            return false;
+        }
+        $record = $scope['record'];
+        if (
+            $scope['new'] && (null !== $record || null === $scope['draft'] || '' === $scope['draft'])
+            || !$scope['new'] && (null === $record || '' === $record)
+        ) {
+            return false;
+        }
+        $identity = $scope['new'] ? 'new:' . $scope['draft'] : $record;
+        if ($scope['id'] !== $this->draftId($scope['entity'], $identity)) {
+            return false;
+        }
+
+        return $this->checker->canEditRecord($user, $scope['permission'], $scope['entity'], $record);
     }
 
     /** The draft of one record (`$identity` is its id), or of one New page (`new:<draft>`). */

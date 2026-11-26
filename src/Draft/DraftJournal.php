@@ -11,7 +11,7 @@ use Symfony\Contracts\Service\ResetInterface;
  * PHP orders opaque editor operations; CKEditor performs their model-level transformations.
  *
  * @phpstan-type SchemaField array{type: string, initial: mixed, schema?: string, formName?: string, unordered?: bool}
- * @phpstan-type Field array{type: string, initial: mixed, version: int|null, value: mixed, saved: mixed, initialVersion?: int, schema?: string, formName?: string, unordered?: bool, savedVersion?: int|null, savedAt?: float, graveyardLength?: int, discardedAt?: int}
+ * @phpstan-type Field array{type: string, initial: mixed, version: int|null, value: mixed, saved: mixed, initialVersion?: int, schema?: string, formName?: string, unordered?: bool, savedVersion?: int|null, savedAt?: float, graveyardLength?: int, sourceEvents?: list<array<string, mixed>>, discardedAt?: int}
  * @phpstan-type Batch array{id: string, field: string, kind: string, version: int, revision: int, userId: int, label: string, operations?: list<array<string, mixed>>, value?: mixed, labels?: array<array-key, string>, fields?: list<string>}
  * @phpstan-type Actor array{userId: int, label: string}
  * @phpstan-type Draft array{id: string, generation: int, revision: int, savedRevision: int, bytes: int, recordId: string|null, updatedAt: string, fields: array<string, Field>, savedBy?: Actor|null}
@@ -25,6 +25,8 @@ class DraftJournal implements ResetInterface
     /** The `collaborate.drafts` defaults the journal reads, which the configuration tree declares from here. */
     public const array DEFAULTS = [
         'max_update_bytes' => 262_144,
+        'max_source_update_bytes' => 16_777_216,
+        'max_source_draft_bytes' => 33_554_432,
         'max_draft_bytes' => 10_485_760,
         'max_fields' => 10_000,
         'max_value_depth' => 8,
@@ -36,6 +38,10 @@ class DraftJournal implements ResetInterface
 
     /** The largest update, in stored UTF-8 bytes. */
     private int $maxUpdateBytes;
+
+    private int $maxSourceUpdateBytes;
+
+    private int $maxSourceDraftBytes;
 
     /** The largest journal of one draft, in stored UTF-8 bytes. */
     private int $maxDraftBytes;
@@ -74,7 +80,7 @@ class DraftJournal implements ResetInterface
 
     /**
      * @param string $systemLabel the name of the writes no editor made (a compaction, a reconciliation)
-     * @param array{max_update_bytes?: int, max_draft_bytes?: int, max_fields?: int, max_value_depth?: int, label_length?: int, compact?: array{bytes?: int, fields?: int, idle?: int, ...}, locks?: array{save?: int, writer?: int, ...}, purge?: array{clean_days?: int, unsaved_days?: int, ...}, ...} $limits
+     * @param array{max_update_bytes?: int, max_source_update_bytes?: int, max_source_draft_bytes?: int, max_draft_bytes?: int, max_fields?: int, max_value_depth?: int, label_length?: int, compact?: array{bytes?: int, fields?: int, idle?: int, ...}, locks?: array{save?: int, writer?: int, ...}, purge?: array{clean_days?: int, unsaved_days?: int, ...}, ...} $limits
      *     the `collaborate.drafts` configuration
      * @param int|null $firstGeneration the generation of every new draft instead of a random one
      */
@@ -87,6 +93,8 @@ class DraftJournal implements ResetInterface
     ) {
         $defaults = self::DEFAULTS;
         $this->maxUpdateBytes = $limits['max_update_bytes'] ?? $defaults['max_update_bytes'];
+        $this->maxSourceUpdateBytes = $limits['max_source_update_bytes'] ?? $defaults['max_source_update_bytes'];
+        $this->maxSourceDraftBytes = $limits['max_source_draft_bytes'] ?? $defaults['max_source_draft_bytes'];
         $this->maxDraftBytes = $limits['max_draft_bytes'] ?? $defaults['max_draft_bytes'];
         $this->maxFields = $limits['max_fields'] ?? $defaults['max_fields'];
         $this->labelLength = $limits['label_length'] ?? $defaults['label_length'];
@@ -174,7 +182,12 @@ class DraftJournal implements ResetInterface
                         );
                     }
                     $adopted[] = $name;
-                    unset($state['schema'], $state['initialVersion'], $state['graveyardLength']);
+                    unset(
+                        $state['schema'],
+                        $state['initialVersion'],
+                        $state['graveyardLength'],
+                        $state['sourceEvents'],
+                    );
                     $state['version'] = null;
                     $state['savedVersion'] = null;
                     $state['type'] = $definition['type'];
@@ -257,13 +270,16 @@ class DraftJournal implements ResetInterface
      *
      * @return Batch
      */
-    public function append(string $id, array $allowed, array $event, int $userId, string $label): array
-    {
+    public function append(
+        string $id,
+        array $allowed,
+        array $event,
+        int $userId,
+        string $label,
+        ?int $maxTextBytes = null,
+    ): array {
         // Limits count stored UTF-8 bytes, not \uXXXX escapes.
         $size = \strlen(JournalStore::encode($event));
-        if ($size > $this->maxUpdateBytes) {
-            throw new DraftTooLargeException('Collaborate update is too large.');
-        }
         $field = self::stringOrNull($event['field'] ?? null);
         if (null === $field) {
             throw new InvalidDraftEventException('Invalid Collaborate event.');
@@ -271,6 +287,10 @@ class DraftJournal implements ResetInterface
         $definition = FieldDefinitions::prototype($field) ? null : new FieldDefinitions($allowed)->definition($field);
         if (null === $definition) {
             throw new InvalidDraftEventException(\sprintf('Collaborate field "%s" is not in this form.', $field));
+        }
+        $updateLimit = 'source' === $definition['type'] ? $this->maxSourceUpdateBytes : $this->maxUpdateBytes;
+        if ($size > $updateLimit) {
+            throw new DraftTooLargeException('Collaborate update is too large.');
         }
         if (
             !\is_string($event['id'] ?? null)
@@ -282,7 +302,16 @@ class DraftJournal implements ResetInterface
             throw new InvalidDraftEventException('Invalid Collaborate event.');
         }
 
-        return $this->exclusive($id, function () use ($id, $event, $field, $size, $userId, $label, $definition): array {
+        return $this->exclusive($id, function () use (
+            $id,
+            $event,
+            $field,
+            $size,
+            $userId,
+            $label,
+            $definition,
+            $maxTextBytes,
+        ): array {
             $draft = $this->store->read($id, true, [
                 $field,
                 ...FieldNames::membersAround($definition['formName'] ?? $field),
@@ -333,10 +362,28 @@ class DraftJournal implements ResetInterface
             if ($event['version'] !== $version) {
                 throw new DraftConflictException('Collaborate model revision changed.');
             }
-            if ('operations' === ($event['kind'] ?? null) && \in_array($state['type'], ['text', 'rich'], true)) {
+            if ('operations' === ($event['kind'] ?? null) && 'source' === $state['type']) {
+                $operations = $this->validator->operations($event['operations'] ?? null, $version);
+                $result = new DraftSource()->apply(
+                    (string) $state['initial'],
+                    $state['sourceEvents'] ?? [],
+                    $operations,
+                    $userId,
+                );
+                if (\strlen($result['text']) > min($maxTextBytes ?? DraftSource::MAX_BYTES, DraftSource::MAX_BYTES)) {
+                    throw new DraftTooLargeException('Collaborate source exceeds its source limit.');
+                }
+                $state['value'] = $result['text'];
+                $state['sourceEvents'] = $result['events'];
+                $state['version'] = $version + \count($operations);
+                $payload = ['operations' => $result['operations']];
+            } elseif ('operations' === ($event['kind'] ?? null) && \in_array($state['type'], ['text', 'rich'], true)) {
                 $operations = $this->validator->operations($event['operations'] ?? null, $version);
                 if ('text' === $state['type']) {
                     $result = $this->text->apply((string) $state['value'], $state['graveyardLength'] ?? 0, $operations);
+                    if (null !== $maxTextBytes && \strlen($result['text']) > $maxTextBytes) {
+                        throw new DraftTooLargeException('Collaborate text exceeds its source limit.');
+                    }
                     $state['value'] = $result['text'];
                     $state['graveyardLength'] = $result['graveyard'];
                 }
@@ -377,7 +424,8 @@ class DraftJournal implements ResetInterface
             ];
             // The journal grows by the batch it stores, with its revision and author: not by what the page sent.
             $stored = JournalStore::encode($accepted);
-            if (($draft['bytes'] + \strlen($stored)) > $this->maxDraftBytes) {
+            $journalLimit = 'source' === $state['type'] ? $this->maxSourceDraftBytes : $this->maxDraftBytes;
+            if (($draft['bytes'] + \strlen($stored)) > $journalLimit) {
                 throw new DraftTooLargeException('Collaborate draft is full. Save or discard before continuing.');
             }
             // Source mode is shared UI state, not a persisted form value: switching it leaves the draft saved.
@@ -785,7 +833,7 @@ class DraftJournal implements ResetInterface
         $field['value'] = $field['saved'];
         $field['version'] = null;
         $field['savedVersion'] = null;
-        unset($field['initialVersion'], $field['graveyardLength']);
+        unset($field['initialVersion'], $field['graveyardLength'], $field['sourceEvents']);
 
         return $field;
     }

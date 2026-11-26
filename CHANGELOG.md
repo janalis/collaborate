@@ -5,6 +5,15 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Headless collaborative source sessions for custom editors, with record-scoped
+  authorization, compact grants and exact-revision save checkpoints.
+- Public native text and source adapters. Source transactions preserve peer
+  insertions through selective undo, track ranges and capture composition edits.
+- Separate source request and journal limits for large documents, without
+  increasing ordinary form limits, plus a two-view host integration example.
+
 ## [0.6.1] - 2026-11-24
 
 ### Fixed

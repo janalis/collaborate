@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Janalis\Collaborate\Tests\Unit\Controller;
 
+use Janalis\Collaborate\Access\RecordDraftAccessCheckerInterface;
 use Janalis\Collaborate\Access\RoleDraftAccessChecker;
 use Janalis\Collaborate\Controller\DraftController;
 use Janalis\Collaborate\Draft\DraftAccess;
@@ -153,6 +154,32 @@ final class DraftControllerTest extends TestCase
         self::assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
 
         return $response;
+    }
+
+    public function testHeadlessGrantsCannotUseFormEndpoints(): void
+    {
+        $checker = $this->createStub(RecordDraftAccessCheckerInterface::class);
+        $checker->method('canEdit')->willReturn(true);
+        $checker->method('canEditRecord')->willReturn(true);
+        $this->access = new DraftAccess('secret', true, new Topics(), new SecurityCollaboratorProvider(), $checker);
+        $this->grant = $this->access->issue(
+            [
+                'id' => $this->access->draftId(TestUser::class, '7'),
+                'entity' => TestUser::class,
+                'record' => '7',
+                'permission' => 'update',
+                'new' => false,
+                'draft' => null,
+                'headless' => true,
+                'fields' => [],
+            ],
+            7,
+            time(),
+            $this->user->getRoles(),
+        );
+        $this->journal->expects($this->never())->method('join');
+        $this->expectException(AccessDeniedException::class);
+        $this->handle('join');
     }
 
     public function testJoinsAndReplaysOnlyCapabilityFields(): void

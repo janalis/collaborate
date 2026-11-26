@@ -9,6 +9,7 @@ use Doctrine\Persistence\Mapping\ClassMetadata as PersistenceClassMetadata;
 use Doctrine\Persistence\ObjectManager;
 use EasyCorp\Bundle\EasyAdminBundle\Form\Type\CrudAutocompleteType;
 use Janalis\Collaborate\Access\DraftAccessCheckerInterface;
+use Janalis\Collaborate\Access\RecordDraftAccessCheckerInterface;
 use Janalis\Collaborate\Doctrine\RecordIdentifier;
 use Janalis\Collaborate\Draft\DraftAccess;
 use Janalis\Collaborate\Draft\DraftJournal;
@@ -105,6 +106,7 @@ final class CollaborateFormExtensionTest extends TypeTestCase
     private TestUser $user;
     private bool $granted = true;
     private bool $canEdit = true;
+    private bool $canEditRecord = true;
     /** @var array<string, list<string>> what the edited record's draft saved for its plain lists */
     private array $listKeys = [];
     /** @var array<string, array<array-key, string>> the keys the edited record's draft gave its collections' entries, by record id */
@@ -131,8 +133,9 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         $security
             ->method('isGranted')
             ->willReturnCallback(fn(mixed $role): bool => $this->granted && 'ROLE_EDITOR' === $role);
-        $checker = $this->createStub(DraftAccessCheckerInterface::class);
+        $checker = $this->createStub(RecordDraftAccessCheckerInterface::class);
         $checker->method('canEdit')->willReturnCallback(fn(): bool => $this->canEdit);
+        $checker->method('canEditRecord')->willReturnCallback(fn(): bool => $this->canEditRecord);
         $urls = $this->createStub(UrlGeneratorInterface::class);
         $urls->method('generate')->willReturnCallback(static fn(
             string $route,
@@ -293,6 +296,12 @@ final class CollaborateFormExtensionTest extends TypeTestCase
         file_put_contents($path, '<?php return ' . var_export($entries, true) . ';');
 
         return new ImportMapConfigReader($path, new RemotePackageStorage(sys_get_temp_dir()));
+    }
+
+    public function testRecordPolicyCanRefuseAFormAllowedByClassPolicy(): void
+    {
+        $this->canEditRecord = false;
+        self::assertArrayNotHasKey('data-collaborate', self::vars($this->form()->createView(), 'attr'));
     }
 
     public function testEditorSchemaRequiresAPinnedCkeditor(): void

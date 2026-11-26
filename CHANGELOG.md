@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-11-26
+
 ### Added
 
 - Headless collaborative source sessions for custom editors, with record-scoped
@@ -770,7 +772,8 @@ versions follow [Semantic Versioning](https://semver.org/).
   `FormContextInterface` (which record a page edits).
 - English and French translations.
 
-[Unreleased]: https://github.com/janalis/collaborate/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/janalis/collaborate/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/janalis/collaborate/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/janalis/collaborate/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/janalis/collaborate/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/janalis/collaborate/compare/v0.5.1...v0.5.2

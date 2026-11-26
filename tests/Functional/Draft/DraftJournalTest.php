@@ -1073,7 +1073,10 @@ final class DraftJournalTest extends TestCase
             self::assertCount(1, $view['events']);
             self::assertCount(1, array_filter(
                 \array_slice($recording->queries, $before),
-                static fn(string $sql): bool => str_starts_with($sql, 'SELECT payload FROM collaborate_draft_event'),
+                static fn(string $sql): bool => str_starts_with(
+                    $sql,
+                    'SELECT revision, payload FROM collaborate_draft_event',
+                ),
             ));
         } finally {
             $recording->delete('collaborate_draft_event', ['draft_id' => $id]);

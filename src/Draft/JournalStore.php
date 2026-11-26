@@ -89,11 +89,11 @@ final class JournalStore
         // Drivers return the string columns as strings, the integer ones as integers or numeric strings.
         /** @var array{generation: int|string, revision: int|string, saved_revision: int|string, bytes: int|string, record_id: string|null, saved_by: int|string|null, saved_by_label: string|null, updated_at: string} $row */
         $states = null === $names
-            ? $this->db()->fetchAllAssociative('SELECT name, state FROM collaborate_draft_field WHERE draft_id = ? ORDER BY name', [
+            ? $this->db()->fetchAllAssociative('SELECT name, state FROM collaborate_draft_field WHERE draft_id = ?', [
                 $id,
             ])
             : $this->db()->fetchAllAssociative(
-                'SELECT name, state FROM collaborate_draft_field WHERE draft_id = ? AND name IN (?) ORDER BY name',
+                'SELECT name, state FROM collaborate_draft_field WHERE draft_id = ? AND name IN (?)',
                 [$id, $names],
                 [1 => ArrayParameterType::STRING],
             );
@@ -117,7 +117,7 @@ final class JournalStore
     /** @return array<string, Field> the field states of one type, `member` or `collection` */
     public function fieldsOfType(string $id, string $type): array
     {
-        return $this->decodeFields($this->db()->fetchAllAssociative('SELECT name, state FROM collaborate_draft_field WHERE draft_id = ? AND type = ? ORDER BY name', [
+        return $this->decodeFields($this->db()->fetchAllAssociative('SELECT name, state FROM collaborate_draft_field WHERE draft_id = ? AND type = ?', [
             $id,
             $type,
         ]));
@@ -221,14 +221,17 @@ final class JournalStore
     {
         $events = [];
         $rebasedFrom = [];
-        /** @var list<string> $payloads a JSON column */
-        $payloads = $this->db()->fetchFirstColumn('SELECT payload FROM collaborate_draft_event WHERE draft_id = ? AND revision > ? ORDER BY revision', [
+        /** @var list<array{revision: int|numeric-string, payload: string}> $rows */
+        $rows = $this->db()->fetchAllAssociative('SELECT revision, payload FROM collaborate_draft_event WHERE draft_id = ? AND revision > ?', [
             $id,
             $since,
         ]);
-        foreach ($payloads as $payload) {
+        // MySQL can filesort JSON payloads even when the revision index could supply the order.
+        // Sort the already fetched rows here, including compaction markers, outside its sort buffer.
+        usort($rows, static fn(array $a, array $b): int => (int) $a['revision'] <=> (int) $b['revision']);
+        foreach ($rows as $stored) {
             /** @var array<mixed> $row */
-            $row = json_decode($payload, true, flags: \JSON_THROW_ON_ERROR);
+            $row = json_decode($stored['payload'], true, flags: \JSON_THROW_ON_ERROR);
             // A batch is an object; the row a compaction leaves, the list of the generations it replaced.
             if (array_is_list($row)) {
                 /** @var list<int> $row */
@@ -358,6 +361,8 @@ final class JournalStore
             $name = $row['name'];
             $fields[$name] = $decoded;
         }
+
+        ksort($fields, \SORT_STRING);
 
         return $fields;
     }

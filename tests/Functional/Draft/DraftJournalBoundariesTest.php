@@ -445,7 +445,7 @@ final class DraftJournalBoundariesTest extends TestCase
         );
         $release = $position('RELEASE_LOCK');
         self::assertGreaterThan(-1, $release);
-        self::assertGreaterThan($release, $position('SELECT payload FROM collaborate_draft_event'));
+        self::assertGreaterThan($release, $position('SELECT revision, payload FROM collaborate_draft_event'));
     }
 
     public function testANestedLockIsReleasedByItsLastUnlockAndAnUnheldOneIsNotReleased(): void
@@ -1305,7 +1305,7 @@ final class DraftJournalBoundariesTest extends TestCase
 
     public function testAReplayTakesNoRowLock(): void
     {
-        self::assertFalse($this->outsideUpdateBlocks('SELECT payload', fn(
+        self::assertFalse($this->outsideUpdateBlocks('SELECT revision, payload', fn(
             DraftJournal $journal,
             string $id,
         ) => $journal->replay($id, $this->fields, 0)));
